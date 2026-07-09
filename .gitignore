@@ -1,0 +1,22 @@
+# Frontend (Next.js)
+.next/
+node_modules/
+out/
+build/
+.env.local
+.env.*.local
+
+# Backend (Laravel & Python)
+/backend-core/vendor/
+/backend-core/.env
+/microservice/.venv/
+/microservice/venv/
+__pycache__/
+*.pyc
+.phpunit.result.cache
+
+# Docker & Infra
+.env
+.DS_Store
+*.log
+docker-compose.override.yml

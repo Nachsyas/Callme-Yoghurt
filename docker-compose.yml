@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: callme_yoghurt_postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: callme_user
+      POSTGRES_PASSWORD: callme_password
+      POSTGRES_DB: callme_yoghurt
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongodb:
+    image: mongo:7.0
+    container_name: callme_yoghurt_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: callme_yoghurt_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
