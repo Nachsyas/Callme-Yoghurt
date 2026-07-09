@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// URL sudah dihapus dari sini sesuai aturan Prisma V7
+datasource db {
+  provider  = "postgresql"
+}
+
+// Tabel untuk menyimpan data produk Callme Yoghurt
+model Product {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  name            String
+  subName         String
+  description     String   @db.Text
+  
+  price250        Int
+  price1000       Int
+  
+  brandColor      String
+  darkBg          String
+  imageUrl        String?
+  
+  ingredients     String[]
+  nutrisiKalori   String
+  nutrisiProtein  String
+  nutrisiLemak    String
+  nutrisiGula     String
+  
+  isAvailable     Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
