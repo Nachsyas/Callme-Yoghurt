@@ -39,4 +39,5 @@ def calculate_total_weight(items) -> float:
             
         total_weight += (weight_per_item * item.quantity)
         
-    return total_weight
+    return round(total_weight, 2)
+
