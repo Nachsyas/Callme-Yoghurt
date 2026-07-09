@@ -2,34 +2,173 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// URL sudah dihapus dari sini sesuai aturan Prisma V7
 datasource db {
   provider  = "postgresql"
 }
 
-// Tabel untuk menyimpan data produk Callme Yoghurt
-model Product {
+// ==========================================
+// 1. MASTER DATA (Data Induk)
+// ==========================================
+
+model UnitOfMeasure {
+  id        String   @id @default(uuid())
+  code      String   @unique // LTR, GR, PCS
+  name      String
+  items     Item[]
+}
+
+enum ItemType {
+  RAW_MATERIAL
+  PACKAGING
+  FINISHED_GOOD
+}
+
+model Item {
   id              String   @id @default(uuid())
-  slug            String   @unique
+  sku             String   @unique
   name            String
-  subName         String
-  description     String   @db.Text
+  type            ItemType
   
-  price250        Int
-  price1000       Int
+  uomId           String
+  uom             UnitOfMeasure @relation(fields: [uomId], references: [id])
   
-  brandColor      String
-  darkBg          String
+  // Atribut Khusus Finished Good (Untuk Website)
+  slug            String?  @unique 
+  description     String?  @db.Text
+  price           Int?     
+  brandColor      String?
   imageUrl        String?
-  
-  ingredients     String[]
-  nutrisiKalori   String
-  nutrisiProtein  String
-  nutrisiLemak    String
-  nutrisiGula     String
-  
   isAvailable     Boolean  @default(true)
+
+  // Relasi
+  bomsAsResult    BillOfMaterial[] @relation("BOMFinishedGood")
+  bomComponents   BOMComponent[]
+  stockBatches    StockBatch[]
+  stockMoves      StockMove[]
+}
+
+// ==========================================
+// 2. MANUFAKTUR & RESEP (Bill of Materials)
+// ==========================================
+
+model BillOfMaterial {
+  id             String         @id @default(uuid())
+  code           String         @unique 
+  finishedGoodId String
+  finishedGood   Item           @relation("BOMFinishedGood", fields: [finishedGoodId], references: [id])
+  isActive       Boolean        @default(true)
+  components     BOMComponent[]
+}
+
+model BOMComponent {
+  id          String         @id @default(uuid())
+  bomId       String
+  bom         BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  componentId String
+  component   Item           @relation(fields: [componentId], references: [id], onDelete: Restrict)
+  quantity    Float          
+}
+
+// ==========================================
+// 3. INVENTARIS & GUDANG (Inventory Management)
+// ==========================================
+
+model Warehouse {
+  id          String       @id @default(uuid())
+  code        String       @unique // WH-MAIN, WH-KITCHEN
+  name        String       // Gudang Utama, Kulkas Dapur
+  batches     StockBatch[]
+  movesFrom   StockMove[]  @relation("LocationFrom")
+  movesTo     StockMove[]  @relation("LocationTo")
+}
+
+// Menggunakan sistem Batch/Lot untuk melacak Expire Date (FEFO)
+model StockBatch {
+  id             String    @id @default(uuid())
+  batchNumber    String    @unique // LOT-20260710-01
+  itemId         String
+  item           Item      @relation(fields: [itemId], references: [id])
+  warehouseId    String
+  warehouse      Warehouse @relation(fields: [warehouseId], references: [id])
   
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  quantity       Float     @default(0) // Stok aktual saat ini
+  expirationDate DateTime?
+  
+  createdAt      DateTime  @default(now())
+}
+
+// ==========================================
+// 4. BUKU BESAR STOK (Stock Ledger - Immutable)
+// ==========================================
+// Merekam setiap pergerakan (Masuk, Keluar, Pindah Gudang). Tidak boleh di-edit/hapus!
+
+enum MoveType {
+  RECEIPT    // Barang Masuk dari Supplier
+  DELIVERY   // Barang Keluar ke Pelanggan
+  PRODUCTION // Konsumsi Bahan Baku / Hasil Yoghurt
+  TRANSFER   // Pindah Gudang
+  ADJUSTMENT // Penyesuaian (Barang rusak/hilang)
+}
+
+model StockMove {
+  id             String    @id @default(uuid())
+  reference      String    // Nomor Dokumen Transaksi (PO, SO, WO)
+  moveType       MoveType
+  
+  itemId         String
+  item           Item      @relation(fields: [itemId], references: [id])
+  quantity       Float     // Jumlah yang dipindah/dipakai
+  
+  locationFromId String?
+  locationFrom   Warehouse? @relation("LocationFrom", fields: [locationFromId], references: [id])
+  
+  locationToId   String?
+  locationTo     Warehouse? @relation("LocationTo", fields: [locationToId], references: [id])
+
+  createdAt      DateTime  @default(now())
+  actor          String    @default("System") // Siapa yang melakukan
+}
+
+// ==========================================
+// 5. MITRA & TRANSAKSI (CRM & Sales)
+// ==========================================
+
+model Partner {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  isVendor  Boolean  @default(false) // Supplier Bahan Baku
+  isCustomer Boolean @default(true)  // Pembeli Yoghurt
+  orders    Order[]
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  DONE
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  orderNumber String      @unique // SO-001 atau PO-001
+  isPurchase  Boolean     @default(false) // True = Beli Bahan Baku, False = Jual Yoghurt
+  
+  partnerId   String
+  partner     Partner     @relation(fields: [partnerId], references: [id])
+  status      OrderStatus @default(DRAFT)
+  totalAmount Int         @default(0)
+  
+  lines       OrderLine[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderLine {
+  id        String @id @default(uuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId    String // Barang yang dibeli/dijual
+  quantity  Float
+  unitPrice Int    // Harga saat transaksi
 }
