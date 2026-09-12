@@ -51,7 +51,7 @@ class Customer extends Model
      */
     public function setPhoneWithBlindIndex(string $phone, ?string $secretKey = null): void
     {
-        $this->attributes['phone'] = $phone;
-        $this->attributes['phone_bindex'] = PhoneBlindIndexService::generateBlindIndex($phone, $secretKey);
+        $this->phone = $phone;
+        $this->phone_bindex = PhoneBlindIndexService::generateBlindIndex($phone, $secretKey);
     }
 }
