@@ -51,13 +51,15 @@
 
 ## Gate 0C — ERP Core Foundation
 
-- [ ] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel application.
-- [ ] `IMPLEMENTED` Add dependency/bootstrap/config/routes/runtime structure.
-- [ ] `IMPLEMENTED` Establish explicit domain/application/infrastructure boundaries.
-- [ ] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence.
-- [ ] `TESTED` Run database migrations from a clean environment.
-- [ ] `TESTED` Run ERP automated tests from a clean environment.
-- [ ] `VERIFIED` Demonstrate ERP API boot and health check.
+- [x] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel application (`composer.json`, `artisan`, `public/index.php`, `bootstrap/app.php`, `bootstrap/providers.php`).
+- [x] `IMPLEMENTED` Add dependency/bootstrap/config/routes/runtime structure (`config/app.php`, `config/database.php`, `config/crm.php`, `config/services.php`, `routes/api.php`, `routes/web.php`, `routes/console.php`).
+- [x] `IMPLEMENTED` Establish explicit domain/application/infrastructure boundaries (`app/Domain`, `app/Application`, `app/Infrastructure`, `app/Http`, `app/Providers`).
+- [x] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence (default `pgsql`, zero MongoDB/Prisma coupling, sanitized development configuration).
+- [ ] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow).
+- [ ] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow).
+- [ ] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow).
+
+**Gate 0C status: IN PROGRESS — Application runtime and test suites implemented; automated verification pending clean Linux CI execution against PostgreSQL.**
 
 ## Gate 0D — Data & Storage Architecture
 
