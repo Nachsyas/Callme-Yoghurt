@@ -35,17 +35,18 @@
 
 ## Gate 0B — Security Foundation
 
-- [x] `IMPLEMENTED` Remove BFF secret from checkout business payload.
-- [x] `IMPLEMENTED` Remove hard-coded/fallback internal secret behavior.
-- [x] `IMPLEMENTED` Fail closed when required service authentication configuration is absent.
-- [x] `IMPLEMENTED` Establish strict typed request validation for checkout edge input.
-- [x] `IMPLEMENTED` Establish service authentication boundary for BFF -> ERP calls.
-- [ ] `PLANNED` Define PII encryption/search strategy including blind index/hash where needed.
-- [ ] `PLANNED` Define security headers and rate-limiting baseline.
-- [ ] `PLANNED` Restrict local security tooling/network exposure by default.
-- [ ] `TESTED` Add security regression tests for secret exposure and tampered transaction input.
+- [x] `TESTED` Remove BFF secret from checkout business payload (verified via security regression suite).
+- [x] `TESTED` Remove hard-coded/fallback internal secret behavior (fails closed with 503; verified by test).
+- [x] `TESTED` Fail closed when required service authentication configuration is absent (verified by test).
+- [x] `TESTED` Establish strict typed request validation for checkout edge input (verified by test).
+- [x] `TESTED` Establish service authentication boundary for BFF -> ERP calls (verified by test).
+- [x] `IMPLEMENTED` Define PII encryption/search strategy including blind index/hash via `PhoneBlindIndexService` and `Customer` model (PHP runtime verification BLOCKED BY GATE 0C; golden vector verified in TS suite).
+- [x] `TESTED` Define security headers baseline (`next.config.ts` headers with CSP `frame-ancestors 'none'`, nosniff, Referrer-Policy, Permissions-Policy, conditional HSTS; verified by test).
+- [x] `TESTED` Define rate-limiting baseline with `DevMemoryRateLimiter` development adapter and safe client identity signals (verified by test; Redis distributed limiter PLANNED/DEPENDENT ON RUNTIME).
+- [x] `TESTED` Restrict local security tooling/network exposure by default (localhost binding, dev credentials, required ZAP API key, deferred MongoDB profile; verified via Compose config).
+- [x] `TESTED` Add security regression tests for secret exposure, tampered transaction input, fail-closed configuration, sanitized upstream errors, rate-limiting boundary, and security headers (22 targeted automated tests passing).
 
-**Gate 0B status: IN PROGRESS — implementation exists for the checkout P0 patch but is not yet test-certified.**
+**Gate 0B status: IN PROGRESS — Security foundation is implemented and tested at the edge/BFF, Docker, and test-vector boundaries; full Gate 0B verification is pending Gate 0C for Laravel ERP Core runtime boot and Redis distributed rate limiter.**
 
 ## Gate 0C — ERP Core Foundation
 

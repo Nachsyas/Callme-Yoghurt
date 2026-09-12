@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { getRateLimiter, getClientIdentifier } from '../../../lib/security/rate-limit.ts';
 
 type DeliveryMethod = 'instant' | 'sameday' | 'nextday';
 
@@ -74,19 +74,53 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
   };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
+  // Rate limiting check at the BFF edge boundary
+  const rateLimiter = getRateLimiter();
+  const clientId = getClientIdentifier(request);
+  // Default checkout write limit: 5 requests per 60-second window
+  const rateLimitResult = await rateLimiter.check(`checkout:${clientId}`, 5, 60);
+
+  const rateLimitHeaders = {
+    'X-RateLimit-Limit': String(rateLimitResult.limit),
+    'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+    'X-RateLimit-Reset': String(rateLimitResult.resetAt),
+  };
+
+  if (!rateLimitResult.success) {
+    return Response.json(
+      {
+        error: 'Too many checkout requests. Please try again later.',
+        retry_after: rateLimitResult.retryAfter,
+      },
+      {
+        status: 429,
+        headers: {
+          ...rateLimitHeaders,
+          'Retry-After': String(rateLimitResult.retryAfter),
+        },
+      },
+    );
+  }
+
   let rawPayload: unknown;
 
   try {
     rawPayload = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    return Response.json(
+      { error: 'Invalid JSON payload' },
+      { status: 400, headers: rateLimitHeaders },
+    );
   }
 
   const payload = parseCheckoutRequest(rawPayload);
 
   if (!payload) {
-    return NextResponse.json({ error: 'Invalid checkout payload' }, { status: 400 });
+    return Response.json(
+      { error: 'Invalid checkout payload' },
+      { status: 400, headers: rateLimitHeaders },
+    );
   }
 
   const erpBaseUrl = process.env.ERP_INTERNAL_URL;
@@ -96,9 +130,9 @@ export async function POST(request: Request) {
   // no development fallback credential and no simulated success response.
   if (!erpBaseUrl || !erpServiceToken) {
     console.error('Checkout BFF is unavailable because ERP internal configuration is incomplete.');
-    return NextResponse.json(
+    return Response.json(
       { error: 'Checkout service is temporarily unavailable' },
-      { status: 503 },
+      { status: 503, headers: rateLimitHeaders },
     );
   }
 
@@ -124,24 +158,27 @@ export async function POST(request: Request) {
         status: backendResponse.status,
       });
 
-      return NextResponse.json(
+      return Response.json(
         {
           error: 'Unable to process checkout',
           request_id: requestId,
         },
-        { status: backendResponse.status >= 400 && backendResponse.status < 500 ? backendResponse.status : 502 },
+        {
+          status: backendResponse.status >= 400 && backendResponse.status < 500 ? backendResponse.status : 502,
+          headers: rateLimitHeaders,
+        },
       );
     }
 
     const responseBody: unknown = await backendResponse.json();
 
-    return NextResponse.json(
+    return Response.json(
       {
         success: true,
         request_id: requestId,
         data: responseBody,
       },
-      { status: 200 },
+      { status: 200, headers: rateLimitHeaders },
     );
   } catch (error) {
     console.error('ERP checkout transport failure.', {
@@ -149,12 +186,12 @@ export async function POST(request: Request) {
       error: error instanceof Error ? error.message : 'unknown error',
     });
 
-    return NextResponse.json(
+    return Response.json(
       {
         error: 'Checkout service is temporarily unavailable',
         request_id: requestId,
       },
-      { status: 502 },
+      { status: 502, headers: rateLimitHeaders },
     );
   }
 }
