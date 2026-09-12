@@ -14,7 +14,7 @@ Phase 0 exists to remove that ambiguity before further feature development.
 
 ### 1. Transactional authority
 
-Laravel ERP Core is the sole transactional business authority for commerce and ERP domains.
+Laravel ERP Core is the sole transactional business authority for commerce and ERP domains. *(Note: Framework runtime lifecycle and major version update to Laravel 13 / PHP 8.3 is recorded in ADR-0002).*
 
 The ERP Core will be implemented as a modular monolith first. Domain boundaries must remain explicit so that a bounded context can be extracted into a service later only when operational evidence justifies it.
 
