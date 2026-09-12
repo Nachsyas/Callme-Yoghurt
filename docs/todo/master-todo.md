@@ -57,10 +57,10 @@
 - [x] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence (default `pgsql`, zero MongoDB/Prisma coupling, sanitized development configuration).
 - [x] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow with PostgreSQL 16 service).
 - [x] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow; 15 tests, 62 assertions passing).
-- [x] `TESTED` Enforce reproducible, audited dependency installation from committed `composer.lock` with zero advisory bypasses (`composer audit --locked`).
+- [ ] `IN PROGRESS` Enforce reproducible, audited dependency installation from committed `composer.lock` with zero advisory bypasses (`composer audit --locked` blocked by upstream `laravel/framework` advisories).
 - [x] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow: `about`, `route:list`, `/api/health`, `/api/ready`, and authenticated `/api/internal/health`).
 
-**Gate 0C status: PASS — Laravel 11 ERP Core is runnable, locked to reproducible audited dependencies (`composer.lock`), configured with PostgreSQL as primary system of record, and verified via automated test suite on clean Linux runner with PostgreSQL 16 (15 tests passing, 62 assertions).**
+**Gate 0C status: IN PROGRESS — Laravel 11 ERP Core runtime and PostgreSQL persistence are functionally verified (15 tests, 62 assertions in clean environment), and dependencies are locked to committed `backend-core/composer.lock`; marked IN PROGRESS because `composer audit --locked` identifies 3 upstream security advisories on `laravel/framework` v11.56.1 (fixed in >=12.61.1), awaiting framework version resolution.**
 
 ## Gate 0D — Data & Storage Architecture
 
