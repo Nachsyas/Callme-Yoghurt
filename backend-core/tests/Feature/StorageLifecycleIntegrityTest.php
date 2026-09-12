@@ -600,8 +600,8 @@ class StorageLifecycleIntegrityTest extends TestCase
         $response = $this->getJson('/api/health');
         $response->assertStatus(200);
         $response->assertJson([
-            'status' => 'healthy',
-            'app' => 'Callme Yoghurt ERP Core',
+            'status' => 'ok',
+            'service' => 'erp-core',
         ]);
     }
 }

@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('sha256', 64)->nullable();
             $table->string('classification', 50);
             $table->string('retention_class', 50);
-            $table->timestamp('delete_after')->nullable();
+            $table->timestampTz('delete_after')->nullable();
             $table->boolean('legal_hold')->default(false);
             $table->timestamps();
 
