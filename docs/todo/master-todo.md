@@ -41,13 +41,13 @@
 - [x] `TESTED` Establish strict typed request validation for checkout edge input (verified by test).
 - [x] `TESTED` Establish service authentication boundary for BFF -> ERP calls (verified by test).
 - [x] `TESTED` Establish explicit public checkout response contract sanitizing upstream ERP payload, stripping internal secrets/database URLs/debug traces, and failing closed on malformed success JSON with 502 (zero `any`, verified by test).
-- [x] `IMPLEMENTED` Define PII encryption/search strategy including blind index/hash via `PhoneBlindIndexService` and `Customer` model (PHP runtime verification BLOCKED BY GATE 0C; golden vector verified in TS suite).
+- [x] `TESTED` Define PII encryption/search strategy including blind index/hash via `PhoneBlindIndexService` and `Customer` model (PHP runtime verified against PostgreSQL in CI run 34708399936; golden vector verified in TS and PHP suites).
 - [x] `TESTED` Define security headers baseline with hardened HSTS opt-in controls (`next.config.mjs` and middleware headers with CSP `frame-ancestors 'none'`, nosniff, Referrer-Policy, Permissions-Policy; HSTS, `includeSubDomains`, and `preload` require explicit opt-in flags; default production build never automatically produces preload; verified by test).
 - [x] `TESTED` Define rate-limiting baseline with strictly development/test-only `DevMemoryRateLimiter`, fail-closed `UnavailableProductionRateLimiter` preventing silent fallback in production, safe client identity isolation (`x-dev-client-id` in dev), and proxy anti-spoofing when `trustProxy=false` (verified by test; Redis distributed limiter PLANNED/DEPENDENT ON RUNTIME).
 - [x] `TESTED` Restrict local security tooling/network exposure by default (localhost binding, dev credentials, required ZAP API key, deferred MongoDB profile; verified via Compose config).
 - [x] `TESTED` Add security regression tests for secret exposure, tampered transaction input, fail-closed configuration, sanitized upstream errors and success DTOs, rate-limiting boundary and identity isolation, and security headers (34 targeted automated tests passing across 4 suites).
 
-**Gate 0B status: IN PROGRESS — Security foundation is implemented and tested at the edge/BFF, Docker, and test-vector boundaries; full Gate 0B verification is pending Gate 0C for Laravel ERP Core runtime boot and Redis distributed rate limiter.**
+**Gate 0B status: IN PROGRESS — Security foundation is implemented and tested at the edge/BFF, Docker, and test-vector boundaries; full Gate 0B verification is pending Redis distributed rate limiter.**
 
 ## Gate 0C — ERP Core Foundation
 
@@ -55,11 +55,11 @@
 - [x] `IMPLEMENTED` Add dependency/bootstrap/config/routes/runtime structure (`config/app.php`, `config/database.php`, `config/crm.php`, `config/services.php`, `routes/api.php`, `routes/web.php`, `routes/console.php`).
 - [x] `IMPLEMENTED` Establish explicit domain/application/infrastructure boundaries (`app/Domain`, `app/Application`, `app/Infrastructure`, `app/Http`, `app/Providers`).
 - [x] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence (default `pgsql`, zero MongoDB/Prisma coupling, sanitized development configuration).
-- [ ] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow).
-- [ ] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow).
-- [ ] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow).
+- [x] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow with PostgreSQL 16 service).
+- [x] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow; 15 tests, 62 assertions passing).
+- [x] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow: `about`, `route:list`, `/api/health`, `/api/ready`, and authenticated `/api/internal/health`).
 
-**Gate 0C status: IN PROGRESS — Application runtime and test suites implemented; automated verification pending clean Linux CI execution against PostgreSQL.**
+**Gate 0C status: PASS — Laravel 11 ERP Core is runnable, configured with PostgreSQL as primary system of record, and verified via automated test suite on clean Linux runner with PostgreSQL 16 (15 tests passing, 62 assertions).**
 
 ## Gate 0D — Data & Storage Architecture
 
