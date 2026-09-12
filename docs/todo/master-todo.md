@@ -28,20 +28,24 @@
 - [x] `IMPLEMENTED` Define S3-compatible object storage boundary.
 - [x] `IMPLEMENTED` Define Python/FastAPI as AI Intelligence Layer rather than duplicate ERP backend.
 - [x] `IMPLEMENTED` Define AI authority/permission boundary.
-- [ ] `VERIFIED` Reconcile repository structure documentation with the actual repository.
-- [ ] `VERIFIED` Audit all architectural docs for contradictions with ADR-0001.
+- [x] `VERIFIED` Reconcile repository structure documentation with the actual repository.
+- [x] `VERIFIED` Audit all architectural docs for contradictions with ADR-0001.
+
+**Gate 0A status: PASS.**
 
 ## Gate 0B — Security Foundation
 
-- [ ] `IMPLEMENTED` Remove BFF secret from checkout business payload.
-- [ ] `IMPLEMENTED` Remove hard-coded/fallback internal secret behavior.
-- [ ] `IMPLEMENTED` Fail closed when required service authentication configuration is absent.
-- [ ] `IMPLEMENTED` Establish request validation schema for checkout edge input.
-- [ ] `IMPLEMENTED` Establish service authentication boundary for BFF -> ERP calls.
+- [x] `IMPLEMENTED` Remove BFF secret from checkout business payload.
+- [x] `IMPLEMENTED` Remove hard-coded/fallback internal secret behavior.
+- [x] `IMPLEMENTED` Fail closed when required service authentication configuration is absent.
+- [x] `IMPLEMENTED` Establish strict typed request validation for checkout edge input.
+- [x] `IMPLEMENTED` Establish service authentication boundary for BFF -> ERP calls.
 - [ ] `PLANNED` Define PII encryption/search strategy including blind index/hash where needed.
 - [ ] `PLANNED` Define security headers and rate-limiting baseline.
 - [ ] `PLANNED` Restrict local security tooling/network exposure by default.
 - [ ] `TESTED` Add security regression tests for secret exposure and tampered transaction input.
+
+**Gate 0B status: IN PROGRESS — implementation exists for the checkout P0 patch but is not yet test-certified.**
 
 ## Gate 0C — ERP Core Foundation
 
@@ -70,13 +74,13 @@
 ## Gate 0E — Transaction Foundation
 
 - [ ] `IMPLEMENTED` Replace fake checkout success with real BFF request.
-- [ ] `IMPLEMENTED` Replace simulated BFF response with real ERP call.
+- [x] `IMPLEMENTED` Replace simulated BFF response with real ERP forwarding behavior that fails closed when ERP is unavailable.
 - [ ] `IMPLEMENTED` Server resolves authoritative SKU/variant data.
 - [ ] `IMPLEMENTED` Server calculates authoritative price/total.
 - [ ] `IMPLEMENTED` Server validates delivery method/rules.
 - [ ] `IMPLEMENTED` Server validates and reserves inventory.
 - [ ] `IMPLEMENTED` Order creation and reservation occur transactionally.
-- [ ] `IMPLEMENTED` Add idempotency for order creation.
+- [ ] `IMPLEMENTED` Add end-to-end idempotency for order creation.
 - [ ] `IMPLEMENTED` Success page requires a committed order identifier.
 - [ ] `TESTED` Reject tampered client price/total input.
 - [ ] `TESTED` Reject insufficient inventory.
@@ -84,9 +88,9 @@
 
 ## Gate 0F — Testing, CI & AI-Agent Governance
 
-- [ ] `IMPLEMENTED` Harden `AGENTS.md` against false-green test repairs.
-- [ ] `IMPLEMENTED` Explicitly forbid skip/xfail/test deletion/assertion weakening as repair shortcuts.
-- [ ] `IMPLEMENTED` Define human-review requirements for security, destructive DB, finance, permissions, and core business-rule changes.
+- [x] `IMPLEMENTED` Harden `AGENTS.md` against false-green test repairs.
+- [x] `IMPLEMENTED` Explicitly forbid skip/xfail/test deletion/assertion weakening as repair shortcuts.
+- [x] `IMPLEMENTED` Define human-review requirements for security, destructive DB, finance, permissions, and core business-rule changes.
 - [ ] `IMPLEMENTED` Repair return/complaint E2E test so it targets real UI behavior.
 - [ ] `IMPLEMENTED` Remove tracked transient test/build artifacts where appropriate.
 - [ ] `IMPLEMENTED` Add CI workflow for lint/static checks/tests/build/security baseline.
@@ -127,7 +131,7 @@ The following repository pieces already exist but must not be treated as complet
 - OWASP ZAP local container prototype — `SCAFFOLDED`
 - Next.js storefront/cart/checkout UI — mixed `IMPLEMENTED` UI with incomplete backend transaction
 - Playwright return-flow test — requires repair/re-verification
-- BFF checkout route — `SCAFFOLDED`, currently under security repair
+- BFF checkout route — security P0 patch `IMPLEMENTED`, not yet `TESTED`
 - Prisma ERP-like schema — architecture/domain exploration input, not authoritative production persistence
 
 ---
