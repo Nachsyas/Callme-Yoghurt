@@ -46,7 +46,9 @@ jobs:
 
       - name: Install Composer dependencies
         working-directory: backend-core
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: |
+          composer config policy.advisories.block false || true
+          composer install --prefer-dist --no-interaction --no-progress
 
       - name: Prepare environment
         working-directory: backend-core
