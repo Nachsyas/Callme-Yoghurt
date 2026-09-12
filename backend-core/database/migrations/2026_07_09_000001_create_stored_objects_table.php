@@ -62,7 +62,9 @@ return new class extends Migration
                     RETURN OLD;
                 END;
                 $$ LANGUAGE plpgsql;
+            SQL);
 
+            DB::statement(<<<'SQL'
                 CREATE TRIGGER trg_protect_stored_objects_retention
                 BEFORE DELETE ON stored_objects
                 FOR EACH ROW
