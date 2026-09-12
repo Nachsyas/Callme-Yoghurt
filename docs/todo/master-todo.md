@@ -64,17 +64,19 @@
 
 ## Gate 0D — Data & Storage Architecture
 
-- [ ] `PLANNED` Reconcile useful concepts from Prisma exploration into ERP-owned persistence.
-- [ ] `PLANNED` Introduce Product + ProductVariant/SKU model.
-- [ ] `PLANNED` Replace precision-sensitive inventory/BOM quantities with decimal/numeric types.
-- [ ] `PLANNED` Add proper relational ownership for order lines and items/variants.
-- [ ] `PLANNED` Design batch/lot traceability on stock movement.
-- [ ] `PLANNED` Design stock reservation and allocation model.
-- [ ] `PLANNED` Define append-oriented stock ledger semantics.
+- [x] `TESTED` Reconcile useful concepts from Prisma exploration into ERP-owned persistence (documented in ADR-0003: UOM, BOM, Warehouse adopted; Product/Variant/InventoryItem and append-only ledger replacing prototype entities).
+- [x] `TESTED` Introduce Product + ProductVariant/SKU model (separate customer catalog from physical stock items, UUID primary keys, unique SKU/slug; verified by tests).
+- [x] `TESTED` Replace precision-sensitive inventory/BOM quantities with decimal/numeric types (`NUMERIC(18,6)` throughout BOM components, ledger deltas, reservations, and order lines; zero float types).
+- [x] `TESTED` Add proper relational ownership for order lines and items/variants (`order_lines` references `product_variant_id` via strict foreign key with `BIGINT` monetary amounts).
+- [x] `TESTED` Design batch/lot traceability on stock movement (`inventory_lots` with compound unique item+lot constraint, zero mutable quantity column; lot balance derived from ledger).
+- [x] `TESTED` Design stock reservation and allocation model (`stock_reservations` and `stock_allocations` connecting reservation to specific lots for FEFO readiness).
+- [x] `TESTED` Define append-oriented stock ledger semantics (`stock_ledger_entries` with signed delta, event types, transfer correlation IDs, model-enforced immutability rejecting updates/deletes and zero deltas).
 - [ ] `PLANNED` Define object-storage metadata and retention model.
 - [ ] `PLANNED` Define data lifecycle classes: hot, warm, cold, delete/legal-hold.
 - [ ] `PLANNED` Define backup/PITR target architecture.
 - [ ] `PLANNED` Add pgvector readiness without embedding transactional rows indiscriminately.
+
+**Gate 0D status: IN PROGRESS — Gate 0D.1 (ERP Data Model Foundation) is implemented and verified on PostgreSQL 16 (17 integrity tests, catalog/inventory/BOM/ledger/orders relational foundation); Gate 0D remains IN PROGRESS pending Gate 0D.2 (object storage, lifecycle classes, backup/PITR, and pgvector readiness).**
 
 ## Gate 0E — Transaction Foundation
 
