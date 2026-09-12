@@ -50,6 +50,13 @@ jobs:
           composer config policy.advisories.block false || true
           composer install --prefer-dist --no-interaction --no-progress
 
+      - name: Upload composer.lock artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: composer-lock
+          path: backend-core/composer.lock
+          if-no-files-found: warn
+
       - name: Prepare environment
         working-directory: backend-core
         run: |
