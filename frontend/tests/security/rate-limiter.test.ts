@@ -2,7 +2,9 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DevMemoryRateLimiter,
+  UnavailableProductionRateLimiter,
   getClientIdentifier,
+  getRateLimiter,
 } from '../../src/lib/security/rate-limit.ts';
 
 describe('Rate Limiter Foundation & Safe Client Identification', () => {
@@ -47,7 +49,37 @@ describe('Rate Limiter Foundation & Safe Client Identification', () => {
     });
   });
 
-  describe('Safe client identifier signals (anti-spoofing)', () => {
+  describe('Production rate-limiter safety invariants', () => {
+    it('proves production cannot silently use DevMemoryRateLimiter', () => {
+      const prodLimiter = getRateLimiter('production');
+      assert.equal(prodLimiter.type, 'unavailable');
+      assert.ok(
+        prodLimiter instanceof UnavailableProductionRateLimiter,
+        'Production must instantiate UnavailableProductionRateLimiter when distributed store is not configured',
+      );
+      assert.ok(
+        !(prodLimiter instanceof DevMemoryRateLimiter),
+        'Production must NEVER silently use DevMemoryRateLimiter',
+      );
+    });
+
+    it('proves production rate limiter fails closed safely and visibly', async () => {
+      const prodLimiter = getRateLimiter('production');
+      const result = await prodLimiter.check('any-key', 5, 60);
+
+      assert.equal(result.success, false, 'Unavailable production limiter must fail closed');
+      assert.equal(result.remaining, 0);
+      assert.ok(result.retryAfter > 0);
+    });
+
+    it('provides DevMemoryRateLimiter for development and test environments', () => {
+      const devLimiter = getRateLimiter('development');
+      assert.equal(devLimiter.type, 'development-memory');
+      assert.ok(devLimiter instanceof DevMemoryRateLimiter);
+    });
+  });
+
+  describe('Safe client identifier signals (anti-spoofing & dev isolation)', () => {
     it('does not trust spoofed X-Forwarded-For when trustProxy is false (default)', () => {
       const spoofedRequest = new Request('http://localhost:3000/api/checkout', {
         headers: {
@@ -56,7 +88,7 @@ describe('Rate Limiter Foundation & Safe Client Identification', () => {
         },
       });
 
-      const clientId = getClientIdentifier(spoofedRequest, { trustProxy: false });
+      const clientId = getClientIdentifier(spoofedRequest, { trustProxy: false, environment: 'production' });
       assert.notEqual(clientId, '203.0.113.50');
       assert.equal(clientId, 'untrusted-client-boundary');
     });
@@ -70,6 +102,40 @@ describe('Rate Limiter Foundation & Safe Client Identification', () => {
 
       const clientId = getClientIdentifier(proxyRequest, { trustProxy: true });
       assert.equal(clientId, '198.51.100.25');
+    });
+
+    it('isolates unrelated development test identities via X-Dev-Client-Id in dev mode', () => {
+      const devReqA = new Request('http://localhost:3000/api/checkout', {
+        headers: {
+          'x-dev-client-id': 'suite-run-alpha',
+          'x-forwarded-for': '1.2.3.4', // Ignored because trustProxy=false
+        },
+      });
+
+      const devReqB = new Request('http://localhost:3000/api/checkout', {
+        headers: {
+          'x-dev-client-id': 'suite-run-beta',
+          'x-forwarded-for': '5.6.7.8', // Ignored because trustProxy=false
+        },
+      });
+
+      const idA = getClientIdentifier(devReqA, { trustProxy: false, environment: 'development' });
+      const idB = getClientIdentifier(devReqB, { trustProxy: false, environment: 'development' });
+
+      assert.equal(idA, 'dev-client:suite-run-alpha');
+      assert.equal(idB, 'dev-client:suite-run-beta');
+      assert.notEqual(idA, idB, 'Different dev identities must not collide into a single bucket');
+    });
+
+    it('ignores development test identity header in production mode', () => {
+      const req = new Request('http://localhost:3000/api/checkout', {
+        headers: {
+          'x-dev-client-id': 'attacker-trying-to-bypass-key',
+        },
+      });
+
+      const id = getClientIdentifier(req, { trustProxy: false, environment: 'production' });
+      assert.equal(id, 'untrusted-client-boundary', 'Production must ignore dev-only client header');
     });
   });
 });

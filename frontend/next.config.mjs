@@ -1,5 +1,5 @@
 /**
- * Canonical Security Headers Configuration for Next.js (Gate 0B).
+ * Canonical Security Headers Configuration for Next.js (Gate 0B.1 Hardening).
  */
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -41,10 +41,22 @@ const securityHeaders = [
   },
 ];
 
-if (isProduction || process.env.ENABLE_HSTS === 'true') {
+// HSTS requires explicit deployment configuration (ENABLE_HSTS=true)
+// includeSubDomains and preload are separate explicit opt-ins.
+if (process.env.ENABLE_HSTS === 'true') {
+  const hstsDirectives = ['max-age=63072000'];
+
+  if (process.env.HSTS_INCLUDE_SUBDOMAINS === 'true') {
+    hstsDirectives.push('includeSubDomains');
+  }
+
+  if (process.env.HSTS_PRELOAD === 'true') {
+    hstsDirectives.push('preload');
+  }
+
   securityHeaders.push({
     key: 'Strict-Transport-Security',
-    value: 'max-age=63072000; includeSubDomains; preload',
+    value: hstsDirectives.join('; '),
   });
 }
 

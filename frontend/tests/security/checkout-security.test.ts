@@ -4,13 +4,14 @@ import { POST } from '../../src/app/api/checkout/route.ts';
 import { getRateLimiter, DevMemoryRateLimiter } from '../../src/lib/security/rate-limit.ts';
 import { getSecurityHeaders } from '../../src/lib/security/headers.ts';
 
-describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
+describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', () => {
   const originalEnv = { ...process.env };
   const originalFetch = globalThis.fetch;
   const testSecretToken = 'super-secret-erp-internal-bearer-token-12345';
   const testErpUrl = 'http://erp-core-internal.local';
 
   beforeEach(() => {
+    process.env.NODE_ENV = 'test';
     process.env.ERP_INTERNAL_URL = testErpUrl;
     process.env.ERP_SERVICE_TOKEN = testSecretToken;
     process.env.TRUST_PROXY = 'false';
@@ -47,7 +48,7 @@ describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
   // 1. Internal ERP service credentials never appear in client responses
   it('proves internal ERP service credentials never appear in client responses', async () => {
     globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ order_number: 'SO-TEST-001' }), {
+      return new Response(JSON.stringify({ order_number: 'SO-TEST-001', status: 'CONFIRMED' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -143,7 +144,7 @@ describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
       if (init && init.body) {
         capturedUpstreamBody = JSON.parse(init.body as string);
       }
-      return new Response(JSON.stringify({ order_id: 'ord-safe-001' }), { status: 200 });
+      return new Response(JSON.stringify({ order_id: 'ord-safe-001', status: 'CONFIRMED' }), { status: 200 });
     };
 
     const tamperedPayload = {
@@ -249,7 +250,7 @@ describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
   // 7. Rate limiting behavior works at its defined boundary
   it('proves rate limiting boundary enforces HTTP 429 when threshold is exceeded', async () => {
     globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
+      return new Response(JSON.stringify({ order_id: 'ord-rl-1', status: 'CONFIRMED' }), { status: 200 });
     };
 
     // The limit is 5 requests per minute
@@ -283,7 +284,7 @@ describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
 
   // 8. Relevant security headers are present
   it('proves relevant baseline security headers are defined and evaluated', () => {
-    const headers = getSecurityHeaders(false);
+    const headers = getSecurityHeaders({ isProduction: false });
     const keys = headers.map((h) => h.key);
 
     assert.ok(keys.includes('Content-Security-Policy'));
@@ -291,5 +292,84 @@ describe('Checkout Route Security Baseline (Gate 0B Regression Suite)', () => {
     assert.ok(keys.includes('Referrer-Policy'));
     assert.ok(keys.includes('Permissions-Policy'));
     assert.ok(keys.includes('X-Frame-Options'));
+  });
+
+  // 9. GATE 0B.1: Upstream success contract sanitizes and exposes only explicit public fields
+  it('proves upstream success responses are strictly filtered and internal fields are never exposed', async () => {
+    globalThis.fetch = async () => {
+      const sensitiveUpstreamSuccess = {
+        order_id: 'ord-sensitive-001',
+        order_number: 'SO-2026-001',
+        status: 'CONFIRMED',
+        total_amount: 100000,
+        internal_secret: 'DO_NOT_EXPOSE_INTERNAL_KEY',
+        database_url: 'postgres://callme_admin:secret@internal-db:5432/callme_db',
+        debug: {
+          stack: 'trace_info_here',
+          execution_time_ms: 42,
+        },
+        internal_node: 'worker-node-alpha-01',
+      };
+
+      return new Response(JSON.stringify(sensitiveUpstreamSuccess), { status: 200 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 200);
+
+    const bodyText = await res.text();
+    // Verify none of the internal fields leak to browser
+    assert.ok(!bodyText.includes('DO_NOT_EXPOSE_INTERNAL_KEY'), 'Must never leak internal_secret');
+    assert.ok(!bodyText.includes('database_url'), 'Must never leak database_url key');
+    assert.ok(!bodyText.includes('postgres://'), 'Must never leak database connection URI');
+    assert.ok(!bodyText.includes('trace_info_here'), 'Must never leak debug stack trace');
+    assert.ok(!bodyText.includes('worker-node-alpha-01'), 'Must never leak internal node info');
+
+    const json = JSON.parse(bodyText) as {
+      success: boolean;
+      request_id: string;
+      data: Record<string, unknown>;
+    };
+
+    assert.equal(json.success, true);
+    assert.equal(json.data.order_id, 'ord-sensitive-001');
+    assert.equal(json.data.order_number, 'SO-2026-001');
+    assert.equal(json.data.status, 'CONFIRMED');
+    assert.equal(json.data.total_amount, 100000);
+    assert.equal(json.data.request_id, json.request_id);
+    assert.equal(json.data.internal_secret, undefined);
+    assert.equal(json.data.database_url, undefined);
+    assert.equal(json.data.debug, undefined);
+  });
+
+  // 10. GATE 0B.1: Malformed upstream success payload fails closed with sanitized 502
+  it('proves unexpected or malformed upstream success JSON fails closed with 502', async () => {
+    globalThis.fetch = async () => {
+      // Missing required order identifier and status
+      const malformedUpstream = {
+        unrecognized_data: true,
+        extra: 'unexpected',
+      };
+      return new Response(JSON.stringify(malformedUpstream), { status: 200 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 502, 'Malformed upstream JSON must fail closed with 502');
+
+    const body = (await res.json()) as { error: string; request_id: string };
+    assert.equal(body.error, 'Unable to process checkout response');
+    assert.ok(body.request_id, 'Must return correlation request_id');
   });
 });

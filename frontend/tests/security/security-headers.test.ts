@@ -1,10 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getSecurityHeaders, buildContentSecurityPolicy } from '../../src/lib/security/headers.ts';
+import {
+  getSecurityHeaders,
+  buildContentSecurityPolicy,
+  buildHstsHeader,
+} from '../../src/lib/security/headers.ts';
 
-describe('Security Headers Baseline (Gate 0B)', () => {
+describe('Security Headers Baseline & HSTS Hardening (Gate 0B.1)', () => {
   it('includes conservative Content-Security-Policy with frame-ancestors none', () => {
-    const headers = getSecurityHeaders(false);
+    const headers = getSecurityHeaders({ isProduction: false });
     const csp = headers.find((h) => h.key === 'Content-Security-Policy');
 
     assert.ok(csp, 'Content-Security-Policy header must be present');
@@ -24,7 +28,7 @@ describe('Security Headers Baseline (Gate 0B)', () => {
   });
 
   it('includes mandatory baseline headers: nosniff, Referrer-Policy, Permissions-Policy, X-Frame-Options', () => {
-    const headers = getSecurityHeaders(false);
+    const headers = getSecurityHeaders({ isProduction: false });
     const headerMap = new Map(headers.map((h) => [h.key, h.value]));
 
     assert.equal(headerMap.get('X-Content-Type-Options'), 'nosniff');
@@ -38,16 +42,62 @@ describe('Security Headers Baseline (Gate 0B)', () => {
     assert.ok(permissions.includes('geolocation=()'));
   });
 
-  it('omits Strict-Transport-Security in development but enforces it in production', () => {
-    const devHeaders = getSecurityHeaders(false);
-    const devHsts = devHeaders.find((h) => h.key === 'Strict-Transport-Security');
-    assert.equal(devHsts, undefined, 'HSTS must not be sent on non-production HTTP environments');
+  describe('HSTS Hardening Invariants', () => {
+    it('omits HSTS in development by default', () => {
+      const devHeaders = getSecurityHeaders({ isProduction: false });
+      const devHsts = devHeaders.find((h) => h.key === 'Strict-Transport-Security');
+      assert.equal(devHsts, undefined, 'Development must not emit HSTS by default');
+    });
 
-    const prodHeaders = getSecurityHeaders(true);
-    const prodHsts = prodHeaders.find((h) => h.key === 'Strict-Transport-Security');
-    assert.ok(prodHsts, 'HSTS must be present in production');
-    assert.ok(prodHsts.value.includes('max-age=63072000'));
-    assert.ok(prodHsts.value.includes('includeSubDomains'));
-    assert.ok(prodHsts.value.includes('preload'));
+    it('omits HSTS in production without explicit opt-in', () => {
+      const prodHeaders = getSecurityHeaders({
+        isProduction: true,
+        hsts: { enabled: false },
+      });
+      const prodHsts = prodHeaders.find((h) => h.key === 'Strict-Transport-Security');
+      assert.equal(prodHsts, undefined, 'Production must NOT emit HSTS without deliberate opt-in');
+    });
+
+    it('emits conservative HSTS max-age only when deliberately enabled', () => {
+      const headers = getSecurityHeaders({
+        isProduction: true,
+        hsts: { enabled: true, includeSubDomains: false, preload: false },
+      });
+      const hsts = headers.find((h) => h.key === 'Strict-Transport-Security');
+      assert.ok(hsts, 'HSTS header must be present when explicitly enabled');
+      assert.equal(hsts.value, 'max-age=63072000');
+      assert.ok(!hsts.value.includes('includeSubDomains'), 'Must not include includeSubDomains without opt-in');
+      assert.ok(!hsts.value.includes('preload'), 'Must not include preload without opt-in');
+    });
+
+    it('includes includeSubDomains only when explicitly opted in', () => {
+      const hstsValue = buildHstsHeader({
+        enabled: true,
+        includeSubDomains: true,
+        preload: false,
+      });
+      assert.ok(hstsValue?.includes('max-age=63072000'));
+      assert.ok(hstsValue?.includes('includeSubDomains'));
+      assert.ok(!hstsValue?.includes('preload'), 'Must not include preload when only includeSubDomains is opted in');
+    });
+
+    it('includes preload only when explicitly opted in', () => {
+      const hstsValue = buildHstsHeader({
+        enabled: true,
+        includeSubDomains: true,
+        preload: true,
+      });
+      assert.ok(hstsValue?.includes('max-age=63072000'));
+      assert.ok(hstsValue?.includes('includeSubDomains'));
+      assert.ok(hstsValue?.includes('preload'));
+    });
+
+    it('proves a default production build configuration never automatically produces preload', () => {
+      const defaultProdHeader = buildHstsHeader({ enabled: false });
+      assert.equal(defaultProdHeader, null);
+
+      const baselineOptIn = buildHstsHeader({ enabled: true });
+      assert.ok(baselineOptIn && !baselineOptIn.includes('preload'), 'Baseline opt-in must not include preload');
+    });
   });
 });
