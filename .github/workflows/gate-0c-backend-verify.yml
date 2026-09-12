@@ -46,16 +46,11 @@ jobs:
 
       - name: Install Composer dependencies
         working-directory: backend-core
-        run: |
-          composer config policy.advisories.block false || true
-          composer install --prefer-dist --no-interaction --no-progress
+        run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Upload composer.lock artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: composer-lock
-          path: backend-core/composer.lock
-          if-no-files-found: warn
+      - name: Audit Composer dependencies
+        working-directory: backend-core
+        run: composer audit --locked --no-interaction
 
       - name: Prepare environment
         working-directory: backend-core

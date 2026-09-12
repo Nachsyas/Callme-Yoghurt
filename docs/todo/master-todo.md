@@ -51,15 +51,16 @@
 
 ## Gate 0C — ERP Core Foundation
 
-- [x] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel application (`composer.json`, `artisan`, `public/index.php`, `bootstrap/app.php`, `bootstrap/providers.php`).
+- [x] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel application (`composer.json`, committed `composer.lock`, `artisan`, `public/index.php`, `bootstrap/app.php`, `bootstrap/providers.php`).
 - [x] `IMPLEMENTED` Add dependency/bootstrap/config/routes/runtime structure (`config/app.php`, `config/database.php`, `config/crm.php`, `config/services.php`, `routes/api.php`, `routes/web.php`, `routes/console.php`).
 - [x] `IMPLEMENTED` Establish explicit domain/application/infrastructure boundaries (`app/Domain`, `app/Application`, `app/Infrastructure`, `app/Http`, `app/Providers`).
 - [x] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence (default `pgsql`, zero MongoDB/Prisma coupling, sanitized development configuration).
 - [x] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow with PostgreSQL 16 service).
 - [x] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow; 15 tests, 62 assertions passing).
+- [x] `TESTED` Enforce reproducible, audited dependency installation from committed `composer.lock` with zero advisory bypasses (`composer audit --locked`).
 - [x] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow: `about`, `route:list`, `/api/health`, `/api/ready`, and authenticated `/api/internal/health`).
 
-**Gate 0C status: PASS — Laravel 11 ERP Core is runnable, configured with PostgreSQL as primary system of record, and verified via automated test suite on clean Linux runner with PostgreSQL 16 (15 tests passing, 62 assertions).**
+**Gate 0C status: PASS — Laravel 11 ERP Core is runnable, locked to reproducible audited dependencies (`composer.lock`), configured with PostgreSQL as primary system of record, and verified via automated test suite on clean Linux runner with PostgreSQL 16 (15 tests passing, 62 assertions).**
 
 ## Gate 0D — Data & Storage Architecture
 
