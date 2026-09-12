@@ -21,7 +21,7 @@ use App\Domain\Storage\Enums\RetentionClass;
 use App\Domain\Storage\Models\ObjectAttachment;
 use App\Domain\Storage\Models\StoredObject;
 use App\Domain\Storage\Services\RetentionPolicyService;
-use App\Domain\Storage\Services\StoredObjectDeletionService;
+use App\Domain\Storage\Services\StoredObjectDeletionRequestService;
 use DateTimeImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +37,7 @@ class StorageLifecycleIntegrityTest extends TestCase
     use RefreshDatabase;
 
     private RetentionPolicyService $retentionPolicy;
+    private StoredObjectDeletionRequestService $deletionRequestService;
     private ProductVariant $variant;
     private Order $order;
 
@@ -45,6 +46,7 @@ class StorageLifecycleIntegrityTest extends TestCase
         parent::setUp();
 
         $this->retentionPolicy = new RetentionPolicyService();
+        $this->deletionRequestService = new StoredObjectDeletionRequestService($this->retentionPolicy);
 
         // Seed minimal dependencies for attachment ownership
         $uom = UnitOfMeasure::create([
@@ -384,25 +386,13 @@ class StorageLifecycleIntegrityTest extends TestCase
     }
 
     /**
-     * 12e. StoredObjectDeletionService coordinates safe deletion with provider.
+     * 12e. Eligible object receives deletion_requested_at timestamp and metadata row remains.
      */
-    public function test_deletion_service_safely_coordinates_retention_and_provider(): void
+    public function test_eligible_object_receives_deletion_requested_at_and_row_remains(): void
     {
-        $mockProvider = $this->createMock(ObjectStorageProviderInterface::class);
-        $mockProvider->expects($this->once())
-            ->method('exists')
-            ->with('temp/service-delete.pdf')
-            ->willReturn(true);
-        $mockProvider->expects($this->once())
-            ->method('delete')
-            ->with('temp/service-delete.pdf')
-            ->willReturn(true);
-
-        $deletionService = new StoredObjectDeletionService($this->retentionPolicy, $mockProvider);
-
         $object = StoredObject::create([
             'storage_disk' => 'object',
-            'object_key' => 'temp/service-delete.pdf',
+            'object_key' => 'temp/request-eligible.pdf',
             'media_type' => 'application/pdf',
             'byte_size' => 2048,
             'classification' => DataClassification::INTERNAL,
@@ -411,9 +401,141 @@ class StorageLifecycleIntegrityTest extends TestCase
             'legal_hold' => false,
         ]);
 
-        $result = $deletionService->delete($object);
-        $this->assertTrue($result);
-        $this->assertDatabaseMissing('stored_objects', ['id' => $object->id]);
+        $this->assertNull($object->deletion_requested_at);
+        $this->assertFalse($object->isDeletionRequested());
+
+        $requestedObject = $this->deletionRequestService->requestDeletion($object);
+
+        $this->assertNotNull($requestedObject->deletion_requested_at);
+        $this->assertTrue($requestedObject->isDeletionRequested());
+
+        // Prove metadata row remains in database (not deleted)
+        $this->assertDatabaseHas('stored_objects', [
+            'id' => $object->id,
+            'object_key' => 'temp/request-eligible.pdf',
+        ]);
+        $this->assertNotNull(StoredObject::find($object->id)?->deletion_requested_at);
+    }
+
+    /**
+     * 12f. Ineligible objects (null, future, legal hold) cannot be requested for deletion.
+     */
+    public function test_ineligible_objects_cannot_be_requested_for_deletion(): void
+    {
+        // Case 1: Null delete_after cannot be requested
+        $nullObject = StoredObject::create([
+            'storage_disk' => 'object',
+            'object_key' => 'temp/null-expire.pdf',
+            'media_type' => 'application/pdf',
+            'byte_size' => 1024,
+            'classification' => DataClassification::INTERNAL,
+            'retention_class' => RetentionClass::WARM,
+            'delete_after' => null,
+            'legal_hold' => false,
+        ]);
+
+        try {
+            $this->deletionRequestService->requestDeletion($nullObject);
+            $this->fail('Expected RuntimeException for null delete_after');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('delete_after is not scheduled', $e->getMessage());
+        }
+        $this->assertNull($nullObject->fresh()->deletion_requested_at);
+
+        // Case 2: Future delete_after cannot be requested
+        $futureObject = StoredObject::create([
+            'storage_disk' => 'object',
+            'object_key' => 'temp/future-expire.pdf',
+            'media_type' => 'application/pdf',
+            'byte_size' => 1024,
+            'classification' => DataClassification::INTERNAL,
+            'retention_class' => RetentionClass::WARM,
+            'delete_after' => now()->addDays(14),
+            'legal_hold' => false,
+        ]);
+
+        try {
+            $this->deletionRequestService->requestDeletion($futureObject);
+            $this->fail('Expected RuntimeException for future delete_after');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('retention period has not expired', $e->getMessage());
+        }
+        $this->assertNull($futureObject->fresh()->deletion_requested_at);
+
+        // Case 3: Legal-held object cannot be requested even if expired
+        $holdObject = StoredObject::create([
+            'storage_disk' => 'object',
+            'object_key' => 'temp/held-object.pdf',
+            'media_type' => 'application/pdf',
+            'byte_size' => 1024,
+            'classification' => DataClassification::CONFIDENTIAL,
+            'retention_class' => RetentionClass::COLD,
+            'delete_after' => now()->subDays(5),
+            'legal_hold' => true,
+        ]);
+
+        try {
+            $this->deletionRequestService->requestDeletion($holdObject);
+            $this->fail('Expected RuntimeException for legal-held object');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('object is under legal hold', $e->getMessage());
+        }
+        $this->assertNull($holdObject->fresh()->deletion_requested_at);
+    }
+
+    /**
+     * 12g. Duplicate deletion request is idempotent.
+     */
+    public function test_duplicate_deletion_request_is_idempotent(): void
+    {
+        $object = StoredObject::create([
+            'storage_disk' => 'object',
+            'object_key' => 'temp/idempotent.pdf',
+            'media_type' => 'application/pdf',
+            'byte_size' => 1024,
+            'classification' => DataClassification::INTERNAL,
+            'retention_class' => RetentionClass::HOT,
+            'delete_after' => now()->subMinutes(5),
+            'legal_hold' => false,
+        ]);
+
+        $firstResult = $this->deletionRequestService->requestDeletion($object);
+        $firstTimestamp = $firstResult->deletion_requested_at;
+
+        $secondResult = $this->deletionRequestService->requestDeletion($object);
+        $this->assertEquals($firstTimestamp, $secondResult->deletion_requested_at);
+    }
+
+    /**
+     * 12h. Legal hold placed after deletion request protects object from subsequent deletion.
+     */
+    public function test_legal_hold_placed_after_deletion_request_protects_object(): void
+    {
+        $object = StoredObject::create([
+            'storage_disk' => 'object',
+            'object_key' => 'temp/held-after-request.pdf',
+            'media_type' => 'application/pdf',
+            'byte_size' => 1024,
+            'classification' => DataClassification::CONFIDENTIAL,
+            'retention_class' => RetentionClass::WARM,
+            'delete_after' => now()->subMinutes(30),
+            'legal_hold' => false,
+        ]);
+
+        // Phase 1: Request succeeds
+        $this->deletionRequestService->requestDeletion($object);
+        $this->assertTrue($object->fresh()->isDeletionRequested());
+
+        // Later: Legal hold is applied due to dispute/audit
+        $object->legal_hold = true;
+        $object->save();
+
+        // Must now fail retention policy check
+        $this->assertFalse($this->retentionPolicy->isDeletionEligible($object->fresh(), now()));
+
+        // Model delete must be blocked
+        $this->expectException(RuntimeException::class);
+        $object->delete();
     }
 
     /**

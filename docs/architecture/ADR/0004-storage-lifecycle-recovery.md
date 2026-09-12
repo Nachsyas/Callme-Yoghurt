@@ -110,19 +110,31 @@ AND now >= delete_after
 AND legal_hold == FALSE
 ```
 
-#### Dual-Layer Enforcement:
-1. **Application Layer (`RetentionPolicyService` & `StoredObject` Eloquent Hooks)**:
-   - `RetentionPolicyService::isDeletionEligible(StoredObject $object, DateTimeInterface $now): bool` evaluates eligibility before any deletion pipeline executes.
-   - `StoredObject::deleting` model lifecycle hook intercepts delete attempts and throws a `RuntimeException` if an ineligible object is deleted via Eloquent.
+#### Dual-Layer Enforcement & Two-Phase Deletion Lifecycle:
+1. **Application Layer (`RetentionPolicyService` & `StoredObjectDeletionRequestService`)**:
+   - `RetentionPolicyService::isDeletionEligible(StoredObject $object, DateTimeInterface $now): bool` evaluates retention eligibility based on `delete_after` expiration and the absence of `legal_hold`.
+   - `StoredObjectDeletionRequestService::requestDeletion(StoredObject $object, ?DateTimeInterface $now): StoredObject` implements **Phase 1 (Durable Deletion Request)**:
+     - Opens a database transaction and acquires a PostgreSQL row lock (`FOR UPDATE`) on the record to eliminate Time-of-Check to Time-of-Use (TOCTOU) races.
+     - Re-validates eligibility on the freshly locked row.
+     - Persists `deletion_requested_at` timestamp.
+     - Commits the transaction and executes **ZERO physical binary deletions**.
+   - `StoredObject::deleting` model lifecycle hook intercepts direct delete attempts and throws a `RuntimeException` if an ineligible object is targeted for deletion via Eloquent.
 2. **PostgreSQL Database Boundary (Trigger Guard)**:
-   - A PostgreSQL `BEFORE DELETE` trigger (`trg_protect_stored_objects_retention`) aborts deletion with an `integrity_constraint_violation` exception whenever:
+   - A PostgreSQL `BEFORE DELETE` trigger (`trg_protect_stored_objects_retention`) aborts hard metadata deletion with an `integrity_constraint_violation` exception whenever:
      ```sql
      OLD.legal_hold = TRUE
      OR OLD.delete_after IS NULL
      OR OLD.delete_after > CURRENT_TIMESTAMP
      ```
-   - This ensures that even direct SQL queries or unvalidated background jobs cannot bypass legal hold or scheduled retention invariants.
-   - *Note*: Automated destructive deletion background workers are deferred to future operational phases; Gate 0D.2 establishes policy and defensive persistence only.
+   - This ensures that direct SQL queries or rogue jobs cannot bypass legal hold or scheduled retention invariants.
+
+#### Lifecycle Separation & No Distributed Transaction:
+- **No Cross-System ACID Transaction**: PostgreSQL and S3-compatible object storage cannot participate in a single distributed ACID transaction. Attempting immediate binary deletion followed by metadata removal is inherently unsafe.
+- **Three Distinct Lifecycle Events**:
+  1. *Deletion Request*: `deletion_requested_at` is recorded in PostgreSQL. The metadata row remains in the database. `deletion_requested_at` is durable intent, NOT proof of binary removal.
+  2. *Physical Binary Deletion (Phase 2, Deferred)*: An asynchronous, retryable, idempotent cleanup worker loads requested deletions, re-acquires a row lock, and **must re-evaluate legal hold and retention eligibility** immediately before issuing physical delete. If a legal hold was placed *after* the request, the binary MUST NOT be deleted.
+  3. *Metadata Finalization / Hard Delete*: Upon verified binary deletion, the worker finalizes the metadata record or tombstone.
+- *Note*: Live object-storage binary deletion workers are explicitly deferred; Gate 0D implements and verifies policy persistence and safe two-phase request intent only.
 
 ---
 
@@ -166,16 +178,18 @@ interface ObjectStorageProviderInterface
 }
 ```
 
-#### 2. Domain Deletion Coordinator (`StoredObjectDeletionService`):
-Orchestrates deletion safely:
+#### 2. Domain Request Coordinator (`StoredObjectDeletionRequestService`):
+Orchestrates deletion intent safely without physical I/O:
 ```text
 StoredObject
     ↓
-RetentionPolicyService (Check eligibility)
-    ↓ If eligible:
-ObjectStorageProviderInterface::delete($object->object_key)
+Database Transaction + Row Lock (FOR UPDATE)
     ↓
-StoredObject::delete() (Database record removed subject to DB trigger)
+RetentionPolicyService (Verify eligibility on locked state)
+    ↓ If eligible:
+Set deletion_requested_at = now()
+    ↓
+Commit Transaction (Row preserved, physical binary intact)
 ```
 
 #### 3. Filesystem Configuration (`config/filesystems.php`):

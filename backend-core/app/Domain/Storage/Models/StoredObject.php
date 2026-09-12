@@ -29,6 +29,7 @@ class StoredObject extends Model
         'classification',
         'retention_class',
         'delete_after',
+        'deletion_requested_at',
         'legal_hold',
     ];
 
@@ -44,6 +45,7 @@ class StoredObject extends Model
             'classification' => DataClassification::class,
             'retention_class' => RetentionClass::class,
             'delete_after' => 'datetime',
+            'deletion_requested_at' => 'datetime',
             'legal_hold' => 'boolean',
         ];
     }
@@ -82,5 +84,13 @@ class StoredObject extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(ObjectAttachment::class, 'stored_object_id');
+    }
+
+    /**
+     * Check whether deletion has been formally requested for this object.
+     */
+    public function isDeletionRequested(): bool
+    {
+        return $this->deletion_requested_at !== null;
     }
 }

@@ -71,12 +71,12 @@
 - [x] `TESTED` Design batch/lot traceability on stock movement (`inventory_lots` with compound unique item+lot constraint, zero mutable quantity column; lot balance derived from ledger).
 - [x] `TESTED` Design stock reservation and allocation model (`stock_reservations` and `stock_allocations` connecting reservation to specific lots for FEFO readiness).
 - [x] `TESTED` Define append-oriented stock ledger semantics (`stock_ledger_entries` with signed delta, event types, transfer correlation IDs, model-enforced immutability rejecting updates/deletes and zero deltas).
-- [x] `TESTED` Define object-storage metadata and retention model (`stored_objects` and `object_attachments` PostgreSQL persistence, dual-layer DB trigger + model retention guards, controlled polymorphic ownership; verified by tests).
-- [x] `IMPLEMENTED` Define data lifecycle classes: hot, warm, cold, delete/legal-hold (documented in ADR-0004; enums and `RetentionPolicyService` tested; automated destructive cleanup worker deferred).
+- [x] `TESTED` Define object-storage metadata and retention model (`stored_objects` and `object_attachments` PostgreSQL persistence, dual-layer DB trigger + model retention guards, two-phase deletion request lifecycle via `StoredObjectDeletionRequestService`, controlled polymorphic ownership; verified by tests; operational binary deletion worker is PLANNED / UNVERIFIED).
+- [x] `IMPLEMENTED` Define data lifecycle classes: hot, warm, cold, delete/legal-hold (documented in ADR-0004; enums, `RetentionPolicyService`, and `StoredObjectDeletionRequestService` tested; automated destructive cleanup worker deferred).
 - [x] `DOCUMENTED TARGET` Define backup/PITR target architecture (documented in ADR-0004: target RPO <= 15m, target RTO <= 4h; operational backup automation and restore drills are not yet implemented/verified).
 - [x] `IMPLEMENTED` Add pgvector readiness without embedding transactional rows indiscriminately (documented in ADR-0004: `knowledge_documents` and `knowledge_chunks` metadata tables without vector columns; core ERP boots without pgvector; transactional and PII data strictly excluded).
 
-**Gate 0D status: PASS — authoritative data/storage architecture and persistence foundation are implemented/tested where executable; object-storage runtime integration, automated backup/PITR operations, restore drills, and pgvector execution remain future operational capabilities and are not claimed as verified.**
+**Gate 0D status: PASS — authoritative data/storage architecture and persistence foundation are implemented/tested where executable; object-storage runtime integration, operational binary deletion worker, automated backup/PITR operations, restore drills, and pgvector execution remain future operational capabilities and are not claimed as verified.**
 
 ## Gate 0E — Transaction Foundation
 
