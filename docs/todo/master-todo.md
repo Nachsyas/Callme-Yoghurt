@@ -51,16 +51,16 @@
 
 ## Gate 0C — ERP Core Foundation
 
-- [x] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel application (`composer.json`, committed `composer.lock`, `artisan`, `public/index.php`, `bootstrap/app.php`, `bootstrap/providers.php`).
+- [x] `IMPLEMENTED` Convert `backend-core` from partial scaffold into a runnable Laravel 13 application (`composer.json`, committed `composer.lock`, `artisan`, `public/index.php`, `bootstrap/app.php`, `bootstrap/providers.php`).
 - [x] `IMPLEMENTED` Add dependency/bootstrap/config/routes/runtime structure (`config/app.php`, `config/database.php`, `config/crm.php`, `config/services.php`, `routes/api.php`, `routes/web.php`, `routes/console.php`).
 - [x] `IMPLEMENTED` Establish explicit domain/application/infrastructure boundaries (`app/Domain`, `app/Application`, `app/Infrastructure`, `app/Http`, `app/Providers`).
 - [x] `IMPLEMENTED` Connect ERP Core to PostgreSQL through authoritative persistence (default `pgsql`, zero MongoDB/Prisma coupling, sanitized development configuration).
 - [x] `TESTED` Run database migrations from a clean environment (verified via Gate 0C CI workflow with PostgreSQL 16 service).
 - [x] `TESTED` Run ERP automated tests from a clean environment (verified via Gate 0C CI workflow; 15 tests, 62 assertions passing).
-- [ ] `IN PROGRESS` Enforce reproducible, audited dependency installation from committed `composer.lock` with zero advisory bypasses (`composer audit --locked` blocked by upstream `laravel/framework` advisories).
+- [x] `TESTED` Enforce reproducible, audited dependency installation from committed `composer.lock` with zero advisory bypasses (`composer audit --locked` clean with 0 advisories on Laravel 13 / PHP 8.3).
 - [x] `VERIFIED` Demonstrate ERP API boot and health check (verified via Gate 0C CI workflow: `about`, `route:list`, `/api/health`, `/api/ready`, and authenticated `/api/internal/health`).
 
-**Gate 0C status: IN PROGRESS — Laravel 11 ERP Core runtime and PostgreSQL persistence are functionally verified (15 tests, 62 assertions in clean environment), and dependencies are locked to committed `backend-core/composer.lock`; marked IN PROGRESS because `composer audit --locked` identifies 3 upstream security advisories on `laravel/framework` v11.56.1 (fixed in >=12.61.1), awaiting framework version resolution.**
+**Gate 0C status: PASS — Laravel 13 ERP Core runtime and PostgreSQL persistence are verified on PHP 8.3 (ADR-0002), locked to committed `backend-core/composer.lock`, audit-clean (0 advisories), and passing the full automated test suite on a clean Linux runner with PostgreSQL 16 (15 tests, 62 assertions).**
 
 ## Gate 0D — Data & Storage Architecture
 

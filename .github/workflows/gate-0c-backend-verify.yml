@@ -44,24 +44,9 @@ jobs:
         working-directory: backend-core
         run: composer validate --strict
 
-      - name: Install or resolve Composer dependencies
+      - name: Install Composer dependencies
         working-directory: backend-core
-        run: |
-          if [ -f composer.lock ]; then
-            echo "Installing dependencies from existing lock file..."
-            composer install --prefer-dist --no-interaction --no-progress
-          else
-            echo "No lock file found; generating fresh lock file via composer update..."
-            composer update --prefer-dist --no-interaction --no-progress
-          fi
-
-      - name: Upload composer.lock artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: composer-lock
-          path: backend-core/composer.lock
-          if-no-files-found: warn
+        run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Audit Composer dependencies
         working-directory: backend-core
