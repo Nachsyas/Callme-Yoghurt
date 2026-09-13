@@ -167,26 +167,45 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A & Gate 0E
   });
 
   // 4. Net content normalization helper (parseNetContentMl)
-  it('proves parseNetContentMl correctly maps supported units without floating point drift', () => {
-    // 250 ML
+  it('proves parseNetContentMl correctly maps supported units with exact BigInt decimal parsing', () => {
+    // Exact 250 ML
     assert.strictEqual(parseNetContentMl('250.000000', 'ML'), 250);
     assert.strictEqual(parseNetContentMl('250', 'ML'), 250);
     assert.strictEqual(parseNetContentMl('250', 'ml'), 250);
 
-    // 1000 ML
+    // Exact 1000 ML
     assert.strictEqual(parseNetContentMl('1000.000000', 'ML'), 1000);
     assert.strictEqual(parseNetContentMl('1000', 'ml'), 1000);
 
-    // 1 Liter -> 1000 ML
+    // Exact 1 Liter -> 1000 ML
     assert.strictEqual(parseNetContentMl('1.000000', 'L'), 1000);
     assert.strictEqual(parseNetContentMl('1', 'L'), 1000);
     assert.strictEqual(parseNetContentMl('1', 'l'), 1000);
 
-    // Fractional Liter: 0.25 L -> 250 ML
+    // Exact Fractional Liter: 0.25 L -> 250 ML
     assert.strictEqual(parseNetContentMl('0.250000', 'L'), 250);
+    assert.strictEqual(parseNetContentMl('0.25', 'L'), 250);
   });
 
-  it('proves parseNetContentMl rejects invalid, negative, or unsupported units', () => {
+  it('proves parseNetContentMl rejects near-value fuzzy amounts, non-exact divisions, and scientific notation (Gate 0E.2A.2)', () => {
+    // Near-values that fuzzy Math.round() would have incorrectly accepted
+    assert.strictEqual(parseNetContentMl('249.600000', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('250.000001', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('999.600000', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('999.999999', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('0.999600', 'L'), null);
+    assert.strictEqual(parseNetContentMl('1.000001', 'L'), null);
+
+    // Scientific notation
+    assert.strictEqual(parseNetContentMl('1e3', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('1E3', 'L'), null);
+    assert.strictEqual(parseNetContentMl('2.5e2', 'ML'), null);
+
+    // Precision exceeding PostgreSQL DECIMAL(18,6) limit (>6 decimal places)
+    assert.strictEqual(parseNetContentMl('250.0000000', 'ML'), null);
+  });
+
+  it('proves parseNetContentMl rejects invalid, negative, zero, or unsupported units', () => {
     // Unsupported UOMs
     assert.strictEqual(parseNetContentMl('250', 'GRAM'), null);
     assert.strictEqual(parseNetContentMl('1', 'KG'), null);
@@ -198,13 +217,18 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A & Gate 0E
     assert.strictEqual(parseNetContentMl('', 'ML'), null);
     assert.strictEqual(parseNetContentMl('250', ''), null);
 
-    // Non-numeric / NaN / non-finite
+    // Non-numeric / NaN / non-finite / invalid characters
     assert.strictEqual(parseNetContentMl('abc', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('NaN', 'ML'), null);
     assert.strictEqual(parseNetContentMl('Infinity', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('+250', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('250.abc', 'ML'), null);
 
-    // Non-positive values
+    // Zero / negative values
     assert.strictEqual(parseNetContentMl('0', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('0.000000', 'ML'), null);
     assert.strictEqual(parseNetContentMl('-250', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('-250.000000', 'ML'), null);
   });
 
   // 5. Size matching does NOT guess from SKU

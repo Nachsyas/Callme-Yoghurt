@@ -40,17 +40,22 @@ export function isUuid(value: unknown): value is string {
   );
 }
 
+const NET_CONTENT_SCALE = BigInt(1000000);
+const DECIMAL_STRING_REGEX = /^\d+(\.\d+)?$/;
+
 /**
  * Normalizes authoritative variant net content into milliliters (ml) for storefront sizing.
  *
- * Invariants (Gate 0E.2A.1):
- * - Supported UOMs: ML (direct), L (multiplied by 1000).
- * - Rejects null, undefined, non-numeric, zero/negative, non-finite, or unsupported UOMs.
- * - Zero floating-point drift: converts via exact integer or bounded precision.
+ * Invariants (Gate 0E.2A.2):
+ * - Authoritative PostgreSQL DECIMAL(18,6) exact parsing using BigInt scaled arithmetic.
+ * - Zero floating-point drift: rejects parseFloat, Number arithmetic, and Math.round/floor/ceil.
+ * - Supported UOMs: ML (direct), L (multiplied by BigInt(1000)).
+ * - Exact whole milliliter requirement: rejects any value where (scaledMl % BigInt(1000000) !== BigInt(0)).
+ * - Rejects non-strings, negative, zero, scientific notation, NaN, Infinity, more than 6 decimal places, or unsupported UOMs.
  * - Never falls back to SKU string guessing.
  */
 export function parseNetContentMl(quantity: unknown, uom: unknown): number | null {
-  if (typeof quantity !== 'string' || typeof uom !== 'string') {
+  if (typeof quantity !== "string" || typeof uom !== "string") {
     return null;
   }
 
@@ -61,22 +66,60 @@ export function parseNetContentMl(quantity: unknown, uom: unknown): number | nul
     return null;
   }
 
-  const parsedNum = Number(trimmedQty);
-  if (!Number.isFinite(parsedNum) || parsedNum <= 0) {
+  if (trimmedUom !== "ML" && trimmedUom !== "L") {
     return null;
   }
 
-  if (trimmedUom === 'ML') {
-    const ml = Math.round(parsedNum);
-    return ml > 0 ? ml : null;
+  // Reject signs (+/-), scientific notation (1e3), non-digits, multiple dots, etc.
+  if (!DECIMAL_STRING_REGEX.test(trimmedQty)) {
+    return null;
   }
 
-  if (trimmedUom === 'L') {
-    const ml = Math.round(parsedNum * 1000);
-    return ml > 0 ? ml : null;
+  const parts = trimmedQty.split(".");
+  const wholePartStr = parts[0];
+  const fracPartStr = parts[1] || "";
+
+  // PostgreSQL DECIMAL(18,6) allows at most 6 fractional digits
+  if (fracPartStr.length > 6) {
+    return null;
   }
 
-  return null;
+  const paddedFracStr = fracPartStr.padEnd(6, "0");
+
+  let whole: bigint;
+  let fraction: bigint;
+  try {
+    whole = BigInt(wholePartStr);
+    fraction = BigInt(paddedFracStr);
+  } catch {
+    return null;
+  }
+
+  const scaledQuantity = whole * NET_CONTENT_SCALE + fraction;
+  if (scaledQuantity <= BigInt(0)) {
+    return null;
+  }
+
+  let scaledMl: bigint;
+  if (trimmedUom === "ML") {
+    scaledMl = scaledQuantity;
+  } else if (trimmedUom === "L") {
+    scaledMl = scaledQuantity * BigInt(1000);
+  } else {
+    return null;
+  }
+
+  // Must yield an exact whole milliliter
+  if (scaledMl % NET_CONTENT_SCALE !== BigInt(0)) {
+    return null;
+  }
+
+  const mlBigInt = scaledMl / NET_CONTENT_SCALE;
+  if (mlBigInt <= BigInt(0) || mlBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return null;
+  }
+
+  return Number(mlBigInt);
 }
 
 /**
