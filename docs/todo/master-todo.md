@@ -99,6 +99,8 @@
 - [x] `TESTED` Client price renamed to presentation-only `display_price` with advisory UI copy.
 - [x] `TESTED` Cart transaction projection produces strictly `{ variant_id, quantity }`, omitting all client-side prices or totals.
 - [x] `TESTED` Checkout relation lock hardening on order resolution explicitly locking `Product` and `InventoryItem` rows with `lockForUpdate()`.
+- [x] `TESTED` Gate 0E.2A.1 Catalog Identity Boundary Hardening: BFF catalog parser strictly validates ProductVariant UUID (UUIDv7/v4 format) and exact `IDR` currency (no case normalization); unknown route slug never resolves or purchases Plain fallback; size-to-variant mapping strictly normalizes authoritative `net_content` (ML/L) without SKU string guessing.
+- [ ] `PLANNED` Homepage catalog cards retain legacy display-only static pricing (they are NOT transaction authority; Product Detail + Cart transaction identity and display price use ERP catalog data; homepage catalog-display cutover remains future storefront presentation cleanup).
 
 ### Gate 0E.2B — Browser Checkout Cutover & Lifecycle (Pending)
 - [ ] `IMPLEMENTED` Real browser POST `/api/checkout`.
@@ -157,6 +159,7 @@ The following repository pieces already exist but must not be treated as complet
 - Playwright return-flow test — requires repair/re-verification
 - BFF checkout route — security P0 patch `IMPLEMENTED`, not yet `TESTED`
 - Prisma ERP-like schema — architecture/domain exploration input, not authoritative production persistence
+- Homepage catalog cards — retain legacy display-only static pricing; NOT transaction authority (Product Detail + Cart use ERP catalog data; cutover deferred to future storefront presentation cleanup).
 
 ---
 

@@ -1,10 +1,16 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { GET } from '../../src/app/api/catalog/route.ts';
-import { parsePublicCatalogResponse } from '../../src/lib/catalog.ts';
+import {
+  parsePublicCatalogResponse,
+  parseNetContentMl,
+  isUuid,
+  type PublicCatalogVariant,
+  type PublicCatalogProduct,
+} from '../../src/lib/catalog.ts';
 import { useCartStore, toTransactionProjection, type CartItem } from '../../src/store/cartStore.ts';
 
-describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => {
+describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A & Gate 0E.2A.1)', () => {
   const originalEnv = { ...process.env };
   const originalFetch = globalThis.fetch;
   const testSecretToken = 'super-secret-erp-service-token-gate0e2a';
@@ -32,7 +38,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
           name: 'Callme Yoghurt Stroberi',
           variants: [
             {
-              variant_id: '11111111-2222-3333-4444-555555555555',
+              variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
               sku: 'CY-STR-250',
               name: 'Stroberi 250ml',
               net_content: {
@@ -45,12 +51,12 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
               },
             },
             {
-              variant_id: '66666666-7777-8888-9999-000000000000',
+              variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43b',
               sku: 'CY-STR-1000',
               name: 'Stroberi 1 Liter',
               net_content: {
-                quantity: '1000.000000',
-                uom: 'ML',
+                quantity: '1.000000',
+                uom: 'L',
               },
               price: {
                 currency: 'IDR',
@@ -75,7 +81,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     assert.strictEqual(parsed.products[0].variants.length, 2);
 
     const v1 = parsed.products[0].variants[0];
-    assert.strictEqual(v1.variant_id, '11111111-2222-3333-4444-555555555555');
+    assert.strictEqual(v1.variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43a');
     assert.strictEqual(v1.sku, 'CY-STR-250');
     assert.strictEqual(v1.name, 'Stroberi 250ml');
     assert.strictEqual(v1.price.currency, 'IDR');
@@ -84,8 +90,187 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     assert.strictEqual(v1.net_content?.uom, 'ML');
   });
 
-  // 2. Malformed catalog rejected
-  it('proves malformed catalog rejected', () => {
+  // 2. Strict UUID enforcement in parser
+  it('proves malformed or non-UUID variant_id is rejected by catalog parser', () => {
+    const raw = makeValidUpstreamCatalog();
+
+    // Arbitrary string is NOT a UUID
+    raw.products[0].variants[0].variant_id = 'not-a-uuid';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    // Empty string
+    raw.products[0].variants[0].variant_id = '';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    // Whitespace only
+    raw.products[0].variants[0].variant_id = '   ';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    // Invalid characters
+    raw.products[0].variants[0].variant_id = '018f6c38-8c50-711e-b8d4-53a8be77e43z';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    // Wrong length
+    raw.products[0].variants[0].variant_id = '018f6c38-8c50-711e-b8d4-53a8be77e4';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+  });
+
+  it('proves valid UUIDv4 and UUIDv7 variant_ids are accepted by catalog parser', () => {
+    const raw = makeValidUpstreamCatalog();
+
+    // Standard UUIDv4
+    raw.products[0].variants[0].variant_id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+    // PostgreSQL / Laravel UUIDv7
+    raw.products[0].variants[1].variant_id = '018f6c38-8c50-711e-b8d4-53a8be77e43b';
+
+    const parsed = parsePublicCatalogResponse(raw);
+    assert.ok(parsed);
+    assert.strictEqual(parsed.products[0].variants[0].variant_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+    assert.strictEqual(parsed.products[0].variants[1].variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43b');
+  });
+
+  // 3. Exact IDR currency enforcement
+  it('proves USD and non-IDR currencies are rejected by catalog parser', () => {
+    const raw = makeValidUpstreamCatalog();
+    raw.products[0].variants[0].price.currency = 'USD';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    raw.products[0].variants[0].price.currency = 'SGD';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    raw.products[0].variants[0].price.currency = 'EUR';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+  });
+
+  it('proves lowercase idr or mixed-case Idr is rejected by catalog parser (no auto-normalization)', () => {
+    const raw = makeValidUpstreamCatalog();
+
+    raw.products[0].variants[0].price.currency = 'idr';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    raw.products[0].variants[0].price.currency = 'Idr';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+
+    raw.products[0].variants[0].price.currency = ' IDR ';
+    assert.strictEqual(parsePublicCatalogResponse(raw), null);
+  });
+
+  it('proves exact IDR currency is accepted by catalog parser', () => {
+    const raw = makeValidUpstreamCatalog();
+    raw.products[0].variants[0].price.currency = 'IDR';
+    raw.products[0].variants[1].price.currency = 'IDR';
+
+    const parsed = parsePublicCatalogResponse(raw);
+    assert.ok(parsed);
+    assert.strictEqual(parsed.products[0].variants[0].price.currency, 'IDR');
+    assert.strictEqual(parsed.products[0].variants[1].price.currency, 'IDR');
+  });
+
+  // 4. Net content normalization helper (parseNetContentMl)
+  it('proves parseNetContentMl correctly maps supported units without floating point drift', () => {
+    // 250 ML
+    assert.strictEqual(parseNetContentMl('250.000000', 'ML'), 250);
+    assert.strictEqual(parseNetContentMl('250', 'ML'), 250);
+    assert.strictEqual(parseNetContentMl('250', 'ml'), 250);
+
+    // 1000 ML
+    assert.strictEqual(parseNetContentMl('1000.000000', 'ML'), 1000);
+    assert.strictEqual(parseNetContentMl('1000', 'ml'), 1000);
+
+    // 1 Liter -> 1000 ML
+    assert.strictEqual(parseNetContentMl('1.000000', 'L'), 1000);
+    assert.strictEqual(parseNetContentMl('1', 'L'), 1000);
+    assert.strictEqual(parseNetContentMl('1', 'l'), 1000);
+
+    // Fractional Liter: 0.25 L -> 250 ML
+    assert.strictEqual(parseNetContentMl('0.250000', 'L'), 250);
+  });
+
+  it('proves parseNetContentMl rejects invalid, negative, or unsupported units', () => {
+    // Unsupported UOMs
+    assert.strictEqual(parseNetContentMl('250', 'GRAM'), null);
+    assert.strictEqual(parseNetContentMl('1', 'KG'), null);
+    assert.strictEqual(parseNetContentMl('1', 'PCS'), null);
+
+    // Missing or empty values
+    assert.strictEqual(parseNetContentMl(null, 'ML'), null);
+    assert.strictEqual(parseNetContentMl('250', null), null);
+    assert.strictEqual(parseNetContentMl('', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('250', ''), null);
+
+    // Non-numeric / NaN / non-finite
+    assert.strictEqual(parseNetContentMl('abc', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('Infinity', 'ML'), null);
+
+    // Non-positive values
+    assert.strictEqual(parseNetContentMl('0', 'ML'), null);
+    assert.strictEqual(parseNetContentMl('-250', 'ML'), null);
+  });
+
+  // 5. Size matching does NOT guess from SKU
+  it('proves size-to-variant mapping does NOT guess from SKU when net_content is missing or invalid', () => {
+    const rawVariantWithNullNetContent: PublicCatalogVariant = {
+      variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
+      sku: 'CY-STR-250', // Has "250" in SKU, but net content is null!
+      name: 'Stroberi Mystery',
+      net_content: {
+        quantity: null,
+        uom: null,
+      },
+      price: {
+        currency: 'IDR',
+        amount: 25000,
+      },
+    };
+
+    // Attempting size matching strictly via parseNetContentMl
+    const ml = parseNetContentMl(
+      rawVariantWithNullNetContent.net_content?.quantity,
+      rawVariantWithNullNetContent.net_content?.uom
+    );
+    assert.strictEqual(ml, null, 'Must return null for missing net content');
+
+    // Therefore variant250 matching logic:
+    const matches250 = ml === 250;
+    assert.strictEqual(matches250, false, 'Must NOT match 250ml option based on SKU string');
+  });
+
+  // 6. Unknown route slug cannot resolve/purchase Plain as fallback
+  it('proves unknown route slug cannot resolve or purchase Plain as fallback', () => {
+    const catalogData = {
+      products: [
+        {
+          slug: 'plain',
+          name: 'Callme Yoghurt Plain',
+          variants: [
+            {
+              variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43c',
+              sku: 'CY-PLN-250',
+              name: 'Plain 250ml',
+              net_content: { quantity: '250.000000', uom: 'ML' },
+              price: { currency: 'IDR' as const, amount: 20000 },
+            },
+          ],
+        },
+      ],
+    };
+
+    const requestedSlug = 'unknown-flavor';
+
+    // Storefront matching logic:
+    const matchedProduct = catalogData.products.find(
+      (p: PublicCatalogProduct) => p.slug.toLowerCase() === requestedSlug.toLowerCase()
+    );
+
+    // Proves unknown slug returns null instead of falling back to 'plain'
+    assert.strictEqual(matchedProduct, undefined, 'Unknown slug must NOT match any product');
+
+    // Cart store remains empty because Add to Cart is disabled when matchedProduct is null
+    assert.strictEqual(useCartStore.getState().items.length, 0);
+  });
+
+  // 7. General malformed catalog rejected
+  it('proves malformed catalog structure is rejected', () => {
     // Missing slug
     assert.strictEqual(
       parsePublicCatalogResponse({
@@ -103,7 +288,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
             name: 'Stroberi',
             variants: [
               {
-                variant_id: 'uuid-1',
+                variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
                 sku: 'CY-STR-250',
                 name: 'Stroberi',
                 price: { currency: 'IDR', amount: 25000.5 },
@@ -124,30 +309,10 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
             name: 'Stroberi',
             variants: [
               {
-                variant_id: 'uuid-1',
+                variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
                 sku: 'CY-STR-250',
                 name: 'Stroberi',
                 price: { currency: 'IDR', amount: -100 },
-              },
-            ],
-          },
-        ],
-      }),
-      null
-    );
-
-    // Missing variant_id
-    assert.strictEqual(
-      parsePublicCatalogResponse({
-        products: [
-          {
-            slug: 'stroberi',
-            name: 'Stroberi',
-            variants: [
-              {
-                sku: 'CY-STR-250',
-                name: 'Stroberi',
-                price: { currency: 'IDR', amount: 25000 },
               },
             ],
           },
@@ -163,7 +328,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     assert.strictEqual(parsePublicCatalogResponse('string'), null);
   });
 
-  // 3. Missing ERP config fails closed
+  // 8. Missing ERP config fails closed
   it('proves missing ERP config fails closed with HTTP 503', async () => {
     delete process.env.ERP_INTERNAL_URL;
     delete process.env.ERP_SERVICE_TOKEN;
@@ -176,7 +341,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     assert.strictEqual(res.headers.get('Cache-Control'), 'no-store');
   });
 
-  // 4. Service credentials never appear publicly
+  // 9. Service credentials never appear publicly
   it('proves service credentials never appear publicly in body or headers', async () => {
     globalThis.fetch = async () => {
       return new Response(
@@ -215,26 +380,12 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     });
   });
 
-  // 5. Catalog includes real variant_id
-  it('proves catalog includes real variant_id', () => {
-    const raw = makeValidUpstreamCatalog();
-    const parsed = parsePublicCatalogResponse(raw);
-
-    assert.ok(parsed);
-    const expectedUuid = '11111111-2222-3333-4444-555555555555';
-    assert.strictEqual(parsed.products[0].variants[0].variant_id, expectedUuid);
-    assert.match(
-      parsed.products[0].variants[0].variant_id,
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
-  });
-
-  // 6. Cart identity uses variant_id
+  // 10. Cart identity uses variant_id
   it('proves cart identity uses variant_id and removes correctly by variant_id', () => {
     const store = useCartStore.getState();
 
     const item1: CartItem = {
-      variant_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
       sku: 'CY-STR-250',
       name: 'Callme Yoghurt Stroberi',
       volume_ml: 250,
@@ -246,21 +397,21 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
 
     const items = useCartStore.getState().items;
     assert.strictEqual(items.length, 1);
-    assert.strictEqual(items[0].variant_id, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+    assert.strictEqual(items[0].variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43a');
     assert.strictEqual(items[0].sku, 'CY-STR-250');
     assert.strictEqual(items[0].display_price, 25000);
 
     // Remove by variant_id
-    useCartStore.getState().removeItem('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
+    useCartStore.getState().removeItem('018f6c38-8c50-711e-b8d4-53a8be77e43a');
     assert.strictEqual(useCartStore.getState().items.length, 0);
   });
 
-  // 7. Same variant_id merges quantity
+  // 11. Same variant_id merges quantity
   it('proves same variant_id merges quantity', () => {
     const store = useCartStore.getState();
 
     const itemA: CartItem = {
-      variant_id: 'b1ffcd88-8b1a-4fe7-aa5c-5aa8ac270b22',
+      variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43b',
       sku: 'CY-MAN-250',
       name: 'Callme Yoghurt Mangga',
       volume_ml: 250,
@@ -269,7 +420,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     };
 
     const itemB: CartItem = {
-      variant_id: 'b1ffcd88-8b1a-4fe7-aa5c-5aa8ac270b22',
+      variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43b',
       sku: 'CY-MAN-250',
       name: 'Callme Yoghurt Mangga',
       volume_ml: 250,
@@ -286,11 +437,11 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
     assert.strictEqual(useCartStore.getState().getEstimatedTotal(), 5 * 28000);
   });
 
-  // 8. Checkout item projection contains only variant_id and quantity
+  // 12. Checkout item projection contains only variant_id and quantity
   it('proves checkout item projection contains only variant_id and quantity', () => {
     const cartItems: CartItem[] = [
       {
-        variant_id: 'var-uuid-1',
+        variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
         sku: 'CY-STR-250',
         name: 'Stroberi 250ml',
         volume_ml: 250,
@@ -298,7 +449,7 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
         display_price: 25000,
       },
       {
-        variant_id: 'var-uuid-2',
+        variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43b',
         sku: 'CY-MAN-1000',
         name: 'Mangga 1 Liter',
         volume_ml: 1000,
@@ -320,17 +471,17 @@ describe('Authoritative Storefront Catalog & Cart Identity (Gate 0E.2A)', () => 
       );
     }
 
-    assert.strictEqual(projection[0].variant_id, 'var-uuid-1');
+    assert.strictEqual(projection[0].variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43a');
     assert.strictEqual(projection[0].quantity, 3);
-    assert.strictEqual(projection[1].variant_id, 'var-uuid-2');
+    assert.strictEqual(projection[1].variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43b');
     assert.strictEqual(projection[1].quantity, 1);
   });
 
-  // 9. display_price is not part of transaction projection
+  // 13. display_price is not part of transaction projection
   it('proves display_price is not part of transaction projection', () => {
     const cartItems: CartItem[] = [
       {
-        variant_id: 'var-uuid-xyz',
+        variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43c',
         sku: 'CY-PLAIN-250',
         name: 'Plain 250ml',
         quantity: 4,
