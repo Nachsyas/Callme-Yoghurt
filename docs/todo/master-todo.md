@@ -80,7 +80,7 @@
 
 ## Gate 0E — Transaction Foundation
 
-- [ ] `IMPLEMENTED` Replace fake checkout success with real BFF request.
+### Gate 0E.1 — Server-Authoritative Checkout Foundation
 - [x] `IMPLEMENTED` Replace simulated BFF response with real ERP forwarding behavior that fails closed when ERP is unavailable.
 - [x] `TESTED` Server resolves authoritative SKU/variant data (`CreateCheckoutOrderService` resolves active variants and inventory items).
 - [x] `TESTED` Server calculates authoritative price/total (`CurrentVariantPriceResolver` and integer Rupiah arithmetic with row locks).
@@ -88,12 +88,26 @@
 - [x] `TESTED` Server validates and reserves inventory (`FefoInventoryReservationService` derives availability via PostgreSQL numeric math from ledger minus active reservations).
 - [x] `TESTED` Order creation and reservation occur transactionally (atomic `DB::transaction` with full rollback on any failure).
 - [x] `TESTED` Add end-to-end idempotency for order creation (`checkout_idempotency_keys` with SHA-256 key hash, HMAC-SHA256 request fingerprint, and PostgreSQL upsert/locking).
-- [ ] `IMPLEMENTED` Success page requires a committed order identifier.
 - [x] `TESTED` Reject tampered client price/total input (`CreateOrderRequest` rejects unknown keys and authority fields).
 - [x] `TESTED` Reject insufficient inventory (returns HTTP 409 conflict and rolls back all writes).
 - [x] `TESTED` Prevent duplicate order on retried request (replay returns same committed order with HTTP 200).
 
-**Gate 0E status: IN PROGRESS (Gate 0E.1 = PASS; Gate 0E overall = IN PROGRESS; Gate 0E.2 = pending).**
+### Gate 0E.2A — Authoritative Storefront Catalog Identity Cutover
+- [x] `TESTED` Laravel authoritative catalog endpoint (`GET /api/internal/catalog/products`) under service auth returning only sellable FINISHED_GOOD variants with active IDR prices and UUIDs, excluding internal stock/lot/ledger metadata.
+- [x] `TESTED` Next.js BFF catalog endpoint (`GET /api/catalog`) with strict response parsing, fail-closed handling (503 on missing config, 502 on upstream/malformed failure), and credentials never exposed.
+- [x] `TESTED` Storefront cart refactored to use authoritative `variant_id` identity and merging quantity on duplicate additions.
+- [x] `TESTED` Client price renamed to presentation-only `display_price` with advisory UI copy.
+- [x] `TESTED` Cart transaction projection produces strictly `{ variant_id, quantity }`, omitting all client-side prices or totals.
+- [x] `TESTED` Checkout relation lock hardening on order resolution explicitly locking `Product` and `InventoryItem` rows with `lockForUpdate()`.
+
+### Gate 0E.2B — Browser Checkout Cutover & Lifecycle (Pending)
+- [ ] `IMPLEMENTED` Real browser POST `/api/checkout`.
+- [ ] `IMPLEMENTED` Stable browser idempotency-key lifecycle.
+- [ ] `IMPLEMENTED` Clear cart only after committed order.
+- [ ] `IMPLEMENTED` Committed-order redirect.
+- [ ] `IMPLEMENTED` Success page requires a committed order identifier.
+
+**Gate 0E status: IN PROGRESS (Gate 0E.1 = PASS; Gate 0E.2A = PASS; Gate 0E overall = IN PROGRESS; Gate 0E.2B = pending).**
 
 
 ## Gate 0F — Testing, CI & AI-Agent Governance

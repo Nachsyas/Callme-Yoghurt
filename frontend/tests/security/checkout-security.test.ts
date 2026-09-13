@@ -11,7 +11,7 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
   const testErpUrl = 'http://erp-core-internal.local';
 
   beforeEach(() => {
-    process.env.NODE_ENV = 'test';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
     process.env.ERP_INTERNAL_URL = testErpUrl;
     process.env.ERP_SERVICE_TOKEN = testSecretToken;
     process.env.TRUST_PROXY = 'false';

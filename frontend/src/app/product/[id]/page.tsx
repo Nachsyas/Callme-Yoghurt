@@ -4,7 +4,8 @@ import { useCartStore } from '@/store/cartStore';
 import { CupSoda, Heart, Leaf, Milk, Minus, Plus, ShoppingBag, ShoppingCart, Snowflake, ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { use, useState } from 'react';
+import { use, useEffect, useState } from 'react';
+import type { PublicCatalogData, PublicCatalogProduct, PublicCatalogVariant } from '@/lib/catalog';
 
 interface FlavorData {
   name: string;
@@ -12,7 +13,6 @@ interface FlavorData {
   darkBg: string;
   tagline: string;
   description: string;
-  prices: { 250: number; 1000: number; };
   ingredients: string[];
   nutrition: { calories: string; protein: string; fat: string; sugar: string; };
   svgGradient: React.ReactNode;
@@ -25,7 +25,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#271900',
     tagline: 'Yogurt stirred murni tanpa tambahan gula.',
     description: 'Yogurt stirred murni tanpa tambahan gula dengan tekstur super kental, lembut, dan creamy kualitas homemade terbaik.',
-    prices: { 250: 22000, 1000: 65000 },
     ingredients: ['Yogurt kental murni (99,5%)', 'Kultur Bakteri Probiotik Hidup (L. Bulgaricus, S. Thermophilus, L. Acidophilus)'],
     nutrition: { calories: '110kcal', protein: '8.5g', fat: '3.2g', sugar: '0g' },
     svgGradient: (<linearGradient id="detail-grad-plain" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#f7ebd3" /><stop offset="50%" stopColor="#cba258" /><stop offset="100%" stopColor="#9a7127" /></linearGradient>)
@@ -36,7 +35,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3b1c21',
     tagline: 'Paduan rasa stroberi buah segar aromatik.',
     description: 'Paduan rasa stroberi buah segar aromatik dengan yogurt kental premium dan tambahan topping jelly / nata de coco yang kenyal.',
-    prices: { 250: 25000, 1000: 75000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa stroberi buah alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '120kcal', protein: '8g', fat: '3g', sugar: '12g' },
     svgGradient: (<linearGradient id="detail-grad-stroberi" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffb3c1" /><stop offset="50%" stopColor="#E85D75" /><stop offset="100%" stopColor="#D81E5B" /></linearGradient>)
@@ -47,7 +45,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3d230d',
     tagline: 'Kombinasi rasa asam manis segar eksotis.',
     description: 'Yogurt lembut stirred premium dengan mangga harum manis masak pohon pilihan. Kaya probiotik hidup.',
-    prices: { 250: 28000, 1000: 80000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa mangga alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '130kcal', protein: '7.5g', fat: '2.8g', sugar: '14g' },
     svgGradient: (<linearGradient id="detail-grad-mangga" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffe3b3" /><stop offset="50%" stopColor="#F9A03F" /><stop offset="100%" stopColor="#e07a16" /></linearGradient>)
@@ -58,7 +55,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#232d0f',
     tagline: 'Sensasi kesegaran buah melon premium berair.',
     description: 'Kaya probiotik aktif untuk kesehatan pencernaan maksimal sehari-hari berpadu dengan kesegaran melon.',
-    prices: { 250: 25000, 1000: 75000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa melon alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '115kcal', protein: '8.2g', fat: '3g', sugar: '10g' },
     svgGradient: (<linearGradient id="detail-grad-melon" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#e2f0b6" /><stop offset="50%" stopColor="#A1C349" /><stop offset="100%" stopColor="#7da226" /></linearGradient>)
@@ -69,7 +65,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3B1C33',
     tagline: 'Sensasi rasa anggur merah premium manis eksklusif.',
     description: 'Dipadu dengan stirred yoghurt kental yang lembut, lengkap dengan sensasi mengunyah dari topping jelly.',
-    prices: { 250: 28000, 1000: 80000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa anggur alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '120kcal', protein: '8g', fat: '3g', sugar: '12g' },
     svgGradient: (<linearGradient id="detail-grad-anggur" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#dfb7d8" /><stop offset="50%" stopColor="#7A3B69" /><stop offset="100%" stopColor="#552246" /></linearGradient>)
@@ -80,7 +75,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#4a1523',
     tagline: 'Rasa leci manis harum khas yang menyegarkan.',
     description: 'Berpadu dengan kelembutan stirred yoghurt alami. Memberi kesegaran instan bernutrisi.',
-    prices: { 250: 25000, 1000: 75000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa leci alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '118kcal', protein: '8g', fat: '3g', sugar: '13g' },
     svgGradient: (<linearGradient id="detail-grad-leci" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffc2cf" /><stop offset="50%" stopColor="#ff8da1" /><stop offset="100%" stopColor="#c75066" /></linearGradient>)
@@ -91,7 +85,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3d361c',
     tagline: 'Kehangatan rasa vanila klasik.',
     description: 'Berpadu kentalnya susu fermentasi dari peternakan lokal terbaik. Halus, manis pas, dan menenangkan.',
-    prices: { 250: 25000, 1000: 75000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa vanila alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '125kcal', protein: '8.2g', fat: '3.5g', sugar: '12g' },
     svgGradient: (<linearGradient id="detail-grad-vanila" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fdf7db" /><stop offset="50%" stopColor="#f3e5AB" /><stop offset="100%" stopColor="#bba755" /></linearGradient>)
@@ -102,7 +95,6 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#332D10',
     tagline: 'Kentalnya nikmat dengan keharuman pisang ambon.',
     description: 'Yogurt lembut stirred premium dengan sensasi dan wangi pisang ambon alami. 100% gula asli tanpa pemanis buatan.',
-    prices: { 250: 25000, 1000: 75000 },
     ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa pisang ambon alami', 'Topping Jelly / Nata de Coco'],
     nutrition: { calories: '125kcal', protein: '8g', fat: '3.2g', sugar: '13g' },
     svgGradient: (<linearGradient id="detail-grad-pisang" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fcf6ce" /><stop offset="50%" stopColor="#E8D354" /><stop offset="100%" stopColor="#a3922c" /></linearGradient>)
@@ -119,17 +111,78 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   const [selectedSize, setSelectedSize] = useState<250 | 1000>(250);
   const [quantity, setQuantity] = useState<number>(1);
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
+  const [erpProduct, setErpProduct] = useState<PublicCatalogProduct | null>(null);
+
   const addItem = useCartStore((state) => state.addItem);
 
-  const activePrice = flavor.prices[selectedSize];
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const res = await fetch('/api/catalog');
+        if (!res.ok) {
+          if (isMounted) setCatalogLoading(false);
+          return;
+        }
+        const data: PublicCatalogData = await res.json();
+        if (isMounted) {
+          const matched = data.products?.find((p: PublicCatalogProduct) => p.slug.toLowerCase() === flavorKey.toLowerCase());
+          setErpProduct(matched || null);
+          setCatalogLoading(false);
+        }
+      } catch {
+        if (isMounted) setCatalogLoading(false);
+      }
+    }
+    loadCatalog();
+    return () => { isMounted = false; };
+  }, [flavorKey]);
+
+  // Authoritative variant matching by selected size
+  const selectedVariant = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const qty = v.net_content?.quantity ? parseFloat(v.net_content.quantity) : null;
+    const uom = v.net_content?.uom?.toUpperCase();
+    if (qty !== null) {
+      if (uom === 'L' && Math.round(qty * 1000) === selectedSize) return true;
+      if (Math.round(qty) === selectedSize) return true;
+    }
+    return v.sku.toUpperCase().includes(String(selectedSize));
+  });
+
+  const variant250 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const qty = v.net_content?.quantity ? parseFloat(v.net_content.quantity) : null;
+    const uom = v.net_content?.uom?.toUpperCase();
+    if (qty !== null) {
+      if (uom === 'L' && Math.round(qty * 1000) === 250) return true;
+      if (Math.round(qty) === 250) return true;
+    }
+    return v.sku.toUpperCase().includes('250');
+  });
+
+  const variant1000 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const qty = v.net_content?.quantity ? parseFloat(v.net_content.quantity) : null;
+    const uom = v.net_content?.uom?.toUpperCase();
+    if (qty !== null) {
+      if (uom === 'L' && Math.round(qty * 1000) === 1000) return true;
+      if (Math.round(qty) === 1000) return true;
+    }
+    return v.sku.toUpperCase().includes('1000') || v.sku.toUpperCase().endsWith('-1L');
+  });
+
+  const isAvailable = Boolean(selectedVariant);
+  const displayPrice = selectedVariant?.price.amount ?? null;
 
   const handleAddToCart = () => {
+    if (!selectedVariant) return;
+
     addItem({
-      id: `${flavorKey}-${selectedSize}`,
+      variant_id: selectedVariant.variant_id, // Authoritative UUID from ERP
+      sku: selectedVariant.sku,
       name: `Callme Yoghurt ${flavor.name}`,
       volume_ml: selectedSize,
       quantity: quantity,
-      price: activePrice
+      display_price: selectedVariant.price.amount, // Presentation only
     });
     alert(`${flavor.name} (${selectedSize}ml) telah ditambahkan ke pesanan!`);
     router.push('/checkout');
@@ -211,15 +264,41 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="bg-white p-6 md:p-8 rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] space-y-5">
                 <h3 className="font-bold text-sm uppercase tracking-wider text-black/58">Pilih Ukuran</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => setSelectedSize(250)} className="flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all active:scale-[0.98]" style={{ borderColor: selectedSize === 250 ? flavor.brandColor : '#e5e7eb', backgroundColor: selectedSize === 250 ? `${flavor.brandColor}08` : 'transparent' }}>
-                    <CupSoda size={40} color={selectedSize === 250 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
+                  <button
+                    type="button"
+                    disabled={!variant250}
+                    onClick={() => setSelectedSize(250)}
+                    className={`flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all ${
+                      !variant250 ? 'opacity-40 cursor-not-allowed' : 'active:scale-[0.98]'
+                    }`}
+                    style={{
+                      borderColor: selectedSize === 250 && variant250 ? flavor.brandColor : '#e5e7eb',
+                      backgroundColor: selectedSize === 250 && variant250 ? `${flavor.brandColor}08` : 'transparent',
+                    }}
+                  >
+                    <CupSoda size={40} color={selectedSize === 250 && variant250 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
                     <span className="font-bold text-base text-black/87">250 ml</span>
-                    <span className="font-semibold text-sm text-black/58">Rp {flavor.prices[250].toLocaleString('id-ID')}</span>
+                    <span className="font-semibold text-sm text-black/58">
+                      {variant250 ? `Rp ${variant250.price.amount.toLocaleString('id-ID')}` : 'Tidak Tersedia'}
+                    </span>
                   </button>
-                  <button onClick={() => setSelectedSize(1000)} className="flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all active:scale-[0.98]" style={{ borderColor: selectedSize === 1000 ? flavor.brandColor : '#e5e7eb', backgroundColor: selectedSize === 1000 ? `${flavor.brandColor}08` : 'transparent' }}>
-                    <Milk size={40} color={selectedSize === 1000 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
+                  <button
+                    type="button"
+                    disabled={!variant1000}
+                    onClick={() => setSelectedSize(1000)}
+                    className={`flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all ${
+                      !variant1000 ? 'opacity-40 cursor-not-allowed' : 'active:scale-[0.98]'
+                    }`}
+                    style={{
+                      borderColor: selectedSize === 1000 && variant1000 ? flavor.brandColor : '#e5e7eb',
+                      backgroundColor: selectedSize === 1000 && variant1000 ? `${flavor.brandColor}08` : 'transparent',
+                    }}
+                  >
+                    <Milk size={40} color={selectedSize === 1000 && variant1000 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
                     <span className="font-bold text-base text-black/87">1 Liter</span>
-                    <span className="font-semibold text-sm text-black/58">Rp {flavor.prices[1000].toLocaleString('id-ID')}</span>
+                    <span className="font-semibold text-sm text-black/58">
+                      {variant1000 ? `Rp ${variant1000.price.amount.toLocaleString('id-ID')}` : 'Tidak Tersedia'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -236,14 +315,28 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     </button>
                   </div>
                   <div className="text-right">
-                    <span className="block text-sm text-black/58 font-medium mb-1">Total Harga</span>
+                    <span className="block text-sm text-black/58 font-medium mb-1">Estimasi Total</span>
                     <span className="text-3xl font-extrabold" style={{ color: flavor.brandColor }}>
-                      Rp {((activePrice * quantity) / 1000).toFixed(0)}k
+                      {displayPrice !== null ? `Rp ${((displayPrice * quantity) / 1000).toFixed(0)}k` : '-'}
                     </span>
+                    <span className="block text-[11px] text-black/40 mt-1">Total akhir diverifikasi oleh sistem saat pesanan dibuat.</span>
                   </div>
                 </div>
-                <button onClick={handleAddToCart} className="w-full text-white py-4 rounded-[50px] font-bold text-base transition-transform active:scale-95 flex items-center justify-center gap-3 hover:opacity-90 shadow-lg" style={{ backgroundColor: flavor.brandColor }}>
-                  <ShoppingCart size={20} /> Tambahkan ke Pesanan
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={!isAvailable || catalogLoading}
+                  className={`w-full text-white py-4 rounded-[50px] font-bold text-base transition-transform flex items-center justify-center gap-3 shadow-lg ${
+                    !isAvailable || catalogLoading ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
+                  }`}
+                  style={{ backgroundColor: isAvailable ? flavor.brandColor : '#9ca3af' }}
+                >
+                  <ShoppingCart size={20} />
+                  {catalogLoading
+                    ? 'Memeriksa Katalog...'
+                    : isAvailable
+                      ? 'Tambahkan ke Pesanan'
+                      : 'Varian Belum Tersedia'}
                 </button>
               </div>
 

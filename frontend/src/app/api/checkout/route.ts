@@ -15,7 +15,7 @@ type CheckoutRequest = {
   delivery_method: DeliveryMethod;
 };
 
-export interface PublicOrderData {
+interface PublicOrderData {
   order_id: string;
   order_number: string;
   status: string;
@@ -87,7 +87,7 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
  * 
  * Never blindly forwards arbitrary upstream fields, internal credentials, database info, or debug traces.
  */
-export function parsePublicOrderResponse(value: unknown, requestId: string): PublicOrderData | null {
+function parsePublicOrderResponse(value: unknown, requestId: string): PublicOrderData | null {
   if (!isRecord(value)) {
     return null;
   }

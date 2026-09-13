@@ -48,4 +48,9 @@ class ProductVariant extends Model
     {
         return $this->belongsTo(UnitOfMeasure::class, 'net_content_uom_id');
     }
+
+    public function prices(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Domain\Pricing\Models\ProductVariantPrice::class, 'product_variant_id');
+    }
 }

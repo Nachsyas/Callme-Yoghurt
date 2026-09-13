@@ -1,6 +1,6 @@
 'use client';
 
-import { useCartStore } from '@/store/cartStore';
+import { useCartStore, toTransactionProjection } from '@/store/cartStore';
 import { ArrowLeft, MapPin, Phone, ShieldCheck, ShoppingBag, Truck, User } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getTotal, removeItem, clearCart } = useCartStore();
+  const { items, getEstimatedTotal, removeItem } = useCartStore();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({ name: '', whatsapp: '', address: '', delivery: 'instant' });
 
@@ -21,15 +21,27 @@ export default function CheckoutPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    const payload = { customer: formData, order_items: items, total_amount: getTotal() };
+    // Pure transaction projection from cart items (Gate 0E.2A).
+    // Contains ONLY variant_id and quantity.
+    // Must NOT contain display_price, price, subtotal, total, SKU, name, etc.
+    const transactionItems = toTransactionProjection(items);
+
+    const projectedPayload = {
+      customer: {
+        name: formData.name.trim(),
+        whatsapp: formData.whatsapp.trim(),
+        address: formData.address.trim(),
+      },
+      delivery_method: formData.delivery,
+      items: transactionItems,
+    };
 
     try {
-      console.log('Mengirim data ke server:', payload);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      clearCart();
-      router.push('/return');
-    } catch (error) {
+      console.log('Proyeksi transaksi checkout (Gate 0E.2A):', projectedPayload);
+      // In Gate 0E.2A, real checkout POST is not executed yet (deferred to Gate 0E.2B).
+      await new Promise(resolve => setTimeout(resolve, 800));
+      alert('Proyeksi transaksi siap dengan identitas ProductVariant UUID resmi (Gate 0E.2A).');
+    } catch {
       alert('Terjadi kesalahan saat memproses pesanan.');
     } finally {
       setIsLoading(false);
@@ -119,22 +131,27 @@ export default function CheckoutPage() {
               <h2 className="font-bold text-lg border-b border-gray-100 pb-4 mb-4">Ringkasan Pesanan</h2>
               <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
                 {items.map((item) => (
-                  <div key={item.id} className="flex justify-between items-start gap-4 bg-gray-50 p-4 rounded-[12px]">
+                  <div key={item.variant_id} className="flex justify-between items-start gap-4 bg-gray-50 p-4 rounded-[12px]">
                     <div className="flex-1">
                       <h4 className="font-bold text-sm text-black/87">{item.name}</h4>
-                      <p className="text-xs font-medium text-black/58 mt-1">{item.volume_ml}ml <span className="mx-1">•</span> Qty: {item.quantity}</p>
+                      <p className="text-xs font-medium text-black/58 mt-1">
+                        {item.sku} {item.volume_ml ? `• ${item.volume_ml}ml` : ''} <span className="mx-1">•</span> Qty: {item.quantity}
+                      </p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <span className="font-bold text-sm text-black/87">Rp {(item.price * item.quantity).toLocaleString('id-ID')}</span>
-                      <button onClick={() => removeItem(item.id)} className="block text-xs text-red-500 font-medium mt-1 hover:underline ml-auto">Hapus</button>
+                      <span className="font-bold text-sm text-black/87">Rp {(item.display_price * item.quantity).toLocaleString('id-ID')}</span>
+                      <button onClick={() => removeItem(item.variant_id)} className="block text-xs text-red-500 font-medium mt-1 hover:underline ml-auto">Hapus</button>
                     </div>
                   </div>
                 ))}
               </div>
               <div className="border-t border-gray-100 mt-6 pt-6 space-y-3">
                 <div className="flex justify-between items-end pt-2">
-                  <span className="font-bold text-black/87">Total Sementara</span>
-                  <span className="text-2xl font-black text-[#00754A]">Rp {getTotal().toLocaleString('id-ID')}</span>
+                  <div>
+                    <span className="font-bold text-black/87 block">Estimasi Total</span>
+                    <span className="text-[11px] text-black/40 block mt-0.5">Total akhir diverifikasi oleh sistem saat pesanan dibuat.</span>
+                  </div>
+                  <span className="text-2xl font-black text-[#00754A]">Rp {getEstimatedTotal().toLocaleString('id-ID')}</span>
                 </div>
               </div>
               <button type="submit" form="checkout-form" disabled={isLoading} className="w-full mt-8 bg-[#00754A] text-white py-4 rounded-[50px] font-bold text-base hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50">

@@ -6,9 +6,11 @@ namespace App\Application\Sales;
 
 use App\Domain\CRM\Models\Customer;
 use App\Domain\CRM\Services\PhoneBlindIndexService;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\ItemType;
 use App\Domain\Inventory\Exceptions\FulfillmentWarehouseUnavailableException;
+use App\Domain\Inventory\Models\InventoryItem;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\Services\FefoInventoryReservationService;
 use App\Domain\Pricing\Exceptions\InactiveVariantException;
@@ -159,8 +161,8 @@ class CreateCheckoutOrderService
             $totalAmount = 0;
 
             foreach ($sortedItems as $item) {
+                /** @var ProductVariant|null $variant */
                 $variant = ProductVariant::query()
-                    ->with(['product', 'inventoryItem'])
                     ->lockForUpdate()
                     ->find($item['variant_id']);
 
@@ -168,11 +170,22 @@ class CreateCheckoutOrderService
                     throw new InactiveVariantException("Variant [{$item['variant_id']}] is inactive or does not exist.");
                 }
 
-                if ($variant->product === null || !$variant->product->active) {
+                /** @var Product|null $product */
+                $product = Product::query()
+                    ->where('id', $variant->product_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($product === null || !$product->active) {
                     throw new InactiveVariantException("Product family for variant [{$item['variant_id']}] is inactive or missing.");
                 }
 
-                $inventoryItem = $variant->inventoryItem;
+                /** @var InventoryItem|null $inventoryItem */
+                $inventoryItem = InventoryItem::query()
+                    ->where('id', $variant->inventory_item_id)
+                    ->lockForUpdate()
+                    ->first();
+
                 if ($inventoryItem === null || !$inventoryItem->active) {
                     throw new InactiveVariantException("Inventory item for variant [{$item['variant_id']}] is inactive or missing.");
                 }
@@ -182,6 +195,9 @@ class CreateCheckoutOrderService
                         "Only FINISHED_GOOD items are sellable at checkout. Variant [{$item['variant_id']}] has item type [{$inventoryItem->type->value}]."
                     );
                 }
+
+                $variant->setRelation('product', $product);
+                $variant->setRelation('inventoryItem', $inventoryItem);
 
                 // Resolve authoritative retail price with row lock
                 $unitPrice = $this->priceResolver->resolvePrice($variant, 'IDR', lockRow: true);

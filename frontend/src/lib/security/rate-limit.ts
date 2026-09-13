@@ -87,11 +87,11 @@ export class DevMemoryRateLimiter implements RateLimiter {
 
   private pruneStaleBuckets(now: number): void {
     this.lastPruneTime = now;
-    for (const [key, bucket] of this.buckets.entries()) {
+    this.buckets.forEach((bucket, key) => {
       if (now >= bucket.resetAt) {
         this.buckets.delete(key);
       }
-    }
+    });
   }
 
   /**
