@@ -23,10 +23,10 @@ class FefoInventoryReservationService
      * Invariants (ADR-0005):
      * - Any service creating stock_allocations MUST first lock relevant inventory_lots
      *   through this authoritative reservation boundary.
-     * - Deterministic lot lock order: expiration_date ASC, production_date ASC, received_at ASC, id ASC.
+     * - Deterministic lot lock order: expiration_date ASC, production_date ASC NULLS LAST, received_at ASC NULLS LAST, id ASC.
      * - Expiry evaluated in business timezone Asia/Jakarta: expiration_date < business_today is expired.
      * - Undated lots are excluded from finished goods retail allocation.
-     * - Availability = ledger on-hand minus active reserved allocations.
+     * - Availability = ledger on-hand minus active reserved allocations scoped to item, warehouse, and lot.
      * - Arithmetic executed in PostgreSQL NUMERIC to prevent floating point imprecision.
      * - Whole unit retail checkout semantics.
      * - Insufficient inventory throws InsufficientInventoryException (triggering complete transaction rollback).
@@ -56,16 +56,16 @@ class FefoInventoryReservationService
         // Evaluate expiry in business timezone Asia/Jakarta
         $businessToday = Carbon::now('Asia/Jakarta')->startOfDay()->toDateString();
 
-        // 1. Query and lock eligible lots deterministically
+        // 1. Query and lock eligible lots deterministically with explicit NULLS LAST
         /** @var \Illuminate\Database\Eloquent\Collection<int, InventoryLot> $eligibleLots */
         $eligibleLots = InventoryLot::query()
             ->where('inventory_item_id', $inventoryItem->id)
             ->whereNotNull('expiration_date')
             ->where('expiration_date', '>=', $businessToday)
-            ->orderBy('expiration_date', 'asc')
-            ->orderBy('production_date', 'asc')
-            ->orderBy('received_at', 'asc')
-            ->orderBy('id', 'asc')
+            ->orderByRaw('expiration_date ASC')
+            ->orderByRaw('production_date ASC NULLS LAST')
+            ->orderByRaw('received_at ASC NULLS LAST')
+            ->orderByRaw('id ASC')
             ->lockForUpdate()
             ->get();
 
@@ -76,6 +76,11 @@ class FefoInventoryReservationService
         foreach ($eligibleLots as $lot) {
             if ($remainingToAllocate <= 0) {
                 break;
+            }
+
+            // Application-level guard: lot must belong to the same inventory item
+            if ($lot->inventory_item_id !== $inventoryItem->id) {
+                continue;
             }
 
             $availableUnits = $this->calculateLotAvailableUnits(
@@ -104,7 +109,7 @@ class FefoInventoryReservationService
             );
         }
 
-        // 4. Create StockReservation
+        // 4. Create StockReservation with canonical status RESERVED
         $reservation = StockReservation::create([
             'inventory_item_id' => $inventoryItem->id,
             'warehouse_id' => $warehouse->id,
@@ -142,7 +147,8 @@ class FefoInventoryReservationService
      * Invariants:
      * - On-hand = SUM(stock_ledger_entries.quantity_delta)
      * - Active reserved = SUM(stock_allocations.quantity) for reservations WHERE:
-     *     warehouse_id matches AND status = 'RESERVED' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+     *     sr.inventory_item_id matches AND sr.warehouse_id matches AND sa.inventory_lot_id matches
+     *     AND sr.status = 'RESERVED' AND (sr.expires_at IS NULL OR sr.expires_at > CURRENT_TIMESTAMP)
      * - Floor to whole units; negative clamped to zero.
      */
     public function calculateLotAvailableUnits(
@@ -164,8 +170,9 @@ class FefoInventoryReservationService
                     SELECT SUM(sa.quantity)
                     FROM stock_allocations sa
                     JOIN stock_reservations sr ON sr.id = sa.stock_reservation_id
-                    WHERE sa.inventory_lot_id = :lot_id_alloc
+                    WHERE sr.inventory_item_id = :item_id_alloc
                       AND sr.warehouse_id = :warehouse_id_alloc
+                      AND sa.inventory_lot_id = :lot_id_alloc
                       AND sr.status = 'RESERVED'
                       AND (sr.expires_at IS NULL OR sr.expires_at > CURRENT_TIMESTAMP)
                 ), 0)
@@ -174,8 +181,9 @@ class FefoInventoryReservationService
                 'item_id' => $inventoryItemId,
                 'warehouse_id' => $warehouseId,
                 'lot_id' => $lotId,
-                'lot_id_alloc' => $lotId,
+                'item_id_alloc' => $inventoryItemId,
                 'warehouse_id_alloc' => $warehouseId,
+                'lot_id_alloc' => $lotId,
             ]
         );
 

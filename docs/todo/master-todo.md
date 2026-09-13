@@ -93,7 +93,7 @@
 - [x] `TESTED` Reject insufficient inventory (returns HTTP 409 conflict and rolls back all writes).
 - [x] `TESTED` Prevent duplicate order on retried request (replay returns same committed order with HTTP 200).
 
-**Gate 0E status: IN PROGRESS (Gate 0E.1 PASS — server-authoritative checkout transaction core is implemented and tested; Gate 0E.2 storefront/BFF cutover remains pending).**
+**Gate 0E status: IN PROGRESS (Gate 0E.1 = PASS; Gate 0E overall = IN PROGRESS; Gate 0E.2 = pending).**
 
 
 ## Gate 0F — Testing, CI & AI-Agent Governance

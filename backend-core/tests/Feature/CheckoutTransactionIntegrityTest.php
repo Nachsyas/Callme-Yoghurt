@@ -24,6 +24,7 @@ use App\Domain\Sales\Models\CheckoutIdempotencyKey;
 use App\Domain\Sales\Models\Order;
 use App\Domain\Sales\Models\OrderLine;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -481,13 +482,12 @@ class CheckoutTransactionIntegrityTest extends TestCase
      */
     public function test_concurrent_customer_resolution_serialized_via_advisory_lock(): void
     {
-        // Emulate transaction advisory lock directly
+        // Emulate transaction advisory lock directly via PostgreSQL hashtextextended
         $phone = '628999888777';
         $bindex = PhoneBlindIndexService::generateBlindIndex($phone, $this->blindIndexKey);
-        $lockKey = (int) (hexdec(substr($bindex, 0, 15)) & 0x7FFFFFFFFFFFFFFF);
 
-        DB::transaction(function () use ($lockKey) {
-            $lockAcquired = DB::selectOne('SELECT pg_advisory_xact_lock(?)', [$lockKey]);
+        DB::transaction(function () use ($bindex) {
+            $lockAcquired = DB::selectOne('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [$bindex]);
             $this->assertNotNull($lockAcquired);
         });
     }
@@ -956,5 +956,317 @@ class CheckoutTransactionIntegrityTest extends TestCase
         $response->assertJson(['error' => 'Checkout service is temporarily unavailable']);
 
         $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 39. Status PENDING is rejected by database check constraint.
+     */
+    public function test_pending_reservation_status_is_rejected_by_database_constraint(): void
+    {
+        $this->expectException(QueryException::class);
+
+        DB::table('stock_reservations')->insert([
+            'id' => (string) Str::uuid(),
+            'inventory_item_id' => $this->inventoryItem1->id,
+            'warehouse_id' => $this->warehouse->id,
+            'reference_type' => 'ORDER',
+            'reference_id' => 'SO-PENDING-TEST',
+            'quantity' => '5.000000',
+            'status' => 'PENDING',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * 40. Reservation Item A cannot allocate Lot Item B (DB trigger + domain rejection).
+     */
+    public function test_reservation_item_a_cannot_allocate_lot_item_b(): void
+    {
+        $reservation = StockReservation::create([
+            'inventory_item_id' => $this->inventoryItem1->id,
+            'warehouse_id' => $this->warehouse->id,
+            'reference_type' => 'ORDER',
+            'reference_id' => 'SO-ITEM-MISMATCH',
+            'quantity' => '2.000000',
+            'status' => ReservationStatus::RESERVED->value,
+        ]);
+
+        $lotItem2 = InventoryLot::create([
+            'inventory_item_id' => $this->inventoryItem2->id,
+            'lot_number' => 'LOT-BLUE-MISMATCH-01',
+            'expiration_date' => Carbon::now('Asia/Jakarta')->addDays(10)->toDateString(),
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        StockAllocation::create([
+            'stock_reservation_id' => $reservation->id,
+            'inventory_lot_id' => $lotItem2->id,
+            'quantity' => '2.000000',
+        ]);
+    }
+
+    /**
+     * 41. Inactive Product rejects checkout (422).
+     */
+    public function test_inactive_product_rejects_checkout(): void
+    {
+        $this->product1->update(['active' => false]);
+
+        $response = $this->postOrder($this->validPayload());
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items.0.variant_id']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 42. RAW_MATERIAL-backed variant rejects checkout (422).
+     */
+    public function test_raw_material_backed_variant_rejects_checkout(): void
+    {
+        $rawItem = InventoryItem::create([
+            'code' => 'RM-MILK-TEST',
+            'name' => 'Raw Milk',
+            'type' => ItemType::RAW_MATERIAL,
+            'base_uom_id' => $this->uomPcs->id,
+            'lot_tracked' => true,
+            'active' => true,
+        ]);
+
+        $rawVariant = ProductVariant::create([
+            'product_id' => $this->product1->id,
+            'inventory_item_id' => $rawItem->id,
+            'sku' => 'RAW-MILK-VAR',
+            'variant_name' => 'Raw Milk Variant',
+            'active' => true,
+        ]);
+
+        ProductVariantPrice::create([
+            'product_variant_id' => $rawVariant->id,
+            'currency' => 'IDR',
+            'amount' => 15000,
+            'active' => true,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['items'][0]['variant_id'] = $rawVariant->id;
+
+        $response = $this->postOrder($payload);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items.0.variant_id']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 43. PACKAGING-backed variant rejects checkout (422).
+     */
+    public function test_packaging_backed_variant_rejects_checkout(): void
+    {
+        $pkgItem = InventoryItem::create([
+            'code' => 'PKG-BOTTLE-TEST',
+            'name' => 'Plastic Bottle 250ml',
+            'type' => ItemType::PACKAGING,
+            'base_uom_id' => $this->uomPcs->id,
+            'lot_tracked' => false,
+            'active' => true,
+        ]);
+
+        $pkgVariant = ProductVariant::create([
+            'product_id' => $this->product1->id,
+            'inventory_item_id' => $pkgItem->id,
+            'sku' => 'PKG-BOTTLE-VAR',
+            'variant_name' => 'Bottle Variant',
+            'active' => true,
+        ]);
+
+        ProductVariantPrice::create([
+            'product_variant_id' => $pkgVariant->id,
+            'currency' => 'IDR',
+            'amount' => 5000,
+            'active' => true,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['items'][0]['variant_id'] = $pkgVariant->id;
+
+        $response = $this->postOrder($payload);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items.0.variant_id']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 44. Cross-warehouse reservation does not reduce another warehouse's available stock.
+     */
+    public function test_cross_warehouse_reservation_does_not_reduce_another_warehouse_availability(): void
+    {
+        $warehouseB = Warehouse::create([
+            'code' => 'WH-BALI',
+            'name' => 'Bali Warehouse',
+            'active' => true,
+        ]);
+
+        $lotB = InventoryLot::create([
+            'inventory_item_id' => $this->inventoryItem1->id,
+            'lot_number' => 'LOT-BALI-001',
+            'expiration_date' => Carbon::now('Asia/Jakarta')->addDays(14)->toDateString(),
+        ]);
+
+        StockLedgerEntry::create([
+            'inventory_item_id' => $this->inventoryItem1->id,
+            'warehouse_id' => $warehouseB->id,
+            'inventory_lot_id' => $lotB->id,
+            'quantity_delta' => 10,
+            'event_type' => 'RECEIPT',
+            'reference_type' => 'PO',
+            'reference_id' => 'PO-BALI-001',
+            'occurred_at' => now(),
+        ]);
+
+        // Create an active reservation in Warehouse B for 8 units
+        $resB = StockReservation::create([
+            'inventory_item_id' => $this->inventoryItem1->id,
+            'warehouse_id' => $warehouseB->id,
+            'reference_type' => 'ORDER',
+            'reference_id' => 'SO-BALI-001',
+            'quantity' => '8.000000',
+            'status' => ReservationStatus::RESERVED->value,
+            'expires_at' => Carbon::now('Asia/Jakarta')->addMinutes(30),
+        ]);
+
+        StockAllocation::create([
+            'stock_reservation_id' => $resB->id,
+            'inventory_lot_id' => $lotB->id,
+            'quantity' => '8.000000',
+        ]);
+
+        // In WH-MAIN, 50 units exist. Order full 50 units.
+        // If WH-BALI reservation incorrectly reduced WH-MAIN, available would be 42 and this would 409.
+        $payload = $this->validPayload();
+        $payload['items'][0]['quantity'] = 50;
+
+        $response = $this->postOrder($payload);
+        $response->assertStatus(201);
+    }
+
+    /**
+     * 45. 51 checkout item lines are rejected (422).
+     */
+    public function test_51_checkout_item_lines_are_rejected(): void
+    {
+        $items = [];
+        for ($i = 0; $i < 51; $i++) {
+            $items[] = [
+                'variant_id' => (string) Str::uuid(),
+                'quantity' => 1,
+            ];
+        }
+
+        $payload = [
+            'customer' => [
+                'name' => 'Too Many Lines Customer',
+                'whatsapp' => '081234567890',
+                'address' => 'Jl. Banyak Item No. 51',
+            ],
+            'items' => $items,
+            'delivery_method' => 'instant',
+        ];
+
+        $response = $this->postOrder($payload);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['items']);
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 46. Pre-existing matching idempotency row with order_id=NULL fails closed (409).
+     */
+    public function test_pre_existing_matching_idempotency_row_with_null_order_fails_closed(): void
+    {
+        $key = 'concurrent-inflight-key-xyz';
+        $payload = $this->validPayload();
+
+        $keyHash = hash('sha256', $key);
+        $canonicalJson = json_encode([
+            'customer' => [
+                'address' => 'Jl. Sudirman No. 45, Jakarta Pusat',
+                'name' => 'Budi Pratama',
+                'phone_e164' => '6281234567890',
+            ],
+            'delivery_method' => 'instant',
+            'items' => [
+                [
+                    'quantity' => 2,
+                    'variant_id' => $this->variant1->id,
+                ],
+            ],
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $requestFingerprint = hash_hmac('sha256', $canonicalJson, $this->fingerprintKey);
+
+        DB::table('checkout_idempotency_keys')->insert([
+            'id' => (string) Str::uuid(),
+            'scope' => 'CHECKOUT_ORDER',
+            'key_hash' => $keyHash,
+            'request_fingerprint' => $requestFingerprint,
+            'order_id' => null,
+            'response_payload' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->postOrder($payload, $key);
+        $response->assertStatus(409);
+        $response->assertJson(['error' => 'A transaction with this idempotency key is already in progress']);
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    /**
+     * 47. Customer profile change after checkout does not change Order shipping snapshot.
+     */
+    public function test_customer_profile_change_after_checkout_does_not_change_order_shipping_snapshot(): void
+    {
+        $response = $this->postOrder($this->validPayload());
+        $response->assertStatus(201);
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertEquals('Budi Pratama', $order->shipping_name);
+        $this->assertEquals('Jl. Sudirman No. 45, Jakarta Pusat', $order->shipping_address);
+
+        $customer = Customer::first();
+        $this->assertNotNull($customer);
+        $customer->update([
+            'name' => 'Budi Pratama Updated Name',
+            'address' => 'Jl. Thamrin No. 99, Jakarta Baru',
+        ]);
+
+        $orderFresh = $order->fresh();
+        $this->assertEquals('Budi Pratama', $orderFresh->shipping_name);
+        $this->assertEquals('Jl. Sudirman No. 45, Jakarta Pusat', $orderFresh->shipping_address);
+    }
+
+    /**
+     * 48. Checkout-created reservation explicitly stores RESERVED status.
+     */
+    public function test_checkout_created_reservation_explicitly_stores_reserved_status(): void
+    {
+        $response = $this->postOrder($this->validPayload());
+        $response->assertStatus(201);
+
+        $orderLine = OrderLine::first();
+        $this->assertNotNull($orderLine);
+
+        $reservation = StockReservation::where('reference_id', (string) $orderLine->id)->first();
+        $this->assertNotNull($reservation);
+        $this->assertEquals(ReservationStatus::RESERVED->value, $reservation->status);
+        $this->assertEquals('RESERVED', $reservation->status);
+
+        $rawReservation = DB::table('stock_reservations')->where('id', $reservation->id)->first();
+        $this->assertEquals('RESERVED', $rawReservation->status);
     }
 }

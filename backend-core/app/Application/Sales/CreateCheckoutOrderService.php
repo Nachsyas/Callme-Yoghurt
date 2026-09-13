@@ -7,6 +7,7 @@ namespace App\Application\Sales;
 use App\Domain\CRM\Models\Customer;
 use App\Domain\CRM\Services\PhoneBlindIndexService;
 use App\Domain\Catalog\Models\ProductVariant;
+use App\Domain\Inventory\Enums\ItemType;
 use App\Domain\Inventory\Exceptions\FulfillmentWarehouseUnavailableException;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\Services\FefoInventoryReservationService;
@@ -48,20 +49,27 @@ class CreateCheckoutOrderService
             throw new RuntimeException('Checkout fingerprint key is not configured. Failing closed.');
         }
 
-        // 2. Canonicalize payload and calculate request fingerprint
+        // 2. Canonicalize payload and calculate request fingerprint with explicit JSON flags
         $canonicalPayload = $this->canonicalizePayload($validatedData);
-        $requestFingerprint = hash_hmac('sha256', json_encode($canonicalPayload, JSON_THROW_ON_ERROR), $fingerprintKey);
+        $encoded = json_encode(
+            $canonicalPayload,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+        $requestFingerprint = hash_hmac('sha256', $encoded, $fingerprintKey);
         $keyHash = hash('sha256', $rawIdempotencyKey);
 
         // 3. Execute everything inside a single PostgreSQL transaction
         return DB::transaction(function () use ($canonicalPayload, $requestFingerprint, $keyHash) {
-            // Step A: Idempotency acquisition via PostgreSQL ON CONFLICT DO NOTHING + FOR UPDATE
-            DB::statement(
+            // Step A: Idempotency acquisition capturing RETURNING id to detect whether this tx inserted the row
+            $insertedRows = DB::select(
                 "INSERT INTO checkout_idempotency_keys (id, scope, key_hash, request_hash, order_id, created_at, updated_at)
                  VALUES (?, 'checkout', ?, ?, NULL, NOW(), NOW())
-                 ON CONFLICT (scope, key_hash) DO NOTHING",
+                 ON CONFLICT (scope, key_hash) DO NOTHING
+                 RETURNING id",
                 [(string) Str::uuid(), $keyHash, $requestFingerprint]
             );
+
+            $wasInsertedByThisTx = !empty($insertedRows);
 
             /** @var CheckoutIdempotencyKey|null $idempotencyRecord */
             $idempotencyRecord = CheckoutIdempotencyKey::query()
@@ -74,31 +82,36 @@ class CreateCheckoutOrderService
                 throw new RuntimeException('Failed to acquire idempotency lock.');
             }
 
-            // Existing completed order check
-            if ($idempotencyRecord->order_id !== null) {
+            if ($wasInsertedByThisTx) {
+                // Row was newly inserted by this transaction -> proceed to normal checkout
+            } else {
+                // Pre-existing row:
+                // 1. If payload fingerprint differs -> 409 Conflict
                 if (!hash_equals($idempotencyRecord->request_hash, $requestFingerprint)) {
                     throw new IdempotencyConflictException(
                         'Idempotency key reused with different request payload.'
                     );
                 }
 
-                $existingOrder = Order::with('lines')->find($idempotencyRecord->order_id);
-                if ($existingOrder !== null) {
-                    return [
-                        'order' => $existingOrder,
-                        'is_replay' => true,
-                    ];
+                // 2. If committed order exists -> replay same order
+                if ($idempotencyRecord->order_id !== null) {
+                    $existingOrder = Order::with('lines')->find($idempotencyRecord->order_id);
+                    if ($existingOrder !== null) {
+                        return [
+                            'order' => $existingOrder,
+                            'is_replay' => true,
+                        ];
+                    }
                 }
-            }
 
-            // If payload fingerprint does not match pending insert
-            if (!hash_equals($idempotencyRecord->request_hash, $requestFingerprint)) {
+                // 3. Pre-existing row with order_id NULL and not inserted by this transaction:
+                // Indicates competing in-flight request or previously interrupted transaction -> fail closed!
                 throw new IdempotencyConflictException(
-                    'Idempotency key reused with different request payload.'
+                    'Idempotency transaction is currently in progress or incomplete. Please retry later.'
                 );
             }
 
-            // Step B: Resolve Fulfillment Warehouse (fail closed)
+            // Step B: Resolve and lock Fulfillment Warehouse (fail closed)
             $warehouseCode = config('inventory.fulfillment_warehouse_code');
             if (!is_string($warehouseCode) || $warehouseCode === '') {
                 throw new FulfillmentWarehouseUnavailableException(
@@ -106,21 +119,25 @@ class CreateCheckoutOrderService
                 );
             }
 
-            $warehouse = Warehouse::where('code', $warehouseCode)->where('active', true)->first();
+            $warehouse = Warehouse::query()
+                ->where('code', $warehouseCode)
+                ->where('active', true)
+                ->lockForUpdate()
+                ->first();
+
             if ($warehouse === null) {
                 throw new FulfillmentWarehouseUnavailableException(
                     "Fulfillment warehouse [{$warehouseCode}] is missing or inactive."
                 );
             }
 
-            // Step C: Customer Resolution with transaction-scoped PostgreSQL advisory lock
+            // Step C: Customer Resolution with native PostgreSQL 64-bit advisory lock
             $canonicalCustomer = $canonicalPayload['customer'];
             $canonicalPhone = $canonicalCustomer['whatsapp'];
             $phoneBlindIndex = PhoneBlindIndexService::generateBlindIndex($canonicalPhone);
 
-            // Derive 64-bit integer from blind index for transaction-scoped advisory lock
-            $advisoryLockKey = (int) (hexdec(substr($phoneBlindIndex, 0, 15)) & 0x7FFFFFFFFFFFFFFF);
-            DB::statement('SELECT pg_advisory_xact_lock(?)', [$advisoryLockKey]);
+            // Native PostgreSQL 64-bit advisory lock derived from phone blind index
+            DB::statement('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [$phoneBlindIndex]);
 
             $customer = Customer::where('phone_bindex', $phoneBlindIndex)->first();
             if ($customer !== null) {
@@ -142,9 +159,28 @@ class CreateCheckoutOrderService
             $totalAmount = 0;
 
             foreach ($sortedItems as $item) {
-                $variant = ProductVariant::with('inventoryItem')->find($item['variant_id']);
+                $variant = ProductVariant::query()
+                    ->with(['product', 'inventoryItem'])
+                    ->lockForUpdate()
+                    ->find($item['variant_id']);
+
                 if ($variant === null || !$variant->active) {
                     throw new InactiveVariantException("Variant [{$item['variant_id']}] is inactive or does not exist.");
+                }
+
+                if ($variant->product === null || !$variant->product->active) {
+                    throw new InactiveVariantException("Product family for variant [{$item['variant_id']}] is inactive or missing.");
+                }
+
+                $inventoryItem = $variant->inventoryItem;
+                if ($inventoryItem === null || !$inventoryItem->active) {
+                    throw new InactiveVariantException("Inventory item for variant [{$item['variant_id']}] is inactive or missing.");
+                }
+
+                if ($inventoryItem->type !== ItemType::FINISHED_GOOD) {
+                    throw new InactiveVariantException(
+                        "Only FINISHED_GOOD items are sellable at checkout. Variant [{$item['variant_id']}] has item type [{$inventoryItem->type->value}]."
+                    );
                 }
 
                 // Resolve authoritative retail price with row lock

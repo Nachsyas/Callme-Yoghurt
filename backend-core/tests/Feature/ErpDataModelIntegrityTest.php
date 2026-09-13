@@ -371,13 +371,13 @@ class ErpDataModelIntegrityTest extends TestCase
             'reference_type' => 'ORDER',
             'reference_id' => 'SO-2026-0001',
             'quantity' => '24.500000',
-            'status' => 'PENDING',
+            'status' => 'RESERVED',
             'expires_at' => now()->addMinutes(15),
         ]);
 
         $fresh = $reservation->fresh();
         $this->assertEquals('24.500000', (string) $fresh->quantity);
-        $this->assertEquals('PENDING', $fresh->status);
+        $this->assertEquals('RESERVED', $fresh->status);
     }
 
     /**
@@ -391,6 +391,7 @@ class ErpDataModelIntegrityTest extends TestCase
             'reference_type' => 'ORDER',
             'reference_id' => 'SO-2026-0002',
             'quantity' => '10.000000',
+            'status' => 'RESERVED',
         ]);
 
         $lot = InventoryLot::create([

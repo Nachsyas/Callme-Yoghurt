@@ -33,7 +33,7 @@ class CreateOrderRequest extends FormRequest
             'customer.name' => ['required', 'string', 'max:255'],
             'customer.whatsapp' => ['required', 'string', 'max:50'],
             'customer.address' => ['required', 'string', 'max:1000'],
-            'items' => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1', 'max:50'],
             'items.*.variant_id' => ['required', 'uuid'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
             'delivery_method' => ['required', 'string', Rule::in(DeliveryMethod::values())],
