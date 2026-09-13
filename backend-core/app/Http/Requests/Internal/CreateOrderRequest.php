@@ -163,8 +163,8 @@ class CreateOrderRequest extends FormRequest
     {
         throw new HttpResponseException(
             response()->json([
-                'error' => 'Validation failed',
-                'messages' => $validator->errors()->toArray(),
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()->toArray(),
             ], 422)
         );
     }

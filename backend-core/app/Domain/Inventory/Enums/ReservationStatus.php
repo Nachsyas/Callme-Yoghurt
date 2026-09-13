@@ -6,6 +6,7 @@ namespace App\Domain\Inventory\Enums;
 
 enum ReservationStatus: string
 {
+    case PENDING = 'PENDING';
     case RESERVED = 'RESERVED';
     case RELEASED = 'RELEASED';
     case CONSUMED = 'CONSUMED';

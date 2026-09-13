@@ -15,7 +15,7 @@ return new class extends Migration
         DB::statement('ALTER TABLE order_lines ADD CONSTRAINT check_order_lines_subtotal CHECK (subtotal >= 0);');
 
         DB::statement('ALTER TABLE stock_reservations ADD CONSTRAINT check_stock_reservations_quantity CHECK (quantity > 0);');
-        DB::statement("ALTER TABLE stock_reservations ADD CONSTRAINT check_stock_reservations_status CHECK (status IN ('RESERVED', 'RELEASED', 'CONSUMED', 'EXPIRED', 'CANCELLED'));");
+        DB::statement("ALTER TABLE stock_reservations ADD CONSTRAINT check_stock_reservations_status CHECK (status IN ('PENDING', 'RESERVED', 'RELEASED', 'CONSUMED', 'EXPIRED', 'CANCELLED'));");
 
         DB::statement('ALTER TABLE stock_allocations ADD CONSTRAINT check_stock_allocations_quantity CHECK (quantity > 0);');
 
