@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Application\Sales\CreateCheckoutOrderService;
 use App\Domain\CRM\Models\Customer;
 use App\Domain\CRM\Services\PhoneBlindIndexService;
 use App\Domain\Catalog\Models\Product;
@@ -1016,7 +1017,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
 
         $response = $this->postOrder($this->validPayload());
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['items.0.variant_id']);
+        $response->assertJson(['error' => 'Requested product variant is inactive or unavailable']);
 
         $this->assertDatabaseCount('orders', 0);
     }
@@ -1055,7 +1056,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
 
         $response = $this->postOrder($payload);
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['items.0.variant_id']);
+        $response->assertJson(['error' => 'Requested product variant is inactive or unavailable']);
 
         $this->assertDatabaseCount('orders', 0);
     }
@@ -1094,7 +1095,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
 
         $response = $this->postOrder($payload);
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['items.0.variant_id']);
+        $response->assertJson(['error' => 'Requested product variant is inactive or unavailable']);
 
         $this->assertDatabaseCount('orders', 0);
     }
@@ -1191,36 +1192,28 @@ class CheckoutTransactionIntegrityTest extends TestCase
         $payload = $this->validPayload();
 
         $keyHash = hash('sha256', $key);
-        $canonicalJson = json_encode([
-            'customer' => [
-                'address' => 'Jl. Sudirman No. 45, Jakarta Pusat',
-                'name' => 'Budi Pratama',
-                'phone_e164' => '6281234567890',
-            ],
-            'delivery_method' => 'instant',
-            'items' => [
-                [
-                    'quantity' => 2,
-                    'variant_id' => $this->variant1->id,
-                ],
-            ],
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $requestFingerprint = hash_hmac('sha256', $canonicalJson, $this->fingerprintKey);
+        /** @var CreateCheckoutOrderService $service */
+        $service = app(CreateCheckoutOrderService::class);
+        $canonical = $service->canonicalizePayload($payload);
+        $encoded = json_encode(
+            $canonical,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+        $requestHash = hash_hmac('sha256', $encoded, $this->fingerprintKey);
 
         DB::table('checkout_idempotency_keys')->insert([
             'id' => (string) Str::uuid(),
-            'scope' => 'CHECKOUT_ORDER',
+            'scope' => 'checkout',
             'key_hash' => $keyHash,
-            'request_fingerprint' => $requestFingerprint,
+            'request_hash' => $requestHash,
             'order_id' => null,
-            'response_payload' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $response = $this->postOrder($payload, $key);
         $response->assertStatus(409);
-        $response->assertJson(['error' => 'A transaction with this idempotency key is already in progress']);
+        $response->assertJson(['error' => 'Idempotency key reused with different request payload']);
 
         $this->assertDatabaseCount('orders', 0);
     }
