@@ -91,4 +91,5 @@ jobs:
           DB_PASSWORD: callme_dev_insecure_password
           CRM_PII_BLIND_INDEX_KEY: test-crm-pii-blind-index-key-32ch
           ERP_SERVICE_TOKEN: test-erp-service-token-secret-64ch
+          CHECKOUT_FINGERPRINT_KEY: test-checkout-fingerprint-key-32ch
         run: php artisan test

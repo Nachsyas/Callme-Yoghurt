@@ -82,16 +82,19 @@
 
 - [ ] `IMPLEMENTED` Replace fake checkout success with real BFF request.
 - [x] `IMPLEMENTED` Replace simulated BFF response with real ERP forwarding behavior that fails closed when ERP is unavailable.
-- [ ] `IMPLEMENTED` Server resolves authoritative SKU/variant data.
-- [ ] `IMPLEMENTED` Server calculates authoritative price/total.
-- [ ] `IMPLEMENTED` Server validates delivery method/rules.
-- [ ] `IMPLEMENTED` Server validates and reserves inventory.
-- [ ] `IMPLEMENTED` Order creation and reservation occur transactionally.
-- [ ] `IMPLEMENTED` Add end-to-end idempotency for order creation.
+- [x] `TESTED` Server resolves authoritative SKU/variant data (`CreateCheckoutOrderService` resolves active variants and inventory items).
+- [x] `TESTED` Server calculates authoritative price/total (`CurrentVariantPriceResolver` and integer Rupiah arithmetic with row locks).
+- [x] `TESTED` Server validates delivery method/rules (domain enum `DeliveryMethod` and database constraint).
+- [x] `TESTED` Server validates and reserves inventory (`FefoInventoryReservationService` derives availability via PostgreSQL numeric math from ledger minus active reservations).
+- [x] `TESTED` Order creation and reservation occur transactionally (atomic `DB::transaction` with full rollback on any failure).
+- [x] `TESTED` Add end-to-end idempotency for order creation (`checkout_idempotency_keys` with SHA-256 key hash, HMAC-SHA256 request fingerprint, and PostgreSQL upsert/locking).
 - [ ] `IMPLEMENTED` Success page requires a committed order identifier.
-- [ ] `TESTED` Reject tampered client price/total input.
-- [ ] `TESTED` Reject insufficient inventory.
-- [ ] `TESTED` Prevent duplicate order on retried request.
+- [x] `TESTED` Reject tampered client price/total input (`CreateOrderRequest` rejects unknown keys and authority fields).
+- [x] `TESTED` Reject insufficient inventory (returns HTTP 409 conflict and rolls back all writes).
+- [x] `TESTED` Prevent duplicate order on retried request (replay returns same committed order with HTTP 200).
+
+**Gate 0E status: IN PROGRESS (Gate 0E.1 PASS — server-authoritative checkout transaction core is implemented and tested; Gate 0E.2 storefront/BFF cutover remains pending).**
+
 
 ## Gate 0F — Testing, CI & AI-Agent Governance
 
