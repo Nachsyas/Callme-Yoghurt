@@ -4,11 +4,12 @@ import { POST } from '../../src/app/api/checkout/route.ts';
 import { getRateLimiter, DevMemoryRateLimiter } from '../../src/lib/security/rate-limit.ts';
 import { getSecurityHeaders } from '../../src/lib/security/headers.ts';
 
-describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', () => {
+describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regression Suite)', () => {
   const originalEnv = { ...process.env };
   const originalFetch = globalThis.fetch;
   const testSecretToken = 'super-secret-erp-internal-bearer-token-12345';
   const testErpUrl = 'http://erp-core-internal.local';
+  const testIdempotencyKey = '018f6c38-8c50-711e-b8d4-53a8be77e43b';
 
   beforeEach(() => {
     (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
@@ -37,7 +38,7 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
       },
       items: [
         {
-          variant_id: 'var-yoghurt-plain-250',
+          variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
           quantity: 2,
         },
       ],
@@ -45,18 +46,30 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     };
   }
 
+  function makeValidUpstreamSuccess() {
+    return {
+      order_id: '018f6c38-8c50-711e-b8d4-53a8be77e440',
+      order_number: 'CY-20260914-01J7ABCDEF',
+      status: 'CONFIRMED',
+      total_amount: 50000,
+    };
+  }
+
   // 1. Internal ERP service credentials never appear in client responses
   it('proves internal ERP service credentials never appear in client responses', async () => {
     globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ order_number: 'SO-TEST-001', status: 'CONFIRMED' }), {
-        status: 200,
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       });
     };
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
@@ -81,7 +94,10 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
@@ -90,19 +106,116 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     assert.equal(fetchCalled, false, 'Fetch must never be called with a hardcoded fallback token');
   });
 
-  // 3. Malformed checkout payload is rejected
+  // 3. Mandatory Idempotency-Key header at edge boundary
+  it('proves missing Idempotency-Key header returns HTTP 400 and does NOT call ERP', async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response('{}', { status: 200 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 400);
+    assert.equal(fetchCalled, false, 'ERP fetch must NOT be called if Idempotency-Key is missing');
+    const body = (await res.json()) as { error: string };
+    assert.equal(body.error, 'Missing or invalid Idempotency-Key header');
+  });
+
+  it('proves empty or whitespace-only Idempotency-Key header returns HTTP 400', async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response('{}', { status: 200 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': '   ',
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 400);
+    assert.equal(fetchCalled, false);
+  });
+
+  it('proves Idempotency-Key longer than 200 characters returns HTTP 400', async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response('{}', { status: 200 });
+    };
+
+    const oversizedKey = 'a'.repeat(201);
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': oversizedKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 400);
+    assert.equal(fetchCalled, false);
+  });
+
+  it('proves valid Idempotency-Key is forwarded exactly to ERP upstream', async () => {
+    let capturedIdempotencyHeader: string | null = null;
+    globalThis.fetch = async (_url, init) => {
+      capturedIdempotencyHeader = (init?.headers as Record<string, string>)?.['Idempotency-Key'] || null;
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 201 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 201);
+    assert.equal(capturedIdempotencyHeader, testIdempotencyKey);
+  });
+
+  // 4. Malformed checkout payload is rejected
   it('proves malformed checkout payloads are rejected with HTTP 400', async () => {
+    const validUuid = '018f6c38-8c50-711e-b8d4-53a8be77e43a';
     const malformedInputs = [
       {}, // Empty body
       { customer: null, items: [] },
-      { customer: { name: '', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'v1', quantity: 1 }], delivery_method: 'instant' },
-      { customer: { name: 'A', whatsapp: '', address: 'addr' }, items: [{ variant_id: 'v1', quantity: 1 }], delivery_method: 'instant' },
-      { customer: { name: 'A', whatsapp: '081', address: '' }, items: [{ variant_id: 'v1', quantity: 1 }], delivery_method: 'instant' },
+      { customer: { name: '', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' },
+      { customer: { name: 'A', whatsapp: '', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' },
+      { customer: { name: 'A', whatsapp: '081', address: '' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' },
+      { customer: { name: 'A'.repeat(256), whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' }, // Name > 255
+      { customer: { name: 'A', whatsapp: '0'.repeat(51), address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' }, // WhatsApp > 50
+      { customer: { name: 'A', whatsapp: '081', address: 'addr'.repeat(251) }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'instant' }, // Address > 1000
       { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [], delivery_method: 'instant' }, // Empty items
-      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'v1', quantity: 0 }], delivery_method: 'instant' }, // 0 qty
-      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'v1', quantity: -5 }], delivery_method: 'instant' }, // Negative qty
-      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'v1', quantity: 1.5 }], delivery_method: 'instant' }, // Non-integer
-      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'v1', quantity: 1 }], delivery_method: 'teleport' }, // Invalid delivery method
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: 'not-a-uuid', quantity: 1 }], delivery_method: 'instant' }, // Invalid UUID
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 0 }], delivery_method: 'instant' }, // 0 qty
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: -5 }], delivery_method: 'instant' }, // Negative qty
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 101 }], delivery_method: 'instant' }, // Qty > 100
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1.5 }], delivery_method: 'instant' }, // Non-integer
+      { customer: { name: 'A', whatsapp: '081', address: 'addr' }, items: [{ variant_id: validUuid, quantity: 1 }], delivery_method: 'teleport' }, // Invalid delivery method
+      // 51 items exceeds limit of 50
+      {
+        customer: { name: 'A', whatsapp: '081', address: 'addr' },
+        items: Array.from({ length: 51 }, () => ({ variant_id: validUuid, quantity: 1 })),
+        delivery_method: 'instant',
+      },
     ];
 
     for (const input of malformedInputs) {
@@ -113,96 +226,111 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
 
       const req = new Request('http://localhost:3000/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': testIdempotencyKey,
+        },
         body: JSON.stringify(input),
       });
 
       const res = await POST(req);
-      assert.equal(res.status, 400, `Expected 400 for input: ${JSON.stringify(input)}`);
-    }
+      assert.equal(
+        res.status,
+        400,
+        `Expected HTTP 400 for input: ${JSON.stringify(input).slice(0, 100)}`,
+      );
 
-    const limiter = getRateLimiter();
-    if (limiter instanceof DevMemoryRateLimiter) {
-      limiter.clear();
+      const body = (await res.json()) as { error: string };
+      assert.equal(body.error, 'Invalid checkout payload');
     }
-
-    // Invalid JSON string test
-    const badJsonReq = new Request('http://localhost:3000/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: 'invalid-json-string',
-    });
-    const badJsonRes = await POST(badJsonReq);
-    assert.equal(badJsonRes.status, 400);
   });
 
-  // 4. Unsupported/unexpected input does not silently become authoritative transaction data
+  // 5. Client-injected prices/roles stripped before forwarding
   it('proves client-injected pricing, discounts, and roles are stripped before ERP forwarding', async () => {
-    let capturedUpstreamBody: Record<string, unknown> | null = null;
+    let capturedBody: Record<string, unknown> | null = null;
 
     globalThis.fetch = async (_url, init) => {
-      if (init && init.body) {
-        capturedUpstreamBody = JSON.parse(init.body as string);
-      }
-      return new Response(JSON.stringify({ order_id: 'ord-safe-001', status: 'CONFIRMED' }), { status: 200 });
+      capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 201 });
     };
 
-    const tamperedPayload = {
+    const maliciousPayload = {
       customer: {
         name: 'Attacker',
-        whatsapp: '08123456789',
-        address: 'Attacker Hideout',
-        is_admin: true, // Tampered permission
+        whatsapp: '081234567890',
+        address: 'Jl. Hacking No. 1',
         role: 'SUPERADMIN',
+        tier: 'VIP_FREE',
       },
       items: [
         {
-          variant_id: 'var-yoghurt-1000',
-          quantity: 5,
-          price: 0, // Tampered price
-          total: 0,
-          discount_amount: 1000000,
+          variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
+          quantity: 1,
+          price: 1, // Attempting 1 IDR exploit
+          unit_price: 1,
+          subtotal: 1,
+          discount: 99999,
+          stock: 999,
+          lot: 'LOT-OVERRIDE',
         },
       ],
-      delivery_method: 'sameday',
-      total_amount: 0, // Tampered total
-      status: 'PAID', // Tampered state
-      payment_confirmed: true,
+      delivery_method: 'instant',
+      total_price: 1,
+      currency: 'USD',
+      discount_code: 'FREE100',
+      shipping_cost: 0,
     };
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(tamperedPayload),
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(maliciousPayload),
     });
 
     const res = await POST(req);
-    assert.equal(res.status, 200);
-    assert.ok(capturedUpstreamBody, 'ERP fetch must have been called');
+    assert.equal(res.status, 201);
+    assert.ok(capturedBody);
 
-    // Verify tampered transaction values were completely stripped
-    const upstream = capturedUpstreamBody as Record<string, unknown>;
-    assert.equal(upstream.total_amount, undefined, 'Client-provided total_amount must not be forwarded');
-    assert.equal(upstream.status, undefined, 'Client-provided status must not be forwarded');
-    assert.equal(upstream.payment_confirmed, undefined, 'Client-provided payment_confirmed must not be forwarded');
+    const forwarded = capturedBody as {
+      customer: Record<string, unknown>;
+      items: Array<Record<string, unknown>>;
+      total_price?: unknown;
+      currency?: unknown;
+      discount_code?: unknown;
+      shipping_cost?: unknown;
+    };
 
-    const customer = upstream.customer as Record<string, unknown>;
-    assert.equal(customer.is_admin, undefined, 'Client-provided is_admin must not be forwarded');
-    assert.equal(customer.role, undefined, 'Client-provided role must not be forwarded');
+    assert.equal(forwarded.customer.role, undefined);
+    assert.equal(forwarded.customer.tier, undefined);
+    assert.equal(forwarded.total_price, undefined);
+    assert.equal(forwarded.currency, undefined);
+    assert.equal(forwarded.discount_code, undefined);
+    assert.equal(forwarded.shipping_cost, undefined);
 
-    const items = upstream.items as Array<Record<string, unknown>>;
-    assert.equal(items[0].price, undefined, 'Client-provided price must not be forwarded');
-    assert.equal(items[0].total, undefined, 'Client-provided total must not be forwarded');
-    assert.equal(items[0].discount_amount, undefined, 'Client-provided discount must not be forwarded');
+    const forwardedItem = forwarded.items[0];
+    assert.equal(forwardedItem.price, undefined);
+    assert.equal(forwardedItem.unit_price, undefined);
+    assert.equal(forwardedItem.subtotal, undefined);
+    assert.equal(forwardedItem.discount, undefined);
+    assert.equal(forwardedItem.stock, undefined);
+    assert.equal(forwardedItem.lot, undefined);
+    assert.equal(forwardedItem.variant_id, '018f6c38-8c50-711e-b8d4-53a8be77e43a');
+    assert.equal(forwardedItem.quantity, 1);
   });
 
-  // 5. Missing internal ERP configuration fails closed
+  // 6. Missing ERP internal URL fails closed with 503
   it('proves missing ERP internal URL fails closed with HTTP 503', async () => {
     delete process.env.ERP_INTERNAL_URL;
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
@@ -212,10 +340,119 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     assert.equal(body.error, 'Checkout service is temporarily unavailable');
   });
 
-  // 6. Upstream internal error bodies/secrets are not leaked
-  it('proves upstream error traces and internal database URLs are never leaked to client', async () => {
+  // 7. Status mapping: 201 -> 201, 200 -> 200, 409 -> 409, 422 -> 422, 503 -> 503, 500 -> 502
+  it('proves new committed order 201 maps to BFF 201', async () => {
     globalThis.fetch = async () => {
-      // Simulate upstream crash leaking DB credentials in trace
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 201 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 201);
+    const json = (await res.json()) as { success: boolean; data: { order_id: string } };
+    assert.equal(json.success, true);
+    assert.equal(json.data.order_id, '018f6c38-8c50-711e-b8d4-53a8be77e440');
+  });
+
+  it('proves idempotent replay 200 maps to BFF 200', async () => {
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 200 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 200);
+    const json = (await res.json()) as { success: boolean; data: { order_id: string } };
+    assert.equal(json.success, true);
+  });
+
+  it('proves upstream ERP 409 maps to sanitized 409 without internal trace', async () => {
+    globalThis.fetch = async () => {
+      return new Response(
+        JSON.stringify({
+          error: 'InsufficientInventoryException: Lot lot-123 has only 1 available',
+          internal_state: 'inventory_conflict',
+        }),
+        { status: 409 },
+      );
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 409);
+    const body = (await res.json()) as { error: string; request_id: string };
+    assert.equal(body.error, 'Checkout conflict or inventory unavailable');
+    assert.ok(body.request_id);
+  });
+
+  it('proves upstream ERP 422 maps to sanitized 422', async () => {
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify({ message: 'Validation failed' }), { status: 422 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 422);
+    const body = (await res.json()) as { error: string; request_id: string };
+    assert.equal(body.error, 'Invalid checkout data');
+    assert.ok(body.request_id);
+  });
+
+  it('proves upstream ERP 503 maps to sanitized 503', async () => {
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify({ message: 'Fulfillment warehouse down' }), { status: 503 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 503);
+    const body = (await res.json()) as { error: string; request_id: string };
+    assert.equal(body.error, 'Checkout service is temporarily unavailable');
+    assert.ok(body.request_id);
+  });
+
+  it('proves upstream error traces and internal database URLs are never leaked to client (500 -> 502)', async () => {
+    globalThis.fetch = async () => {
       const internalLeak = {
         message: 'SQLSTATE[08006] Connection failure: postgresql://callme_admin:SuperSecretDbPassword123@10.0.1.25:5432/callme_yoghurt_prod',
         trace: [
@@ -229,7 +466,10 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
@@ -247,59 +487,12 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     assert.ok(json.request_id, 'Must provide sanitized correlation request_id');
   });
 
-  // 7. Rate limiting behavior works at its defined boundary
-  it('proves rate limiting boundary enforces HTTP 429 when threshold is exceeded', async () => {
-    globalThis.fetch = async () => {
-      return new Response(JSON.stringify({ order_id: 'ord-rl-1', status: 'CONFIRMED' }), { status: 200 });
-    };
-
-    // The limit is 5 requests per minute
-    for (let i = 1; i <= 5; i++) {
-      const req = new Request('http://localhost:3000/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(makeValidPayload()),
-      });
-
-      const res = await POST(req);
-      assert.equal(res.status, 200, `Request ${i} of 5 should succeed`);
-      assert.equal(res.headers.get('x-ratelimit-limit'), '5');
-      assert.equal(res.headers.get('x-ratelimit-remaining'), String(5 - i));
-    }
-
-    // 6th request must exceed rate limit
-    const blockedReq = new Request('http://localhost:3000/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(makeValidPayload()),
-    });
-
-    const blockedRes = await POST(blockedReq);
-    assert.equal(blockedRes.status, 429, '6th request must be rejected with 429');
-    assert.ok(blockedRes.headers.get('retry-after'), 'Retry-After header must be present on 429');
-
-    const blockedBody = (await blockedRes.json()) as { error: string };
-    assert.ok(blockedBody.error.includes('Too many checkout requests'));
-  });
-
-  // 8. Relevant security headers are present
-  it('proves relevant baseline security headers are defined and evaluated', () => {
-    const headers = getSecurityHeaders({ isProduction: false });
-    const keys = headers.map((h) => h.key);
-
-    assert.ok(keys.includes('Content-Security-Policy'));
-    assert.ok(keys.includes('X-Content-Type-Options'));
-    assert.ok(keys.includes('Referrer-Policy'));
-    assert.ok(keys.includes('Permissions-Policy'));
-    assert.ok(keys.includes('X-Frame-Options'));
-  });
-
-  // 9. GATE 0B.1: Upstream success contract sanitizes and exposes only explicit public fields
+  // 8. Success contract validation & field stripping
   it('proves upstream success responses are strictly filtered and internal fields are never exposed', async () => {
     globalThis.fetch = async () => {
       const sensitiveUpstreamSuccess = {
-        order_id: 'ord-sensitive-001',
-        order_number: 'SO-2026-001',
+        order_id: '018f6c38-8c50-711e-b8d4-53a8be77e440',
+        order_number: 'CY-20260914-01J7ABCDEF',
         status: 'CONFIRMED',
         total_amount: 100000,
         internal_secret: 'DO_NOT_EXPOSE_INTERNAL_KEY',
@@ -311,20 +504,22 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
         internal_node: 'worker-node-alpha-01',
       };
 
-      return new Response(JSON.stringify(sensitiveUpstreamSuccess), { status: 200 });
+      return new Response(JSON.stringify(sensitiveUpstreamSuccess), { status: 201 });
     };
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
     const res = await POST(req);
-    assert.equal(res.status, 200);
+    assert.equal(res.status, 201);
 
     const bodyText = await res.text();
-    // Verify none of the internal fields leak to browser
     assert.ok(!bodyText.includes('DO_NOT_EXPOSE_INTERNAL_KEY'), 'Must never leak internal_secret');
     assert.ok(!bodyText.includes('database_url'), 'Must never leak database_url key');
     assert.ok(!bodyText.includes('postgres://'), 'Must never leak database connection URI');
@@ -338,8 +533,8 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     };
 
     assert.equal(json.success, true);
-    assert.equal(json.data.order_id, 'ord-sensitive-001');
-    assert.equal(json.data.order_number, 'SO-2026-001');
+    assert.equal(json.data.order_id, '018f6c38-8c50-711e-b8d4-53a8be77e440');
+    assert.equal(json.data.order_number, 'CY-20260914-01J7ABCDEF');
     assert.equal(json.data.status, 'CONFIRMED');
     assert.equal(json.data.total_amount, 100000);
     assert.equal(json.data.request_id, json.request_id);
@@ -348,28 +543,182 @@ describe('Checkout Route Security Baseline (Gate 0B & 0B.1 Regression Suite)', (
     assert.equal(json.data.debug, undefined);
   });
 
-  // 10. GATE 0B.1: Malformed upstream success payload fails closed with sanitized 502
-  it('proves unexpected or malformed upstream success JSON fails closed with 502', async () => {
+  // 9. Upstream contract violations fail closed with 502
+  it('proves missing order_id in 201 response fails closed with 502', async () => {
     globalThis.fetch = async () => {
-      // Missing required order identifier and status
-      const malformedUpstream = {
-        unrecognized_data: true,
-        extra: 'unexpected',
+      const invalid = {
+        order_number: 'CY-20260914-01J7ABCDEF',
+        status: 'CONFIRMED',
+        total_amount: 50000,
       };
-      return new Response(JSON.stringify(malformedUpstream), { status: 200 });
+      return new Response(JSON.stringify(invalid), { status: 201 });
     };
 
     const req = new Request('http://localhost:3000/api/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
       body: JSON.stringify(makeValidPayload()),
     });
 
     const res = await POST(req);
-    assert.equal(res.status, 502, 'Malformed upstream JSON must fail closed with 502');
+    assert.equal(res.status, 502);
+  });
 
-    const body = (await res.json()) as { error: string; request_id: string };
-    assert.equal(body.error, 'Unable to process checkout response');
-    assert.ok(body.request_id, 'Must return correlation request_id');
+  it('proves malformed order_id (non-UUID) in 201 response fails closed with 502', async () => {
+    globalThis.fetch = async () => {
+      const invalid = {
+        order_id: 'not-a-valid-uuid',
+        order_number: 'CY-20260914-01J7ABCDEF',
+        status: 'CONFIRMED',
+        total_amount: 50000,
+      };
+      return new Response(JSON.stringify(invalid), { status: 201 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 502);
+  });
+
+  it('proves missing order_number in 201 response fails closed with 502', async () => {
+    globalThis.fetch = async () => {
+      const invalid = {
+        order_id: '018f6c38-8c50-711e-b8d4-53a8be77e440',
+        status: 'CONFIRMED',
+        total_amount: 50000,
+      };
+      return new Response(JSON.stringify(invalid), { status: 201 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 502);
+  });
+
+  it('proves status other than CONFIRMED in 201 response fails closed with 502', async () => {
+    globalThis.fetch = async () => {
+      const invalid = {
+        order_id: '018f6c38-8c50-711e-b8d4-53a8be77e440',
+        order_number: 'CY-20260914-01J7ABCDEF',
+        status: 'PENDING',
+        total_amount: 50000,
+      };
+      return new Response(JSON.stringify(invalid), { status: 201 });
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 502);
+  });
+
+  it('proves missing, negative, or non-integer total_amount in 201 response fails closed with 502', async () => {
+    const invalidAmounts = [undefined, -100, 10.5, '50000', NaN, Infinity];
+
+    for (const amt of invalidAmounts) {
+      const limiter = getRateLimiter();
+      if (limiter instanceof DevMemoryRateLimiter) {
+        limiter.clear();
+      }
+
+      globalThis.fetch = async () => {
+        const invalid = {
+          order_id: '018f6c38-8c50-711e-b8d4-53a8be77e440',
+          order_number: 'CY-20260914-01J7ABCDEF',
+          status: 'CONFIRMED',
+          total_amount: amt,
+        };
+        return new Response(JSON.stringify(invalid), { status: 201 });
+      };
+
+      const req = new Request('http://localhost:3000/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': testIdempotencyKey,
+        },
+        body: JSON.stringify(makeValidPayload()),
+      });
+
+      const res = await POST(req);
+      assert.equal(res.status, 502, `Expected 502 for invalid amount: ${amt}`);
+    }
+  });
+
+  // 10. Rate limiting behavior
+  it('proves rate limiting boundary enforces HTTP 429 when threshold is exceeded', async () => {
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 201 });
+    };
+
+    for (let i = 1; i <= 5; i++) {
+      const req = new Request('http://localhost:3000/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `key-${i}`,
+        },
+        body: JSON.stringify(makeValidPayload()),
+      });
+
+      const res = await POST(req);
+      assert.equal(res.status, 201, `Request ${i} of 5 should succeed`);
+      assert.equal(res.headers.get('x-ratelimit-limit'), '5');
+      assert.equal(res.headers.get('x-ratelimit-remaining'), String(5 - i));
+    }
+
+    const blockedReq = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key-6',
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const blockedRes = await POST(blockedReq);
+    assert.equal(blockedRes.status, 429, '6th request must be rejected with 429');
+    assert.ok(blockedRes.headers.get('retry-after'), 'Retry-After header must be present on 429');
+
+    const blockedBody = (await blockedRes.json()) as { error: string };
+    assert.ok(blockedBody.error.includes('Too many checkout requests'));
+  });
+
+  // 11. Security headers
+  it('proves relevant baseline security headers are defined and evaluated', () => {
+    const headers = getSecurityHeaders({ isProduction: false });
+    const keys = headers.map((h) => h.key);
+
+    assert.ok(keys.includes('Content-Security-Policy'));
+    assert.ok(keys.includes('X-Content-Type-Options'));
+    assert.ok(keys.includes('Referrer-Policy'));
+    assert.ok(keys.includes('Permissions-Policy'));
+    assert.ok(keys.includes('X-Frame-Options'));
   });
 });

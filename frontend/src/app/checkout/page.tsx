@@ -1,16 +1,25 @@
 'use client';
 
 import { useCartStore, toTransactionProjection } from '@/store/cartStore';
-import { ArrowLeft, MapPin, Phone, ShieldCheck, ShoppingBag, Truck, User } from 'lucide-react';
+import { executeCheckoutSubmission, type CheckoutPayload, type DeliveryMethod, type PublicCommittedOrderData } from '@/lib/checkout-client';
+import { AlertCircle, ArrowLeft, CheckCircle2, MapPin, Phone, ShieldCheck, ShoppingBag, Truck, User } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, getEstimatedTotal, removeItem } = useCartStore();
+  const { items, getEstimatedTotal, removeItem, clearCart } = useCartStore();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({ name: '', whatsapp: '', address: '', delivery: 'instant' });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [committedFallback, setCommittedFallback] = useState<PublicCommittedOrderData | null>(null);
+
+  const [formData, setFormData] = useState({
+    name: '',
+    whatsapp: '',
+    address: '',
+    delivery: 'instant' as DeliveryMethod,
+  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -19,34 +28,85 @@ export default function CheckoutPage() {
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    if (items.length === 0) {
+      setErrorMessage('Keranjang belanja kosong!');
+      return;
+    }
+
     setIsLoading(true);
 
-    // Pure transaction projection from cart items (Gate 0E.2A).
-    // Contains ONLY variant_id and quantity.
-    // Must NOT contain display_price, price, subtotal, total, SKU, name, etc.
-    const transactionItems = toTransactionProjection(items);
-
-    const projectedPayload = {
+    const payload: CheckoutPayload = {
       customer: {
-        name: formData.name.trim(),
-        whatsapp: formData.whatsapp.trim(),
-        address: formData.address.trim(),
+        name: formData.name,
+        whatsapp: formData.whatsapp,
+        address: formData.address,
       },
+      items: toTransactionProjection(items),
       delivery_method: formData.delivery,
-      items: transactionItems,
     };
 
-    try {
-      console.log('Proyeksi transaksi checkout (Gate 0E.2A):', projectedPayload);
-      // In Gate 0E.2A, real checkout POST is not executed yet (deferred to Gate 0E.2B).
-      await new Promise(resolve => setTimeout(resolve, 800));
-      alert('Proyeksi transaksi siap dengan identitas ProductVariant UUID resmi (Gate 0E.2A).');
-    } catch {
-      alert('Terjadi kesalahan saat memproses pesanan.');
-    } finally {
-      setIsLoading(false);
+    const result = await executeCheckoutSubmission(payload);
+    setIsLoading(false);
+
+    if (!result.success) {
+      setErrorMessage(result.error || 'Gagal memproses pesanan. Silakan coba lagi.');
+      return;
     }
+
+    const order = result.data!;
+    // Cart is cleared ONLY after server committed order response is received and validated
+    clearCart();
+
+    if (result.storageFailed) {
+      // Storage failed to persist confirmation, display inline committed fallback
+      setCommittedFallback(order);
+      return;
+    }
+
+    router.push(`/return?order_id=${encodeURIComponent(order.order_id)}`);
   };
+
+  if (committedFallback) {
+    return (
+      <div className="min-h-screen bg-[#f2f0eb] flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-[#00754A]"></div>
+          <div className="w-16 h-16 bg-[#00754A]/10 text-[#00754A] rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 size={36} />
+          </div>
+          <h2 className="text-2xl font-bold text-black/87 mb-2">Pesanan Berhasil Diterima!</h2>
+          <p className="text-sm text-black/58 mb-6">
+            Pesanan Anda telah berhasil diproses dan tercatat di sistem ERP kami.
+          </p>
+          <div className="bg-gray-50 rounded-[12px] p-4 text-left space-y-2 mb-6 border border-gray-100 text-sm">
+            <div className="flex justify-between">
+              <span className="text-black/58">Nomor Pesanan:</span>
+              <span className="font-bold text-black/87">{committedFallback.order_number}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-black/58">Status:</span>
+              <span className="font-bold text-[#00754A]">{committedFallback.status}</span>
+            </div>
+            <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
+              <span className="text-black/58 font-bold">Total Pembayaran:</span>
+              <span className="font-extrabold text-base text-black/87">
+                Rp {committedFallback.total_amount.toLocaleString('id-ID')}
+              </span>
+            </div>
+          </div>
+          <div className="bg-[#1E3932] p-4 rounded-[12px] flex items-start gap-3 text-white text-left mb-6">
+            <ShieldCheck size={20} className="text-[#A1C349] flex-shrink-0 mt-0.5" />
+            <p className="text-xs leading-relaxed opacity-90">Pesanan disiapkan dengan standar Cold Chain Logistics. Tim kami akan menghubungi WhatsApp Anda untuk konfirmasi pengiriman.</p>
+          </div>
+          <Link href="/" className="w-full inline-block bg-[#1E3932] text-white py-4 rounded-[50px] font-bold text-sm hover:bg-black transition-colors">
+            Kembali ke Beranda
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -73,6 +133,13 @@ export default function CheckoutPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">Checkout Pesanan</h1>
         </div>
 
+        {errorMessage && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-[12px] text-sm flex items-start gap-3 shadow-sm">
+            <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 font-medium">{errorMessage}</div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-7 space-y-6">
             <form id="checkout-form" onSubmit={handleCheckout} className="bg-white p-6 md:p-8 rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] space-y-6">
@@ -82,21 +149,48 @@ export default function CheckoutPage() {
                   <label className="block text-xs font-bold text-black/58 uppercase mb-2">Nama Lengkap</label>
                   <div className="relative">
                     <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-black/40" />
-                    <input required type="text" name="name" onChange={handleInputChange} className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A]" placeholder="Masukkan nama Anda" />
+                    <input
+                      required
+                      type="text"
+                      name="name"
+                      maxLength={255}
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A]"
+                      placeholder="Masukkan nama Anda"
+                    />
                   </div>
                 </div>
                 <div className="relative">
                   <label className="block text-xs font-bold text-black/58 uppercase mb-2">Nomor WhatsApp</label>
                   <div className="relative">
                     <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-black/40" />
-                    <input required type="tel" name="whatsapp" onChange={handleInputChange} className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A]" placeholder="08123456789" />
+                    <input
+                      required
+                      type="tel"
+                      name="whatsapp"
+                      maxLength={50}
+                      value={formData.whatsapp}
+                      onChange={handleInputChange}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A]"
+                      placeholder="08123456789"
+                    />
                   </div>
                 </div>
                 <div className="relative">
                   <label className="block text-xs font-bold text-black/58 uppercase mb-2">Alamat Pengiriman</label>
                   <div className="relative">
                     <MapPin size={18} className="absolute left-4 top-4 text-black/40" />
-                    <textarea required name="address" rows={3} onChange={handleInputChange} className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A] resize-none" placeholder="Detail alamat..."></textarea>
+                    <textarea
+                      required
+                      name="address"
+                      rows={3}
+                      maxLength={1000}
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-[8px] focus:outline-none focus:border-[#00754A] focus:ring-1 focus:ring-[#00754A] resize-none"
+                      placeholder="Detail alamat..."
+                    ></textarea>
                   </div>
                 </div>
                 <div className="pt-2">
@@ -154,8 +248,13 @@ export default function CheckoutPage() {
                   <span className="text-2xl font-black text-[#00754A]">Rp {getEstimatedTotal().toLocaleString('id-ID')}</span>
                 </div>
               </div>
-              <button type="submit" form="checkout-form" disabled={isLoading} className="w-full mt-8 bg-[#00754A] text-white py-4 rounded-[50px] font-bold text-base hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50">
-                {isLoading ? <span className="animate-pulse">Memproses...</span> : <><Truck size={20} />Selesaikan Pesanan</>}
+              <button
+                type="submit"
+                form="checkout-form"
+                disabled={isLoading}
+                className="w-full mt-8 bg-[#00754A] text-white py-4 rounded-[50px] font-bold text-base hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? <span className="animate-pulse">Memproses Pesanan...</span> : <><Truck size={20} />Selesaikan Pesanan</>}
               </button>
             </div>
           </div>

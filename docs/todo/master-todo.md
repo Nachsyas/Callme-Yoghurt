@@ -103,14 +103,19 @@
 - [x] `TESTED` Gate 0E.2A.2 Exact Variant Sizing & UI Scope Restoration: Variant sizing strictly parses PostgreSQL DECIMAL(18,6) strings into exact whole milliliters via scaled BigInt arithmetic (rejecting fuzzy rounding, near-values like 249.6ml or 0.9996L, scientific notation, and non-exact divisions); Product Detail presentation scope and visual sections (bottle visual, size selector, quantity and estimated total, composition and nutrition breakdown, cold-chain storage instructions, organic brand features, full footer, and floating cart button) are restored from baseline 778cf70c52eb60acee48cc2701a9eebaf575ccbf while preserving all authoritative identity fixes.
 - [ ] `PLANNED` Homepage catalog cards retain legacy display-only static pricing (they are NOT transaction authority; Product Detail + Cart transaction identity and display price use ERP catalog data; homepage catalog-display cutover remains future storefront presentation cleanup).
 
-### Gate 0E.2B — Browser Checkout Cutover & Lifecycle (Pending)
-- [ ] `IMPLEMENTED` Real browser POST `/api/checkout`.
-- [ ] `IMPLEMENTED` Stable browser idempotency-key lifecycle.
-- [ ] `IMPLEMENTED` Clear cart only after committed order.
-- [ ] `IMPLEMENTED` Committed-order redirect.
-- [ ] `IMPLEMENTED` Success page requires a committed order identifier.
+### Gate 0E.2B — Browser Checkout Cutover & Committed-Order Lifecycle
+- [x] `TESTED` Real browser POST `/api/checkout` with edge-validated payload (`variant_id`, integer quantity, delivery method, zero client pricing/totals), mandatory `Idempotency-Key` header, and sanitized error mapping (400, 409, 422, 429, 502, 503).
+- [x] `TESTED` Stable browser idempotency-key lifecycle via sessionStorage (`callme.checkout.attempt.v1`) with Web Crypto SHA-256 canonical request hashing, zero customer PII storage, retry reuse across network/502 failures, and key rotation upon semantic payload changes.
+- [x] `TESTED` Clear cart only after committed order proof (HTTP 200/201, `isUuid(order_id)`, status strictly `CONFIRMED`, and non-negative integer `total_amount`), leaving cart intact on any failure.
+- [x] `TESTED` Committed-order redirect to `/return?order_id=<UUID>` upon successful confirmation persistence; safe inline order fallback on storage failure.
+- [x] `TESTED` Success page requires committed order identifier matching verified, unexpired session confirmation record; direct/forged URL access fails closed to neutral non-success state.
 
-**Gate 0E status: IN PROGRESS (Gate 0E.1 = PASS; Gate 0E.2A = PASS; Gate 0E overall = IN PROGRESS; Gate 0E.2B = pending).**
+**Gate 0E status: PASS (Gate 0E.1 = PASS; Gate 0E.2A = PASS; Gate 0E.2B = PASS; Gate 0E overall = PASS).**
+
+> [!IMPORTANT]
+> **Gate 0E functional transaction path is complete.**
+> Production checkout activation remains blocked by Gate 0B distributed Redis rate limiter (`UnavailableProductionRateLimiter` intentionally fails closed in production).
+> Homepage static card pricing remains legacy display-only presentation cleanup and does not block Gate 0E transaction completion.
 
 
 ## Gate 0F — Testing, CI & AI-Agent Governance
