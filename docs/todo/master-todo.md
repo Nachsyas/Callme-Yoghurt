@@ -110,7 +110,17 @@
 - [x] `TESTED` Committed-order redirect to `/return?order_id=<UUID>` upon successful confirmation persistence; safe inline order fallback on storage failure.
 - [x] `TESTED` Success page requires committed order identifier matching verified, unexpired session confirmation record; direct/forged URL access fails closed to neutral non-success state.
 
-**Gate 0E status: PASS (Gate 0E.1 = PASS; Gate 0E.2A = PASS; Gate 0E.2B = PASS; Gate 0E overall = PASS).**
+### Gate 0E.2C — Checkout Production Hardening
+- [x] `TESTED` Upstream ERP request timeout protection via `AbortController` (10s threshold), failing closed to sanitized HTTP 502 without internal trace leaks.
+- [x] `TESTED` Universal transaction response cache protection (`Cache-Control: no-store`, `Pragma: no-cache`) across all checkout responses (201, 200, 400, 409, 422, 429, 502, 503).
+- [x] `TESTED` End-to-end browser checkout verification (`frontend/tests/e2e/checkout-flow.spec.ts`):
+  - Scenario 1: Successful checkout flow (product detail -> cart -> checkout -> submit -> `/return` confirmation with order number, status CONFIRMED, and authoritative total).
+  - Scenario 2: Double submit protection (rapid button clicks disable submit and prevent duplicate transactions).
+  - Scenario 3: Refresh confirmation page (persisted session confirmation remains valid on reload, no duplicate order, cart remains cleared).
+  - Scenario 4: Invalid confirmation URL (`/return?order_id=random-invalid-id` fails closed to neutral non-success state).
+- [x] `TESTED` Regression test suite updated with timeout handling and cache protection invariants (94 security tests passing).
+
+**Gate 0E status: PASS — Browser checkout flow verified end-to-end (Gate 0E.1 = PASS; Gate 0E.2A = PASS; Gate 0E.2B = PASS; Gate 0E.2C = PASS; Gate 0E overall = PASS).**
 
 > [!IMPORTANT]
 > **Gate 0E functional transaction path is complete.**

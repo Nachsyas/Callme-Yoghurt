@@ -721,4 +721,130 @@ describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regr
     assert.ok(keys.includes('Permissions-Policy'));
     assert.ok(keys.includes('X-Frame-Options'));
   });
+
+  // 12. Upstream ERP timeout protection (Gate 0E.2C Task 1)
+  it('proves upstream ERP timeout is handled safely with sanitized 502 response and request_id', async () => {
+    globalThis.fetch = async () => {
+      const abortError = new Error('The operation was aborted due to timeout');
+      abortError.name = 'AbortError';
+      throw abortError;
+    };
+
+    const req = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': testIdempotencyKey,
+      },
+      body: JSON.stringify(makeValidPayload()),
+    });
+
+    const res = await POST(req);
+    assert.equal(res.status, 502);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.equal(res.headers.get('pragma'), 'no-cache');
+
+    const bodyText = await res.text();
+    assert.ok(!bodyText.includes('The operation was aborted'), 'Must never leak abort error message');
+    assert.ok(!bodyText.includes('stack'), 'Must never leak stack trace');
+    assert.ok(!bodyText.includes('http://internal-erp-backend'), 'Must never leak ERP URL');
+
+    const json = JSON.parse(bodyText) as { error: string; request_id: string };
+    assert.equal(json.error, 'Checkout service is temporarily unavailable');
+    assert.ok(json.request_id && typeof json.request_id === 'string' && json.request_id.length > 0, 'Valid request_id must be returned on timeout');
+  });
+
+  // 13. Cache control protection on all checkout responses (Gate 0E.2C Task 2)
+  it('proves all checkout responses include Cache-Control: no-store and Pragma: no-cache', async () => {
+    const limiter = getRateLimiter();
+
+    // 13a. 400 Bad Request (missing idempotency key)
+    const req400 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res400 = await POST(req400);
+    assert.equal(res400.status, 400);
+    assert.equal(res400.headers.get('cache-control'), 'no-store');
+    assert.equal(res400.headers.get('pragma'), 'no-cache');
+
+    // 13b. 201 Created (success)
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 201 });
+    const req201 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-201' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res201 = await POST(req201);
+    assert.equal(res201.status, 201);
+    assert.equal(res201.headers.get('cache-control'), 'no-store');
+    assert.equal(res201.headers.get('pragma'), 'no-cache');
+
+    // 13c. 200 OK (idempotent replay)
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify(makeValidUpstreamSuccess()), { status: 200 });
+    const req200 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-200' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res200 = await POST(req200);
+    assert.equal(res200.status, 200);
+    assert.equal(res200.headers.get('cache-control'), 'no-store');
+    assert.equal(res200.headers.get('pragma'), 'no-cache');
+
+    // 13d. 409 Conflict
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Conflict' }), { status: 409 });
+    const req409 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-409' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res409 = await POST(req409);
+    assert.equal(res409.status, 409);
+    assert.equal(res409.headers.get('cache-control'), 'no-store');
+    assert.equal(res409.headers.get('pragma'), 'no-cache');
+
+    // 13e. 422 Unprocessable Entity
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Unprocessable' }), { status: 422 });
+    const req422 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-422' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res422 = await POST(req422);
+    assert.equal(res422.status, 422);
+    assert.equal(res422.headers.get('cache-control'), 'no-store');
+    assert.equal(res422.headers.get('pragma'), 'no-cache');
+
+    // 13f. 503 Service Unavailable
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Unavailable' }), { status: 503 });
+    const req503 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-503' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res503 = await POST(req503);
+    assert.equal(res503.status, 503);
+    assert.equal(res503.headers.get('cache-control'), 'no-store');
+    assert.equal(res503.headers.get('pragma'), 'no-cache');
+
+    // 13g. 502 Bad Gateway (upstream error)
+    if (limiter instanceof DevMemoryRateLimiter) limiter.clear();
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Internal Error' }), { status: 500 });
+    const req502 = new Request('http://localhost:3000/api/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'test-cache-502' },
+      body: JSON.stringify(makeValidPayload()),
+    });
+    const res502 = await POST(req502);
+    assert.equal(res502.status, 502);
+    assert.equal(res502.headers.get('cache-control'), 'no-store');
+    assert.equal(res502.headers.get('pragma'), 'no-cache');
+  });
 });

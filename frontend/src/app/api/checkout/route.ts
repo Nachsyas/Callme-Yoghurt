@@ -1,6 +1,13 @@
 import { getRateLimiter, getClientIdentifier } from '../../../lib/security/rate-limit.ts';
 import { isUuid } from '../../../lib/catalog.ts';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store',
+  Pragma: 'no-cache',
+};
+
+const UPSTREAM_TIMEOUT_MS = 10000;
+
 type DeliveryMethod = 'instant' | 'sameday' | 'nextday';
 
 interface CheckoutRequest {
@@ -157,6 +164,7 @@ export async function POST(request: Request): Promise<Response> {
         status: 429,
         headers: {
           ...rateLimitHeaders,
+          ...NO_CACHE_HEADERS,
           'Retry-After': String(rateLimitResult.retryAfter),
         },
       },
@@ -172,7 +180,7 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     return Response.json(
       { error: 'Missing or invalid Idempotency-Key header' },
-      { status: 400, headers: rateLimitHeaders },
+      { status: 400, headers: { ...rateLimitHeaders, ...NO_CACHE_HEADERS } },
     );
   }
   const idempotencyKey = rawIdempotencyKey.trim();
@@ -183,7 +191,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return Response.json(
       { error: 'Invalid JSON payload' },
-      { status: 400, headers: rateLimitHeaders },
+      { status: 400, headers: { ...rateLimitHeaders, ...NO_CACHE_HEADERS } },
     );
   }
 
@@ -191,7 +199,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!payload) {
     return Response.json(
       { error: 'Invalid checkout payload' },
-      { status: 400, headers: rateLimitHeaders },
+      { status: 400, headers: { ...rateLimitHeaders, ...NO_CACHE_HEADERS } },
     );
   }
 
@@ -203,11 +211,14 @@ export async function POST(request: Request): Promise<Response> {
     console.error('Checkout BFF is unavailable because ERP internal configuration is incomplete.');
     return Response.json(
       { error: 'Checkout service is temporarily unavailable' },
-      { status: 503, headers: rateLimitHeaders },
+      { status: 503, headers: { ...rateLimitHeaders, ...NO_CACHE_HEADERS } },
     );
   }
 
   const requestId = crypto.randomUUID();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
   try {
     const backendResponse = await fetch(`${erpBaseUrl.replace(/\/$/, '')}/api/internal/orders`, {
@@ -220,7 +231,9 @@ export async function POST(request: Request): Promise<Response> {
       },
       body: JSON.stringify(payload),
       cache: 'no-store',
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (backendResponse.status !== 200 && backendResponse.status !== 201) {
       console.error('ERP checkout request failed.', {
@@ -249,7 +262,10 @@ export async function POST(request: Request): Promise<Response> {
         },
         {
           status: mappedStatus,
-          headers: rateLimitHeaders,
+          headers: {
+            ...rateLimitHeaders,
+            ...NO_CACHE_HEADERS,
+          },
         },
       );
     }
@@ -265,7 +281,10 @@ export async function POST(request: Request): Promise<Response> {
         },
         {
           status: 502,
-          headers: rateLimitHeaders,
+          headers: {
+            ...rateLimitHeaders,
+            ...NO_CACHE_HEADERS,
+          },
         },
       );
     }
@@ -283,7 +302,10 @@ export async function POST(request: Request): Promise<Response> {
         },
         {
           status: 502,
-          headers: rateLimitHeaders,
+          headers: {
+            ...rateLimitHeaders,
+            ...NO_CACHE_HEADERS,
+          },
         },
       );
     }
@@ -296,13 +318,19 @@ export async function POST(request: Request): Promise<Response> {
       },
       {
         status: backendResponse.status,
-        headers: rateLimitHeaders,
+        headers: {
+          ...rateLimitHeaders,
+          ...NO_CACHE_HEADERS,
+        },
       },
     );
-  } catch {
-    console.error('ERP checkout transport failure.', {
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    const isAbort = error instanceof Error && error.name === 'AbortError';
+    console.error(isAbort ? 'ERP checkout request timed out.' : 'ERP checkout transport failure.', {
       requestId,
-      errorCategory: 'transport_failure',
+      errorCategory: isAbort ? 'timeout' : 'transport_failure',
     });
 
     return Response.json(
@@ -310,7 +338,13 @@ export async function POST(request: Request): Promise<Response> {
         error: 'Checkout service is temporarily unavailable',
         request_id: requestId,
       },
-      { status: 502, headers: rateLimitHeaders },
+      {
+        status: 502,
+        headers: {
+          ...rateLimitHeaders,
+          ...NO_CACHE_HEADERS,
+        },
+      },
     );
   }
 }
