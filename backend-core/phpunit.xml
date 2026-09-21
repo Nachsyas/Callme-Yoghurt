@@ -33,5 +33,10 @@
         <env name="ERP_SERVICE_TOKEN" value="test-erp-service-token-secret-64ch"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="ADMIN_SESSION_SECRET" value="test-admin-session-secret-key-32ch"/>
+        <env name="HASH_DRIVER" value="argon2id"/>
+        <env name="ARGON_TIME" value="1"/>
+        <env name="ARGON_MEMORY" value="1024"/>
+        <env name="ARGON_THREADS" value="1"/>
     </php>
 </phpunit>

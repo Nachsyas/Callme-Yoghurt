@@ -174,7 +174,17 @@ Status: **TESTED**
 - [x] `TESTED` Role authorization foundation (`frontend/src/lib/auth/permissions.ts`) with `hasPermission` and `requirePermission` verifying that `OWNER` has full access and `ADMIN` is strictly prevented from accessing `OWNER`-only features (`admin:settings:manage`, `admin:users:manage`, `admin:security:audit`).
 - [x] `TESTED` Deployment separation via `NEXT_PUBLIC_APP_MODE` (`storefront` | `admin`) documented in `frontend/.env.example` with middleware redirecting `/admin` routes to `/` when deployed in storefront mode.
 - [x] `TESTED` Security regression test suite (`frontend/tests/security/admin-access.test.ts`) validating unauthenticated redirection, customer role rejection, fail-closed tampering/expiry validation, OWNER full access, and ADMIN privilege hierarchy (9 tests passing).
-- [ ] `PLANNED` Phase 1.2B: Full Admin User Management & Backend Authentication Integration (OAuth/Session API).
+## Phase 1.2B — Admin Identity Provider & Secure Session Management
+Status: **TESTED**
+- [x] `TESTED` Admin identity persistence data model in PostgreSQL (`admin_users` table with UUID primary key, lowercase normalized email uniqueness constraint, role check `OWNER`/`ADMIN`, status check `ACTIVE`/`DISABLED`, and account lock tracking columns).
+- [x] `TESTED` Eloquent domain model (`app/Domain/Admin/Models/AdminUser.php`) with hidden password hashes, strict enum casting, timing-safe password verification, and account lockout management.
+- [x] `TESTED` Password security using Argon2id via Laravel Hash facade, rejecting empty passwords and preventing credential leakage.
+- [x] `TESTED` Admin authentication domain service (`app/Domain/Admin/Services/AdminAuthenticationService.php`) with timing-attack mitigation (constant-time dummy hash verification on unknown emails), account lockout enforcement, HMAC-SHA256 session token generation matching Next.js Edge runtime, and fail-closed handling in production.
+- [x] `TESTED` Brute force protection and distributed rate limiting on `POST /api/admin/login` (5 attempts / 15 minutes per identity), accompanied by persistent database-level account locks after 5 consecutive failures.
+- [x] `TESTED` Audit logging architecture (`admin_audit_logs` table and `AdminAuditLog` model) recording login successes, failures, account lockouts, and logouts without ever storing passwords, hashes, or session tokens.
+- [x] `TESTED` BFF and frontend integration (`/api/admin/login`, `/api/admin/logout`, and `frontend/src/app/admin/login/page.tsx`) with sanitized generic error messages, zero token persistence in `localStorage`, and HTTP-only cookie session storage.
+- [x] `TESTED` Backend test suite (`backend-core/tests/Feature/AdminAuthenticationTest.php`) verifying OWNER/ADMIN login, wrong password rejection, disabled account rejection, repeated failure lockout, audit logging, password hash absence in responses, and session termination (8 tests, 49 assertions passing).
+- [x] `TESTED` Frontend test suite (`frontend/tests/security/admin-auth-security.test.ts`) validating error sanitization, localStorage isolation, protected route traversal, and cookie clearance on logout (7 tests passing).
 
 ---
 

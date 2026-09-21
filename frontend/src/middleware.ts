@@ -41,8 +41,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 4. Protect any admin API routes if present
-  if (pathname.startsWith("/api/admin")) {
+  // 4. Protect any admin API routes if present (except public auth entry points)
+  if (
+    pathname.startsWith("/api/admin") &&
+    pathname !== "/api/admin/login" &&
+    pathname !== "/api/admin/logout"
+  ) {
     const session = await getAdminSessionFromRequest(request);
     if (!session || (session.user.role !== "OWNER" && session.user.role !== "ADMIN")) {
       return NextResponse.json(
