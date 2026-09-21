@@ -195,6 +195,15 @@ Status: **TESTED**
 - [x] `TESTED` Comprehensive Vercel staging & production deployment guide created (`docs/deployment/vercel-staging.md`) covering project setups, environment specifications, Edge middleware boundary, domain routing, and instant rollback procedures.
 - [x] `TESTED` Security deployment boundary regression test suite (`frontend/tests/security/deployment-boundary.test.ts`) validating storefront isolation, admin mode authentication requirement, secret absence from client bundles/chunks, and non-leakage of ERP configurations in API responses (7 tests passing).
 
+## Phase 1.2D — Vercel Staging Deployment Execution & Verification
+Status: **TESTED**
+- [x] `TESTED` Vercel configuration audit (`package.json`, `next.config.mjs`, `middleware.ts`, `src/lib/env-validator.ts`): verified root directory `frontend`, Next.js framework preset, and zero Node-only dependencies in Edge middleware.
+- [x] `TESTED` Staging execution & verification runbook created (`docs/deployment/vercel-staging-verification.md`) detailing storefront & admin Vercel configurations, environment variable specifications, domain mappings, cookie security invariants, and instant rollback procedures.
+- [x] `TESTED` Environment validation utility (`frontend/src/lib/env-validator.ts`) enforcing required variables for Storefront (`NEXT_PUBLIC_APP_MODE`, `ERP_INTERNAL_URL`, `ERP_SERVICE_TOKEN`) and Admin (`NEXT_PUBLIC_APP_MODE`, `ERP_INTERNAL_URL`, `ADMIN_SESSION_SECRET`) with fail-closed production semantics and zero secret leakage.
+- [x] `TESTED` Environment validation security test suite (`frontend/tests/security/env-validator.test.ts`) validating Storefront requirements, Admin requirements, and zero secret leakage in error messages (9 tests passing).
+- [x] `TESTED` End-to-end deployment smoke test suite (`frontend/tests/e2e/staging-smoke.spec.ts`) validating Storefront homepage, Product detail page with Cold Chain storage guidance, Admin unauthenticated route protection, Admin login form controls, and BFF error sanitization (5 tests passing in Playwright).
+- [x] `TESTED` Zero regressions across full automated verification: 133 passing security tests across 33 suites, 9 passing Playwright e2e tests, 0 TypeScript errors, successful Next.js production build, and 127 passing Laravel ERP feature tests (501 assertions).
+
 ---
 
 # Legacy Implementation Evidence
