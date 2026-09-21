@@ -2,6 +2,8 @@ import { parsePublicCatalogResponse } from '../../../lib/catalog.ts';
 
 export const dynamic = 'force-dynamic';
 
+const UPSTREAM_TIMEOUT_MS = 5000;
+
 export async function GET(): Promise<Response> {
   const erpBaseUrl = process.env.ERP_INTERNAL_URL;
   const erpServiceToken = process.env.ERP_SERVICE_TOKEN;
@@ -22,6 +24,8 @@ export async function GET(): Promise<Response> {
   }
 
   const requestId = crypto.randomUUID();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
   try {
     const upstreamUrl = `${erpBaseUrl.replace(/\/$/, '')}/api/internal/catalog/products`;
@@ -33,7 +37,9 @@ export async function GET(): Promise<Response> {
         'X-Request-Id': requestId,
       },
       cache: 'no-store',
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!backendResponse.ok) {
       console.error('ERP catalog request failed.', {
@@ -84,6 +90,8 @@ export async function GET(): Promise<Response> {
       },
     });
   } catch (error) {
+    clearTimeout(timeoutId);
+
     console.error('ERP catalog transport failure.', {
       requestId,
       error: error instanceof Error ? error.message : 'unknown error',

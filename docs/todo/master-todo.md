@@ -186,6 +186,15 @@ Status: **TESTED**
 - [x] `TESTED` Backend test suite (`backend-core/tests/Feature/AdminAuthenticationTest.php`) verifying OWNER/ADMIN login, wrong password rejection, disabled account rejection, repeated failure lockout, audit logging, password hash absence in responses, and session termination (8 tests, 49 assertions passing).
 - [x] `TESTED` Frontend test suite (`frontend/tests/security/admin-auth-security.test.ts`) validating error sanitization, localStorage isolation, protected route traversal, and cookie clearance on logout (7 tests passing).
 
+## Phase 1.2C — Vercel Staging Deployment Foundation
+Status: **TESTED**
+- [x] `TESTED` Dual-deployment architecture decision documented (`docs/deployment/vercel-staging.md`): single unified repository deploying to distinct Vercel projects (`callme-yoghurt-storefront` and `callme-yoghurt-admin`) with host and mode isolation.
+- [x] `TESTED` Environment variable separation documented in `frontend/.env.example` strictly distinguishing customer variables from administrative variables, prohibiting `NEXT_PUBLIC_` prefixes on secrets (`ERP_SERVICE_TOKEN`, `ADMIN_SESSION_SECRET`, `REDIS_URL`).
+- [x] `TESTED` Vercel Edge runtime compatibility verified: middleware has zero Node.js filesystem/network imports and utilizes standard Web Crypto API; server-side routes utilize standard AbortController 5000ms timeouts.
+- [x] `TESTED` Backend connection hardening: BFF routes (`/api/catalog`, `/api/checkout`, `/api/admin/login`, `/api/admin/logout`) enforce HTTPS readiness, explicit request timeouts, sanitized error mapping, and zero internal credential leakage.
+- [x] `TESTED` Comprehensive Vercel staging & production deployment guide created (`docs/deployment/vercel-staging.md`) covering project setups, environment specifications, Edge middleware boundary, domain routing, and instant rollback procedures.
+- [x] `TESTED` Security deployment boundary regression test suite (`frontend/tests/security/deployment-boundary.test.ts`) validating storefront isolation, admin mode authentication requirement, secret absence from client bundles/chunks, and non-leakage of ERP configurations in API responses (7 tests passing).
+
 ---
 
 # Legacy Implementation Evidence

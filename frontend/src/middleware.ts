@@ -6,9 +6,14 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const appMode = process.env.NEXT_PUBLIC_APP_MODE;
 
-  // 1. Storefront Isolation: If explicitly deployed in storefront mode, block /admin access
+  // 1a. Storefront Isolation: If explicitly deployed in storefront mode, block /admin access
   if (appMode === "storefront" && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
     return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  // 1b. Admin Mode Root Redirect: If deployed in admin mode, route root traffic to admin dashboard
+  if (appMode === "admin" && pathname === "/") {
+    return NextResponse.redirect(new URL("/admin", request.url));
   }
 
   // 2. Allow unauthenticated access to the admin login page
@@ -62,6 +67,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/admin",
     "/admin/:path*",
     "/api/admin/:path*",

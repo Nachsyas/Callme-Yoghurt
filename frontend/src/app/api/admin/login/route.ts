@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server.js";
-import { ADMIN_COOKIE_NAME } from "../../../../lib/auth/admin-session.ts";
+
+const UPSTREAM_TIMEOUT_MS = 5000;
 
 export async function POST(request: Request): Promise<Response> {
   let body: unknown;
@@ -29,6 +30,9 @@ export async function POST(request: Request): Promise<Response> {
 
   const erpBaseUrl = process.env.ERP_INTERNAL_URL || "http://127.0.0.1:8000";
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
   try {
     const upstream = await fetch(`${erpBaseUrl.replace(/\/$/, "")}/api/admin/login`, {
       method: "POST",
@@ -39,7 +43,9 @@ export async function POST(request: Request): Promise<Response> {
       },
       body: JSON.stringify({ email: trimmedEmail, password }),
       cache: "no-store",
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (upstream.status === 401) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
@@ -58,7 +64,6 @@ export async function POST(request: Request): Promise<Response> {
 
     const data = await upstream.json();
 
-    // Extract cookie from upstream or build standard session cookie
     const res = NextResponse.json(
       {
         user: data.user,
@@ -67,7 +72,6 @@ export async function POST(request: Request): Promise<Response> {
       { status: 200 }
     );
 
-    // Forward upstream set-cookie or extract token
     const upstreamCookie = upstream.headers.get("set-cookie");
     if (upstreamCookie) {
       res.headers.set("set-cookie", upstreamCookie);
@@ -75,6 +79,7 @@ export async function POST(request: Request): Promise<Response> {
 
     return res;
   } catch {
+    clearTimeout(timeoutId);
     return NextResponse.json({ error: "Authentication service unavailable" }, { status: 502 });
   }
 }
