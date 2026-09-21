@@ -43,11 +43,11 @@
 - [x] `TESTED` Establish explicit public checkout response contract sanitizing upstream ERP payload, stripping internal secrets/database URLs/debug traces, and failing closed on malformed success JSON with 502 (zero `any`, verified by test).
 - [x] `TESTED` Define PII encryption/search strategy including blind index/hash via `PhoneBlindIndexService` and `Customer` model (PHP runtime verified against PostgreSQL in CI run 34708399936; golden vector verified in TS and PHP suites).
 - [x] `TESTED` Define security headers baseline with hardened HSTS opt-in controls (`next.config.mjs` and middleware headers with CSP `frame-ancestors 'none'`, nosniff, Referrer-Policy, Permissions-Policy; HSTS, `includeSubDomains`, and `preload` require explicit opt-in flags; default production build never automatically produces preload; verified by test).
-- [x] `TESTED` Define rate-limiting baseline with strictly development/test-only `DevMemoryRateLimiter`, fail-closed `UnavailableProductionRateLimiter` preventing silent fallback in production, safe client identity isolation (`x-dev-client-id` in dev), and proxy anti-spoofing when `trustProxy=false` (verified by test; Redis distributed limiter PLANNED/DEPENDENT ON RUNTIME).
+- [x] `TESTED` Define rate-limiting foundation with development/test-only `DevMemoryRateLimiter`, production distributed `RedisRateLimiter` (atomic EVAL script, TTL expiration, fail-closed handling, credential sanitization), and fail-closed `UnavailableProductionRateLimiter` when Redis is unconfigured (verified by security regression test suite).
 - [x] `TESTED` Restrict local security tooling/network exposure by default (localhost binding, dev credentials, required ZAP API key, deferred MongoDB profile; verified via Compose config).
 - [x] `TESTED` Add security regression tests for secret exposure, tampered transaction input, fail-closed configuration, sanitized upstream errors and success DTOs, rate-limiting boundary and identity isolation, and security headers (34 targeted automated tests passing across 4 suites).
 
-**Gate 0B status: IN PROGRESS — Security foundation is implemented and tested at the edge/BFF, Docker, and test-vector boundaries; full Gate 0B verification is pending Redis distributed rate limiter.**
+**Gate 0B status: PASS — Production distributed rate limiter verified**
 
 ## Gate 0C — ERP Core Foundation
 
@@ -124,7 +124,7 @@
 
 > [!IMPORTANT]
 > **Gate 0E functional transaction path is complete.**
-> Production checkout activation remains blocked by Gate 0B distributed Redis rate limiter (`UnavailableProductionRateLimiter` intentionally fails closed in production).
+> Production checkout activation unblocked: Gate 0B distributed Redis rate limiter foundation verified (production fails closed if REDIS_URL is absent, active when configured).
 > Homepage static card pricing remains legacy display-only presentation cleanup and does not block Gate 0E transaction completion.
 
 
