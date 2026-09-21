@@ -229,6 +229,25 @@ Status: **TESTED**
 - [x] `TESTED` Comprehensive OWASP Penetration Testing Report generated at `docs/security/pentest-report.md`.
 - [x] `TESTED` Full regression compatibility: 133 frontend security tests, 23 pentest specs, 127 Laravel ERP tests (501 assertions), 0 TypeScript compilation errors, and successful Next.js production build.
 
+## Phase 1.4A — OWASP ZAP DAST Security Scan & Production Infrastructure Planning
+Status: **TESTED**
+- [x] `TESTED` OWASP ZAP DAST framework structure created under `security/dast/` (`README.md`, `zap-config.yaml`, `zap-report/`, `scripts/run-zap-scan.sh`).
+- [x] `TESTED` OWASP ZAP Baseline Scan configuration (`security/dast/zap-config.yaml`) establishing spidering, passive scanning, admin authentication flow (`POST /api/admin/login`), session verification, and context separation between Customer Storefront (`/`, `/product/*`, `/checkout`, `/api/catalog`, `/api/checkout`) and Admin Portal (`/admin/*`, `/api/admin/*`).
+- [x] `TESTED` Automated dynamic security check suite (`tests/security/dast/dast-checks.spec.ts`) validating:
+  - Authentication: unauthenticated access to `/admin` redirected (307); session cookie flags (`HttpOnly`, `SameSite=Lax`, `Secure`); expired session rejection; logout cookie clearance.
+  - Authorization: customer role denied `/admin`; ADMIN role denied OWNER-only privileged capabilities (`admin:users:manage`, `admin:settings:manage`, `admin:security:audit`).
+  - API Security: unauthenticated access to `/api/admin/*` rejected (401); upstream error responses sanitize secrets, internal IPs, and stack traces.
+  - Injection: reflected XSS, SQLi, and command injection indicators safely handled without 500 errors or execution.
+  - Security Headers: Content-Security-Policy (`frame-ancestors 'none'`, `default-src 'self'`), HSTS (`max-age=63072000`, `includeSubDomains`, `preload`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`.
+- [x] `TESTED` Dynamic Application Security Testing (DAST) assessment report created at `docs/security/dast-report.md` documenting methodology, tools, findings table, request/response evidence, and remediation pathways.
+- [x] `TESTED` Production infrastructure architecture plan created at `docs/deployment/production-architecture.md` defining Edge-BFF topology (Cloudflare WAF -> Vercel Frontend -> Cloudflare Tunnel -> Laravel 13 ERP Core on VPS -> PostgreSQL 16 + Redis 7 + S3/R2 Object Storage).
+- [x] `TESTED` Three deployment sizing tiers documented: Tier 1 Minimal (<10M IDR/year on Hetzner/DigitalOcean VPS), Tier 2 Recommended Production (isolated Managed DB and App VPS), and Tier 3 Enterprise Multi-Region Cluster.
+- [x] `TESTED` Production component stack specified: Laravel 13 on PHP 8.3-FPM/Octane, PostgreSQL 16 with PgBouncer, Redis 7 AOF, S3/R2 object storage with presigned URLs, Nginx reverse proxy, and Cloudflare Strict SSL.
+- [x] `TESTED` Observability & monitoring architecture specified: Prometheus scraping node, postgres, and redis exporters; Grafana real-time operations dashboards; Uptime Kuma 30s heartbeat checks.
+- [x] `TESTED` Backup and disaster recovery strategy documented: daily full `pg_dump` with GPG AES-256 encryption pushed offsite to R2, continuous WAL archiving with 15-minute RPO target, and 4-hour RTO target.
+- [x] `TESTED` Full regression compatibility: 133 frontend security tests, 33 pentest and DAST specs, 127 Laravel ERP tests (501 assertions), 0 TypeScript compilation errors, successful Next.js production build, and k6 smoke test syntax execution.
+
+
 
 ---
 
