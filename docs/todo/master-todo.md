@@ -162,6 +162,22 @@
 
 ---
 
+# Phase 1 — Commerce Core
+
+## Phase 1.1 — Production Object Storage Runtime Integration
+- [x] `TESTED` S3-compatible production object storage runtime integration (`ObjectStorageProviderInterface`, `S3ObjectStorageProvider`, and `LocalObjectStorageProvider`) with fail-closed production credential validation, safe object key generation, presigned URL generation, and metadata persistence without binary database column (verified by 5 automated feature tests).
+
+## Phase 1.2A — Admin Access Control Hardening & Deployment Separation Foundation
+Status: **TESTED**
+- [x] `TESTED` Route protection boundary in `frontend/src/middleware.ts` intercepting `/admin`, `/admin/*`, and `/api/admin/*`, redirecting unauthenticated traffic to `/admin/login?from=...`, and returning HTTP 401 for unauthenticated API requests.
+- [x] `TESTED` Admin session foundation (`frontend/src/lib/auth/admin-session.ts`) using Web Crypto API HMAC-SHA256 signatures, `OWNER` and `ADMIN` role constraints, fail-closed handling on missing production secret, and constant-time signature comparison.
+- [x] `TESTED` Role authorization foundation (`frontend/src/lib/auth/permissions.ts`) with `hasPermission` and `requirePermission` verifying that `OWNER` has full access and `ADMIN` is strictly prevented from accessing `OWNER`-only features (`admin:settings:manage`, `admin:users:manage`, `admin:security:audit`).
+- [x] `TESTED` Deployment separation via `NEXT_PUBLIC_APP_MODE` (`storefront` | `admin`) documented in `frontend/.env.example` with middleware redirecting `/admin` routes to `/` when deployed in storefront mode.
+- [x] `TESTED` Security regression test suite (`frontend/tests/security/admin-access.test.ts`) validating unauthenticated redirection, customer role rejection, fail-closed tampering/expiry validation, OWNER full access, and ADMIN privilege hierarchy (9 tests passing).
+- [ ] `PLANNED` Phase 1.2B: Full Admin User Management & Backend Authentication Integration (OAuth/Session API).
+
+---
+
 # Legacy Implementation Evidence
 
 The following repository pieces already exist but must not be treated as completed enterprise phases without re-verification:
