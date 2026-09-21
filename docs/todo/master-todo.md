@@ -216,6 +216,20 @@ Status: **IMPLEMENTED**
 - [x] `IMPLEMENTED` Metrics Collection & Report Template (`docs/testing/load-test-report-template.md`) establishing standardized reporting for infrastructure utilization, k6 application metrics, and business transaction invariants.
 - [x] `IMPLEMENTED` Full security regression suite passing: 133 frontend security tests, 127 Laravel ERP feature tests (501 assertions), and 0 TypeScript compilation errors.
 
+## Phase 1.3B — OWASP Security Assessment & Penetration Testing Framework
+Status: **TESTED**
+- [x] `TESTED` Security testing framework structure established under `tests/security/pentest/` (`authentication`, `authorization`, `api`, `injection`, `leakage`, `headers`, `reports`).
+- [x] `TESTED` Authentication penetration testing (`tests/security/pentest/authentication/admin-auth.spec.ts`): invalid credentials rejected with HTTP 401 and generic error; user enumeration mitigated via identical error responses; session cookie tampering rejected; expired tokens redirect to `/admin/login`; missing production session secret fails closed.
+- [x] `TESTED` Authorization & RBAC penetration testing (`tests/security/pentest/authorization/rbac.spec.ts`): customer access to `/admin` and admin API denied (307 redirect / 401); ADMIN role denied OWNER-only privileged capabilities (`admin:users:manage`, `admin:settings:manage`, `admin:security:audit`); role tampering / privilege escalation rejected cryptographically.
+- [x] `TESTED` API security testing (`tests/security/pentest/api/api-security.spec.ts`): parameter tampering (price, total, stock, warehouse_id, customer_id, negative/floating quantities, invalid UUIDs) strictly rejected or stripped; upstream error responses never leak `ERP_SERVICE_TOKEN`, internal URLs, IPs, or stack traces; IDOR enumeration blocked.
+- [x] `TESTED` Injection penetration testing (`tests/security/pentest/injection/injection.spec.ts`): SQL injection inputs in checkout and login rejected/sanitized without syntax error or database state disclosure; XSS attacks mitigated with zero `dangerouslySetInnerHTML` across frontend codebase; JSON and prototype pollution (`__proto__`, `constructor.prototype`) neutralized; CRLF header injection prevented.
+- [x] `TESTED` OWASP Security header assessment (`tests/security/pentest/headers/security-header.spec.ts`): Content-Security-Policy (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, no `unsafe-eval` in production), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` hardware restrictions, `X-Frame-Options: DENY`, and Strict-Transport-Security (HSTS).
+- [x] `TESTED` Secret leakage scanner (`tests/security/pentest/leakage/secret-scanner.ts` and `tests/security/pentest/leakage/secret-leakage.spec.ts`): automated scanner verified 0 secret leakage findings across `.next/` build bundles, client components, and public assets.
+- [x] `TESTED` Dependency security audit: Backend Composer audit clean with 0 advisories (`composer audit --locked`); frontend npm audit evaluated and documented with full remediation roadmap.
+- [x] `TESTED` Comprehensive OWASP Penetration Testing Report generated at `docs/security/pentest-report.md`.
+- [x] `TESTED` Full regression compatibility: 133 frontend security tests, 23 pentest specs, 127 Laravel ERP tests (501 assertions), 0 TypeScript compilation errors, and successful Next.js production build.
+
+
 ---
 
 # Legacy Implementation Evidence
