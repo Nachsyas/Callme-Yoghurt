@@ -3,3 +3,4 @@
 /.env.backup
 /.env.production
 .phpunit.result.cache
+/storage/framework/testing/
