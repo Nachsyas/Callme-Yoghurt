@@ -3,7 +3,11 @@
     "name": "callme-yoghurt/backend-core",
     "type": "project",
     "description": "Callme Yoghurt ERP Core — Authoritative Transactional Business Layer",
-    "keywords": ["laravel", "erp", "callme-yoghurt"],
+    "keywords": [
+        "laravel",
+        "erp",
+        "callme-yoghurt"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.3",
@@ -42,7 +46,10 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
     },
     "minimum-stability": "stable",
     "prefer-stable": true
