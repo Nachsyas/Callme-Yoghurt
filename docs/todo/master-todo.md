@@ -204,6 +204,18 @@ Status: **TESTED**
 - [x] `TESTED` End-to-end deployment smoke test suite (`frontend/tests/e2e/staging-smoke.spec.ts`) validating Storefront homepage, Product detail page with Cold Chain storage guidance, Admin unauthenticated route protection, Admin login form controls, and BFF error sanitization (5 tests passing in Playwright).
 - [x] `TESTED` Zero regressions across full automated verification: 133 passing security tests across 33 suites, 9 passing Playwright e2e tests, 0 TypeScript errors, successful Next.js production build, and 127 passing Laravel ERP feature tests (501 assertions).
 
+## Phase 1.3A — Production Load & Stress Test Framework
+Status: **IMPLEMENTED**
+- [x] `IMPLEMENTED` Grafana k6 framework setup (`tests/load/`) with modular architecture: `config.js` (env loader with staging fallbacks), `helpers.js` (synthetic Indonesian customer & phone generators, idempotency key factory, think-time helpers), and `.env.example`.
+- [x] `IMPLEMENTED` Customer Browsing Load Test (`tests/load/catalog-load.js`) simulating ramping traffic from 0 to 500 virtual users across storefront landing, product details, and catalog BFF APIs with p95 < 1000ms latency and < 1% error rate thresholds.
+- [x] `IMPLEMENTED` Checkout Concurrency Test (`tests/load/checkout-load.js`) executing 100 concurrent checkout submissions, asserting transaction integrity, p95 < 3000ms submission latency, and zero token/ERP internal URL leakage.
+- [x] `IMPLEMENTED` Inventory Race Condition Test (`tests/load/inventory-race-test.js`) subjecting limited stock pool to 100 simultaneous checkouts, validating FEFO allocation integrity, fail-closed 409 Conflict handling, and zero overselling (`race_oversold_rate == 0`).
+- [x] `IMPLEMENTED` Idempotency Stress Test (`tests/load/idempotency-stress.js`) executing 100 concurrent submissions of identical `Idempotency-Key`, verifying single transaction creation, idempotent HTTP 200 replay / 409 in-flight lock handling, and zero duplicate orders (`idemp_duplicate_anomaly_rate == 0`).
+- [x] `IMPLEMENTED` Admin Authentication Stress Test (`tests/load/admin-login-stress.js`) simulating high-frequency brute-force attempts, verifying distributed rate limiting (HTTP 429), sanitized failure responses (HTTP 401), account lockout triggers, and zero authentication bypass (`auth_bypass_anomaly_rate == 0`).
+- [x] `IMPLEMENTED` Database Observation Scripts (`tests/load/database-checks/`): `01-inventory-consistency.sql` (no negative stock, reservations balance allocations, append-only ledger), `02-idempotency-integrity.sql` (idempotency uniqueness, global order number uniqueness), and `03-audit-log-verification.sql` (audited attempts, zero plaintext credential leakage).
+- [x] `IMPLEMENTED` Metrics Collection & Report Template (`docs/testing/load-test-report-template.md`) establishing standardized reporting for infrastructure utilization, k6 application metrics, and business transaction invariants.
+- [x] `IMPLEMENTED` Full security regression suite passing: 133 frontend security tests, 127 Laravel ERP feature tests (501 assertions), and 0 TypeScript compilation errors.
+
 ---
 
 # Legacy Implementation Evidence
