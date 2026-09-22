@@ -260,6 +260,9 @@ Status: **TESTED**
 - [x] `TESTED` Supply chain audit and analysis report created at `docs/security/frontend-supply-chain-report.md`.
 - [x] `TESTED` CI supply chain hardening workflow added at `.github/workflows/frontend-supply-chain-verify.yml` with `npm audit --omit=dev --audit-level=critical` and zero critical vulnerability tolerance.
 - [x] `TESTED` Full regression verification: 133 frontend security tests pass, 0 TypeScript errors (`tsc --noEmit`), successful Next.js production build (`next build`), Playwright e2e test suite passing, and 127 Laravel ERP tests passing (501 assertions).
+- [x] `VERIFIED` Customer Storefront deployed online to Vercel at `https://callme-yoghurt-storefront.vercel.app` (`NEXT_PUBLIC_APP_MODE=storefront`), verified with browser automation and zero secret leakage.
+- [x] `VERIFIED` Admin Console deployed online to Vercel at `https://callme-yoghurt-admin.vercel.app` (`NEXT_PUBLIC_APP_MODE=admin`), verified with HttpOnly cookie session isolation and Edge middleware redirecting unauthenticated requests to `/admin/login`.
+- [x] `VERIFIED` Comprehensive online deployment report and visual evidence generated (`docs/deployment/online-deployment-phase1.4b.md` and `docs/deployment/screenshots/`).
 
 
 
