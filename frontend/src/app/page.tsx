@@ -21,7 +21,6 @@ const flavors = [
   { id: "anggur", name: "Anggur", sub: "Royal Purple Grape", price: "Rp 28.000", color: "bg-[#7A3B69]" },
   { id: "leci", name: "Leci", sub: "Sweet Lychee Bliss", price: "Rp 25.000", color: "bg-[#ff8da1]" },
   { id: "vanila", name: "Vanila", sub: "Velvet Orchid Vanilla", price: "Rp 25.000", color: "bg-[#f3e5AB]" },
-  { id: "pisang", name: "Pisang Ambon", sub: "Sweet Banana Smooth", price: "Rp 25.000", color: "bg-[#E8D354]" },
 ];
 
 export default function Home() {
@@ -91,7 +90,7 @@ export default function Home() {
           <div className="max-w-7xl w-full flex flex-col lg:flex-row items-center justify-between gap-12 z-10">
             <div className="w-full lg:w-[50%] flex flex-col items-start relative z-20">
               <span className="text-[#00754A] font-bold tracking-widest text-sm uppercase mb-4 block">Homemade Quality</span>
-              <h1 className="text-6xl md:text-[5.5rem] font-bold leading-[1.1] mb-6">
+              <h1 className="text-4xl sm:text-6xl md:text-[5.5rem] font-bold leading-[1.1] mb-6">
                 <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="block">
                   Kentalnya
                 </motion.span>
@@ -99,17 +98,17 @@ export default function Home() {
                   Nikmat.
                 </motion.span>
               </h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-lg md:text-xl text-brand-textSoft max-w-lg mb-10 leading-[1.5]">
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-base sm:text-lg md:text-xl text-brand-textSoft max-w-lg mb-10 leading-[1.5]">
                 Stirred yoghurt premium dengan 100% gula asli tanpa pemanis buatan. Tersedia dalam 8 varian kesegaran murni yang siap menyehatkan hari Anda.
               </motion.p>
-              <motion.button onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }} className="bg-[#1E3932] text-white px-8 py-4 rounded-[50px] font-semibold text-lg flex items-center gap-3 active:scale-95 hover:scale-95 transition-transform duration-200 shadow-md">
+              <motion.button onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }} className="bg-[#1E3932] text-white px-7 sm:px-8 py-3.5 sm:py-4 rounded-[50px] font-semibold text-base sm:text-lg flex items-center gap-3 active:scale-95 hover:scale-95 transition-transform duration-200 shadow-md">
                 Jelajahi Rasa
               </motion.button>
             </div>
 
-            {/* FOTO HERO SPLASH: Sengaja dibuat membesar (scale-125) agar cipratan susunya terkesan keluar dari layar */}
+            {/* FOTO HERO SPLASH */}
             <div className="w-full lg:w-[50%] flex justify-center lg:justify-end relative">
-              <motion.div animate={{ y: [-10, 10, -10] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }} className="w-full max-w-[550px] aspect-square relative z-20 flex items-center justify-center transform scale-110 lg:scale-125">
+              <motion.div animate={{ y: [-10, 10, -10] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }} className="w-full max-w-[550px] aspect-square relative z-20 flex items-center justify-center transform scale-100 sm:scale-110 lg:scale-125">
                 <Image
                   src="/images/hero-splash.png"
                   alt="Callme Yoghurt Varian"
