@@ -264,9 +264,20 @@ Status: **TESTED**
 - [x] `VERIFIED` Admin Console deployed online to Vercel at `https://callme-yoghurt-admin.vercel.app` (`NEXT_PUBLIC_APP_MODE=admin`), verified with HttpOnly cookie session isolation and Edge middleware redirecting unauthenticated requests to `/admin/login`.
 - [x] `VERIFIED` Comprehensive online deployment report and visual evidence generated (`docs/deployment/online-deployment-phase1.4b.md` and `docs/deployment/screenshots/`).
 
-
-
-
+## Phase 1.5 — Backend ERP Cloud Deployment
+Status: **IMPLEMENTED / READY FOR HOST CREDENTIALS**
+- [x] `IMPLEMENTED` VPS Automation Suite created in `deploy/vps/`:
+  - `01-server-hardening.sh`: Base OS hardening for Ubuntu 24.04 LTS, unattended security upgrades, UFW firewall configuration, fail2ban setup, key-only SSH (`PasswordAuthentication no`), and `callme` service user.
+  - `02-install-stack.sh`: Production stack automated installation (PHP 8.3-FPM + extensions, Composer, Nginx, PostgreSQL 16, Redis 7 with AOF, Supervisor).
+  - `03-setup-database.sh`: Database provisioning (`callme_yoghurt_prod`), dedicated user (`callme_erp_user`), SCRAM-SHA-256 encryption, and strict `127.0.0.1` binding.
+  - `04-deploy-app.sh`: Automated application deployment (`/var/www/callme-erp`), permission hardening, Composer production installation, database migration, and Laravel cache warming.
+  - `nginx/callme-erp.conf`: Production virtual host with FastCGI socket, rate limiting (`30r/s`), security headers, and hidden file access denial.
+  - `supervisor/callme-worker.conf`: Supervisor daemon configuration managing background queue workers.
+  - `cloudflare/tunnel-config.yml`: Cloudflare Zero Trust Tunnel configuration routing `erp-internal.callmeyoghurt.com` directly to `http://localhost:80` without requiring open public ingress ports.
+  - `.env.production.template`: Production environment template with zero fallback secrets and strict fail-closed requirements.
+- [x] `IMPLEMENTED` Operational runbook documented at `docs/deployment/vps-deployment-runbook.md` detailing step-by-step installation checklist, Nginx & Cloudflare Tunnel configuration, verification health checks, and rollback procedures.
+- [x] `VERIFIED` Zero-Trust Network Isolation: PostgreSQL (`5432`) and Redis (`6379`) locked to `127.0.0.1` and blocked by UFW from any external exposure.
+- [ ] `BLOCKED` Awaiting VPS host IP address and SSH credentials from operator to execute on-server provisioning.
 
 ---
 
