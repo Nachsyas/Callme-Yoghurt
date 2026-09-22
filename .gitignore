@@ -24,3 +24,6 @@ docker-compose.override.yml
 /generated/prisma
 
 .env
+.vercel
+.env*
+*.tsbuildinfo
