@@ -247,6 +247,22 @@ Status: **TESTED**
 - [x] `TESTED` Backup and disaster recovery strategy documented: daily full `pg_dump` with GPG AES-256 encryption pushed offsite to R2, continuous WAL archiving with 15-minute RPO target, and 4-hour RTO target.
 - [x] `TESTED` Full regression compatibility: 133 frontend security tests, 33 pentest and DAST specs, 127 Laravel ERP tests (501 assertions), 0 TypeScript compilation errors, successful Next.js production build, and k6 smoke test syntax execution.
 
+## Phase 1.4B — Frontend Supply Chain Hardening & Dependency Security Remediation
+Status: **TESTED**
+- [x] `TESTED` Baseline dependency audit performed (`docs/security/frontend-dependency-audit-baseline.md`) analyzing initial 15 vulnerabilities (1 critical, 9 high, 5 moderate).
+- [x] `TESTED` Redundant exploration dependencies pruned: `@prisma/client` and `prisma` safely uninstalled and `frontend/src/lib/prisma.ts` removed, eliminating 92 transitive packages and 11 vulnerabilities with zero impact on Laravel ERP persistence.
+- [x] `TESTED` Next.js framework upgraded from `15.0.0` to `15.5.25` (latest stable Next 15), resolving critical Server Action / cache poisoning RCE advisories (GHSA-p293-qw3h-jr36, GHSA-2xp9-vwfh-vxw4).
+- [x] `TESTED` React and React-DOM upgraded to stable `19.3.0` satisfying Next.js 15.5 peer dependencies with full App Router and Edge runtime compatibility.
+- [x] `TESTED` CSS toolchain hardened: `postcss` upgraded and pinned via package override to `8.5.28`, resolving CSS stringify XSS (GHSA-qx2v-qp2m-jg93) and source map path traversal advisories.
+- [x] `TESTED` Playwright test suite upgraded to `1.63.0` resolving browser download SSL verification vulnerability (GHSA-7mvr-c777-76hp).
+- [x] `TESTED` Lockfile integrity verified: `rm -rf node_modules && npm ci` succeeds deterministically in clean environment with zero peer dependency conflicts.
+- [x] `TESTED` Zero remaining vulnerabilities: both `npm audit` and `npm audit --omit=dev` report 0 vulnerabilities (100% remediation across critical, high, and moderate).
+- [x] `TESTED` Supply chain audit and analysis report created at `docs/security/frontend-supply-chain-report.md`.
+- [x] `TESTED` CI supply chain hardening workflow added at `.github/workflows/frontend-supply-chain-verify.yml` with `npm audit --omit=dev --audit-level=critical` and zero critical vulnerability tolerance.
+- [x] `TESTED` Full regression verification: 133 frontend security tests pass, 0 TypeScript errors (`tsc --noEmit`), successful Next.js production build (`next build`), Playwright e2e test suite passing, and 127 Laravel ERP tests passing (501 assertions).
+
+
+
 
 
 ---

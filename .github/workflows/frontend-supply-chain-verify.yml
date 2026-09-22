@@ -1,0 +1,67 @@
+name: Frontend Supply Chain & Security Verification
+
+on:
+  push:
+    branches:
+      - phase0/foundation-repair
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-supply-chain-verify.yml'
+  pull_request:
+    branches:
+      - phase0/foundation-repair
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-supply-chain-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  supply-chain-and-quality:
+    name: Frontend Supply Chain Hardening & Build Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Clean install dependencies with lockfile integrity
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Production Dependency Audit (Fail on Critical)
+        working-directory: frontend
+        run: |
+          echo "=== Auditing Production Dependencies ==="
+          npm audit --omit=dev --audit-level=critical
+
+      - name: Run Full Dependency Audit (Development & Toolchain Warnings)
+        working-directory: frontend
+        continue-on-error: true
+        run: |
+          echo "=== Auditing All Dependencies (Dev & Tooling) ==="
+          npm audit
+
+      - name: TypeScript Type Checking (Zero Any & Strict Safety)
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Run Security Regression Test Suite
+        working-directory: frontend
+        run: npm run test:security
+
+      - name: Next.js Production Build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_APP_MODE: storefront
+          ERP_INTERNAL_URL: http://127.0.0.1:8000
+          ERP_SERVICE_TOKEN: ci-service-token-dummy-min-32-characters
+        run: npm run build
