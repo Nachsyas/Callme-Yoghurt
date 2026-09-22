@@ -2,7 +2,7 @@
 
 import React, { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Lock, Shield, ShieldAlert, KeyRound } from "lucide-react";
+import { Shield, ShieldAlert, Lock, ArrowRight } from "lucide-react";
 
 function AdminLoginForm() {
   const searchParams = useSearchParams();
@@ -45,20 +45,17 @@ function AdminLoginForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#090e1a] text-slate-100 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans antialiased">
-      {/* Subtle Background Glow */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#00754A]/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="max-w-md w-full space-y-8 bg-[#0f172a] p-8 sm:p-10 rounded-2xl shadow-2xl border border-slate-800 relative z-10">
-        <div>
-          <div className="mx-auto w-14 h-14 bg-gradient-to-br from-[#00754A] to-[#004d31] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg border border-emerald-400/30">
+    <div className="min-h-screen flex items-center justify-center bg-[#F2F0EB] text-[#1E3932] py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased">
+      <div className="max-w-md w-full space-y-7 bg-white p-8 sm:p-10 rounded-2xl shadow-[0_4px_20px_rgba(30,57,50,0.06)] border border-[#E5E2DA]">
+        {/* Brand Header */}
+        <div className="text-center">
+          <div className="mx-auto w-14 h-14 bg-[#1E3932] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-sm tracking-wider">
             CY
           </div>
-          <h2 className="mt-5 text-center text-2xl font-extrabold tracking-tight text-white">
+          <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-[#1E3932]">
             Callme Yoghurt Operations
-          </h2>
-          <p className="mt-1.5 text-center text-xs text-slate-400 tracking-wide uppercase font-semibold">
+          </h1>
+          <p className="mt-1.5 text-xs text-[#5C6F68] tracking-wider uppercase font-semibold">
             Privileged Administrative Portal
           </p>
         </div>
@@ -66,10 +63,10 @@ function AdminLoginForm() {
         {errorMessage && (
           <div
             role="alert"
-            className="p-3.5 text-xs text-rose-300 bg-rose-950/50 rounded-xl border border-rose-800/80 flex items-center gap-2.5"
+            className="p-3.5 text-xs text-[#C62828] bg-[#FFEBEE] rounded-xl border border-[#FFCDD2] flex items-center gap-2.5"
           >
-            <ShieldAlert size={16} className="text-rose-400 flex-shrink-0" />
-            <span>{errorMessage}</span>
+            <ShieldAlert size={16} className="text-[#C62828] flex-shrink-0" />
+            <span className="font-medium">{errorMessage}</span>
           </div>
         )}
 
@@ -78,46 +75,43 @@ function AdminLoginForm() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-xs font-semibold text-slate-300 mb-1.5"
+                className="block text-xs font-bold text-[#1E3932] mb-1.5"
               >
                 Administrator Email
               </label>
-              <div className="relative">
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl shadow-inner text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#00754A] focus:border-transparent disabled:opacity-50 transition-all"
-                  placeholder="admin@callmeyoghurt.com"
-                />
-              </div>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isSubmitting}
+                className="block w-full px-3.5 py-2.5 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-sm text-[#1E3932] placeholder-[#8A9590] focus:outline-none focus:ring-2 focus:ring-[#00754A] focus:border-transparent disabled:opacity-50 transition-colors"
+                placeholder="admin@callmeyoghurt.com"
+              />
             </div>
 
             <div>
               <label
                 htmlFor="password"
-                className="block text-xs font-semibold text-slate-300 mb-1.5"
+                className="block text-xs font-bold text-[#1E3932] mb-1.5"
               >
                 Password
               </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isSubmitting}
-                  className="block w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl shadow-inner text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-[#00754A] focus:border-transparent disabled:opacity-50 transition-all"
-                />
-              </div>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isSubmitting}
+                className="block w-full px-3.5 py-2.5 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-sm text-[#1E3932] placeholder-[#8A9590] focus:outline-none focus:ring-2 focus:ring-[#00754A] focus:border-transparent disabled:opacity-50 transition-colors"
+                placeholder="••••••••••••"
+              />
             </div>
           </div>
 
@@ -125,19 +119,20 @@ function AdminLoginForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-[#00754A] hover:bg-[#006241] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00754A] disabled:opacity-50 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl shadow-sm text-sm font-bold text-white bg-[#00754A] hover:bg-[#1E3932] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00754A] disabled:opacity-50 transition-all cursor-pointer"
             >
-              {isSubmitting ? "Authenticating..." : "Sign In to Operations"}
+              <span>{isSubmitting ? "Authenticating..." : "Sign In to Operations"}</span>
+              {!isSubmitting && <ArrowRight size={15} />}
             </button>
           </div>
         </form>
 
-        <div className="pt-4 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-          <span className="flex items-center gap-1">
-            <Shield size={12} className="text-emerald-500" />
+        <div className="pt-4 border-t border-[#E5E2DA] flex items-center justify-between text-[11px] text-[#5C6F68]">
+          <span className="flex items-center gap-1 font-medium">
+            <Shield size={13} className="text-[#00754A]" />
             <span>Zero-Trust RBAC</span>
           </span>
-          <span>Argon2id • HttpOnly</span>
+          <span className="font-mono text-[10px]">Argon2id • HttpOnly</span>
         </div>
       </div>
     </div>
@@ -148,8 +143,8 @@ export default function AdminLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#090e1a]">
-          <div className="text-slate-500 text-xs font-mono">Loading operations console...</div>
+        <div className="min-h-screen flex items-center justify-center bg-[#F2F0EB]">
+          <div className="text-[#5C6F68] text-xs font-medium">Loading operations console...</div>
         </div>
       }
     >
