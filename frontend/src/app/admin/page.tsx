@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { AdminDashboardClient } from "./AdminDashboardClient.tsx";
+import { DashboardOverview } from "./DashboardOverview.tsx";
 
 export const metadata: Metadata = {
-  title: "Callme ERP Operations Console | Callme Yoghurt",
-  description: "Enterprise operations and administrative management console.",
+  title: "Dashboard Overview | Callme ERP Operations Console",
+  description: "Executive operational overview for Callme Yoghurt ERP.",
 };
 
-export default function AdminPage() {
-  return <AdminDashboardClient />;
+export default function AdminDashboardPage() {
+  return <DashboardOverview />;
 }
