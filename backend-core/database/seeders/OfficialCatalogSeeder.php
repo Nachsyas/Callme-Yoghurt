@@ -8,19 +8,16 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductVariant;
 use App\Domain\Inventory\Enums\ItemType;
 use App\Domain\Inventory\Models\InventoryItem;
-use App\Domain\Inventory\Models\InventoryLot;
-use App\Domain\Inventory\Models\StockLedgerEntry;
 use App\Domain\Inventory\Models\UnitOfMeasure;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Pricing\Models\ProductVariantPrice;
-use Carbon\Carbon;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class OfficialCatalogSeeder extends Seeder
 {
     /**
-     * Seed authoritative catalog, variants, prices, warehouse, and FEFO lots.
+     * Seed authoritative catalog master data: products, variants, prices, warehouse, and UOMs.
+     * Master data seeder MUST NOT fabricate operational inventory lots or stock ledger entries.
      */
     public function run(): void
     {
@@ -44,42 +41,42 @@ class OfficialCatalogSeeder extends Seeder
             ]
         );
 
-        // 3. The 7 Official Flavors
+        // 3. The 7 Official Flavors (Current Master Business Data)
         $officialFlavors = [
             [
                 'slug' => 'plain',
                 'name' => 'Plain Pure Original',
-                'description' => 'Yogurt stirred murni tanpa tambahan gula dengan tekstur super kental, lembut, dan creamy kualitas homemade terbaik.',
+                'description' => 'Yoghurt stirred segar kualitas homemade Callme Yoghurt tanpa perisa tambahan.',
             ],
             [
                 'slug' => 'stroberi',
                 'name' => 'Stroberi Summer Blush',
-                'description' => 'Paduan rasa stroberi buah segar aromatik dengan yogurt kental premium dan tambahan topping jelly / nata de coco yang kenyal.',
+                'description' => 'Yoghurt stirred segar dengan sentuhan buah stroberi alami dan rasa asam-manis seimbang.',
             ],
             [
                 'slug' => 'mangga',
                 'name' => 'Mangga Tropical Gold',
-                'description' => 'Yogurt lembut stirred premium dengan mangga harum manis masak pohon pilihan. Kaya probiotik hidup.',
+                'description' => 'Yoghurt stirred segar dengan sari mangga tropis harum dan tekstur lembut.',
             ],
             [
                 'slug' => 'melon',
                 'name' => 'Melon Emerald Fresh',
-                'description' => 'Kesegaran melon hijau pilihan dengan aroma manis lembut menyejukkan. Sensasi dingin maksimal dari rantai dingin terjaga.',
+                'description' => 'Yoghurt stirred segar dengan aroma melon hijau yang harum dan menyegarkan.',
             ],
             [
                 'slug' => 'anggur',
                 'name' => 'Anggur Royal Purple',
-                'description' => 'Kombinasi anggur ungu pilihan yang manis legit dan sensasi asam segar khas yoghurt alami Callme.',
+                'description' => 'Yoghurt stirred segar dengan rasa anggur ungu manis legit dan segar khas Callme Yoghurt.',
             ],
             [
                 'slug' => 'leci',
                 'name' => 'Leci Breeze Lychee',
-                'description' => 'Aroma leci eksotis yang harum semerbak berpadu kelembutan stirred yoghurt segar.',
+                'description' => 'Yoghurt stirred segar dengan aroma dan rasa leci yang harum lembut.',
             ],
             [
                 'slug' => 'vanila',
                 'name' => 'Vanila Velvet Orchid',
-                'description' => 'Kehangatan rasa vanila klasik berpadu kentalnya susu fermentasi dari peternakan lokal terbaik.',
+                'description' => 'Yoghurt stirred segar berpadu kelembutan aroma vanila klasik.',
             ],
         ];
 
@@ -144,39 +141,6 @@ class OfficialCatalogSeeder extends Seeder
                         'currency' => 'IDR',
                         'amount' => $size['price'],
                         'active' => true,
-                    ]);
-                }
-
-                // Create initial FEFO lot with 60 days shelf life (Cold Chain standard)
-                $lotNumber = "LOT-" . strtoupper($flavor['slug']) . "-{$size['ml']}-001";
-                $lot = InventoryLot::firstOrCreate(
-                    [
-                        'inventory_item_id' => $item->id,
-                        'lot_number' => $lotNumber,
-                    ],
-                    [
-                        'production_date' => Carbon::now('Asia/Jakarta')->subDays(2)->toDateString(),
-                        'expiration_date' => Carbon::now('Asia/Jakarta')->addDays(60)->toDateString(),
-                        'received_at' => Carbon::now('Asia/Jakarta')->subDays(2),
-                    ]
-                );
-
-                // Add initial stock (100 units) to immutable ledger
-                $hasLedger = StockLedgerEntry::where('inventory_item_id', $item->id)
-                    ->where('warehouse_id', $warehouse->id)
-                    ->where('inventory_lot_id', $lot->id)
-                    ->exists();
-
-                if (!$hasLedger) {
-                    StockLedgerEntry::create([
-                        'inventory_item_id' => $item->id,
-                        'warehouse_id' => $warehouse->id,
-                        'inventory_lot_id' => $lot->id,
-                        'quantity_delta' => 100,
-                        'event_type' => 'RECEIPT',
-                        'reference_type' => 'INITIAL_STOCK',
-                        'reference_id' => "INIT-WH-MAIN-{$sku}",
-                        'occurred_at' => Carbon::now('Asia/Jakarta'),
                     ]);
                 }
             }

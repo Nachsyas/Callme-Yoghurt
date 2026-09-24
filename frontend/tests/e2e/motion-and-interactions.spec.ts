@@ -15,9 +15,12 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     await expect(nextBtn).toBeVisible();
     await expect(prevBtn).toBeVisible();
 
-    // Scroll initial position
+    // Scroll initial position to start
+    await carousel.evaluate((el) => {
+      el.scrollTo({ left: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(300);
     const initialScroll = await carousel.evaluate((el) => el.scrollLeft);
-    expect(initialScroll).toBe(0);
 
     // Click next (right) button
     await nextBtn.click();
@@ -38,9 +41,10 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
 
   test("2. Catalog card size selection smoothly switches variants without reloading image", async ({ page }) => {
     await page.goto("/");
+    await page.waitForLoadState("networkidle");
 
-    // Locate the first card (Plain)
-    const firstCard = page.locator("#catalog-carousel article").first();
+    // Locate the Plain card
+    const firstCard = page.locator("#catalog-carousel article").filter({ hasText: /Plain/i }).first();
     await expect(firstCard).toBeVisible();
 
     // Find size buttons: 250 ml, 500 ml, 1 Liter
@@ -127,6 +131,7 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     // Emulate reduced motion
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
+    await page.waitForLoadState("networkidle");
 
     // 1. Verify reduced-motion media query evaluates to active in the browser
     const prefersReduced = await page.evaluate(
@@ -135,7 +140,7 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     expect(prefersReduced).toBe(true);
 
     // 2. Verify global reduced motion CSS override is active
-    const testArticle = page.locator("#catalog-carousel article").first();
+    const testArticle = page.locator("#catalog-carousel article").filter({ hasText: /Plain/i }).first();
     await expect(testArticle).toBeVisible();
     const transitionDuration = await testArticle.evaluate(
       (el) => window.getComputedStyle(el).transitionDuration

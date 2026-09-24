@@ -79,6 +79,10 @@ export function CatalogCard({
   const currentVariant =
     selectedSize === 250 ? variant250 : selectedSize === 500 ? variant500 : variant1000;
 
+  const displayName = erpProduct?.name || flavor.name;
+  const displaySlug = erpProduct?.slug || flavor.slug;
+  const displaySub = erpProduct?.description || flavor.sub;
+
   const isAvailable = isErpOnline ? Boolean(currentVariant) : false;
   const currentPrice = currentVariant?.price.amount ?? PREVIEW_PRICES[selectedSize];
   const currentScale = SIZE_SCALES[selectedSize];
@@ -139,32 +143,42 @@ export function CatalogCard({
           </span>
         </div>
 
-        {/* Animated Product Image */}
-        <motion.div
-          animate={{ scale: currentScale }}
-          transition={
-            shouldReduceMotion
-              ? { duration: 0 }
-              : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
-          }
-          className="relative w-full h-full flex items-center justify-center z-10 origin-bottom"
-        >
-          <Image
-            src={flavor.artwork}
-            alt={flavor.name}
-            fill
-            sizes="(max-width: 640px) 280px, 360px"
-            className="object-contain drop-shadow-[0_12px_18px_rgba(0,0,0,0.18)]"
-          />
-        </motion.div>
-
-        {/* 1 Liter Photography Notice */}
-        {selectedSize === 1000 && (
-          <div className="absolute bottom-2 left-4 right-4 z-20 text-center pointer-events-none">
-            <span className="bg-black/60 backdrop-blur-xs text-white text-[9px] font-medium px-2 py-0.5 rounded-full inline-block">
+        {/* Product Visual Area: Neutral 1L State or 250/500ml Bottle Artwork */}
+        {selectedSize === 1000 ? (
+          <div className="relative w-full h-full flex flex-col items-center justify-center z-10 p-4 text-center">
+            <div className="w-20 h-28 rounded-2xl border-2 border-dashed border-white/50 bg-white/10 flex flex-col items-center justify-center p-2 mb-2 backdrop-blur-xs">
+              <span className="text-white/90 font-black text-xl tracking-tight">1L</span>
+              <span className="text-white/70 text-[9px] font-medium uppercase tracking-wider">Kemasan Besar</span>
+            </div>
+            <span className="bg-black/50 backdrop-blur-xs text-white text-[10px] font-medium px-3 py-1 rounded-full inline-block shadow-xs">
               Foto resmi 1L segera hadir
             </span>
           </div>
+        ) : (
+          <motion.div
+            animate={{ scale: currentScale }}
+            transition={
+              shouldReduceMotion
+                ? { duration: 0 }
+                : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
+            }
+            className="relative w-full h-full flex items-center justify-center z-10 origin-bottom"
+          >
+            {flavor.artwork ? (
+              <Image
+                src={flavor.artwork}
+                alt={displayName}
+                fill
+                sizes="(max-width: 640px) 280px, 360px"
+                className="object-contain drop-shadow-[0_12px_18px_rgba(0,0,0,0.18)]"
+              />
+            ) : (
+              <div className="w-24 h-32 rounded-2xl bg-white/20 border border-white/30 flex flex-col items-center justify-center text-white p-2">
+                <span className="font-extrabold text-2xl tracking-tight">{displayName.slice(0, 2).toUpperCase()}</span>
+                <span className="text-[10px] font-medium opacity-80 mt-1">{selectedSize} ml</span>
+              </div>
+            )}
+          </motion.div>
         )}
       </div>
 
@@ -172,9 +186,9 @@ export function CatalogCard({
       <div className="p-5 sm:p-6 flex flex-col flex-grow justify-between bg-white z-20 space-y-4">
         <div>
           <h3 className="text-xl sm:text-2xl font-extrabold text-[#1E3932] tracking-tight">
-            {flavor.name}
+            {displayName}
           </h3>
-          <p className="text-xs sm:text-sm text-[#5C6F68] mt-1">{flavor.sub}</p>
+          <p className="text-xs sm:text-sm text-[#5C6F68] mt-1">{displaySub}</p>
         </div>
 
         {/* Size Selector */}
@@ -230,7 +244,7 @@ export function CatalogCard({
 
           <div className="flex items-center gap-2">
             <Link
-              href={`/product/${flavor.slug}`}
+              href={`/product/${displaySlug}`}
               className="px-3 py-2 text-xs font-bold text-[#00754A] hover:bg-[#E8F5E9] rounded-xl transition-colors cursor-pointer"
             >
               Detail
@@ -242,7 +256,7 @@ export function CatalogCard({
               disabled={!isAvailable || catalogLoading}
               whileHover={shouldReduceMotion || !isAvailable ? undefined : { scale: 1.02 }}
               whileTap={shouldReduceMotion || !isAvailable ? undefined : { scale: 0.96 }}
-              aria-label={`Tambah ${flavor.name} ke keranjang`}
+              aria-label={`Tambah ${displayName} ke keranjang`}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs min-w-[108px] justify-center ${
                 !isAvailable || catalogLoading
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"

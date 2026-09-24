@@ -23,6 +23,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { MOTION_TOKENS } from '@/lib/motion';
 import {
+  getProductPresentation,
   parseNetContentMl,
   type PublicCatalogData,
   type PublicCatalogProduct,
@@ -35,29 +36,17 @@ interface FlavorData {
   darkBg: string;
   tagline: string;
   description: string;
-  ingredients: string[];
-  nutrition: {
-    calories: string;
-    protein: string;
-    fat: string;
-    sugar: string;
-  };
 }
 
-// Visual and factual product descriptions without fabricated percentages
+// Visual presentation metadata for known flavors (fallback and styling only, not price or variant authority)
 const FLAVORS: Record<string, FlavorData> = {
   plain: {
     name: 'Plain Pure Original',
     brandColor: '#cba258',
     darkBg: '#271900',
-    tagline: 'Yogurt stirred murni tanpa tambahan gula.',
+    tagline: 'Yoghurt stirred segar murni kualitas homemade Callme Yoghurt.',
     description:
-      'Yogurt stirred murni tanpa tambahan gula dengan tekstur super kental, lembut, dan creamy kualitas homemade terbaik.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Kultur bakteri probiotik hidup (L. Bulgaricus, S. Thermophilus)',
-    ],
-    nutrition: { calories: '110 kcal', protein: '8.5 g', fat: '3.2 g', sugar: '0 g' },
+      'Yoghurt stirred segar murni kualitas homemade Callme Yoghurt tanpa perisa tambahan.',
   },
   stroberi: {
     name: 'Stroberi Summer Blush',
@@ -65,14 +54,7 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3b1c21',
     tagline: 'Paduan rasa stroberi buah segar aromatik.',
     description:
-      'Paduan rasa stroberi buah segar aromatik dengan yogurt kental premium dan tambahan topping jelly / nata de coco yang kenyal.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak buah stroberi alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '120 kcal', protein: '8.0 g', fat: '3.0 g', sugar: '12 g' },
+      'Yoghurt stirred segar dengan sentuhan buah stroberi alami dan rasa asam-manis seimbang.',
   },
   mangga: {
     name: 'Mangga Tropical Gold',
@@ -80,14 +62,7 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3d230d',
     tagline: 'Kombinasi rasa asam manis segar eksotis.',
     description:
-      'Yogurt lembut stirred premium dengan mangga harum manis masak pohon pilihan. Kaya probiotik hidup.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak buah mangga alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '130 kcal', protein: '7.5 g', fat: '2.8 g', sugar: '14 g' },
+      'Yoghurt stirred segar dengan sari mangga tropis harum dan tekstur lembut.',
   },
   melon: {
     name: 'Melon Emerald Fresh',
@@ -95,29 +70,15 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#232d0f',
     tagline: 'Sensasi kesegaran buah melon premium berair.',
     description:
-      'Kaya probiotik aktif untuk kesehatan pencernaan maksimal sehari-hari berpadu dengan kesegaran melon.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak melon alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '115 kcal', protein: '8.2 g', fat: '3.0 g', sugar: '10 g' },
+      'Yoghurt stirred segar dengan aroma melon hijau yang harum dan menyegarkan.',
   },
   anggur: {
     name: 'Anggur Royal Purple',
     brandColor: '#7A3B69',
     darkBg: '#3B1C33',
-    tagline: 'Sensasi rasa anggur merah premium manis eksklusif.',
+    tagline: 'Sensasi rasa anggur ungu premium manis segar.',
     description:
-      'Dipadu dengan stirred yoghurt kental yang lembut, lengkap dengan sensasi mengunyah dari topping jelly.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak anggur alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '120 kcal', protein: '8.0 g', fat: '3.0 g', sugar: '12 g' },
+      'Yoghurt stirred segar dengan rasa anggur ungu manis legit dan segar khas Callme Yoghurt.',
   },
   leci: {
     name: 'Leci Sweet Bliss',
@@ -125,14 +86,7 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#4a1523',
     tagline: 'Rasa leci manis harum khas yang menyegarkan.',
     description:
-      'Berpadu dengan kelembutan stirred yoghurt alami. Memberi kesegaran instan bernutrisi.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak leci alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '118 kcal', protein: '8.0 g', fat: '3.0 g', sugar: '13 g' },
+      'Yoghurt stirred segar dengan aroma dan rasa leci yang harum lembut.',
   },
   vanila: {
     name: 'Vanila Velvet Orchid',
@@ -140,14 +94,7 @@ const FLAVORS: Record<string, FlavorData> = {
     darkBg: '#3d361c',
     tagline: 'Kehangatan rasa vanila klasik.',
     description:
-      'Berpadu kentalnya susu fermentasi dari peternakan lokal terbaik. Halus, manis pas, dan menenangkan.',
-    ingredients: [
-      'Susu sapi segar fermentasi (yogurt stirred)',
-      'Gula pasir murni',
-      'Ekstrak vanila alami',
-      'Topping jelly / nata de coco',
-    ],
-    nutrition: { calories: '125 kcal', protein: '8.2 g', fat: '3.5 g', sugar: '12 g' },
+      'Yoghurt stirred segar berpadu kelembutan aroma vanila klasik.',
   },
 };
 
@@ -187,17 +134,18 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const { id } = use(params);
 
-  // Match visual presentation
   const requestedSlug = id.trim().toLowerCase();
+  const presentation = getProductPresentation(requestedSlug);
   const isKnownFlavor = requestedSlug in FLAVORS;
 
   const visualFlavorKey = (isKnownFlavor ? requestedSlug : 'plain') as FlavorKey;
-  const flavor = FLAVORS[visualFlavorKey];
-  const imageSrc = OFFICIAL_PRODUCT_ARTWORK[visualFlavorKey] || FLAVOR_IMAGES[visualFlavorKey];
+  const fallbackFlavor = FLAVORS[visualFlavorKey];
 
   const [selectedSize, setSelectedSize] = useState<ProductSize>(250);
   const [quantity, setQuantity] = useState<number>(1);
   const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
+  const [catalogLoaded, setCatalogLoaded] = useState<boolean>(false);
+  const [catalogOnline, setCatalogOnline] = useState<boolean>(false);
   const [erpProduct, setErpProduct] = useState<PublicCatalogProduct | null>(null);
   const [demoNoticeVisible, setDemoNoticeVisible] = useState<boolean>(false);
   const [added, setAdded] = useState<boolean>(false);
@@ -208,16 +156,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (!isKnownFlavor) {
-      setCatalogLoading(false);
-      return;
-    }
     let isMounted = true;
     async function loadCatalog() {
       try {
         const res = await fetch('/api/catalog');
         if (!res.ok) {
-          if (isMounted) setCatalogLoading(false);
+          if (isMounted) {
+            setCatalogLoading(false);
+            setCatalogLoaded(true);
+            setCatalogOnline(false);
+          }
           return;
         }
         const data: PublicCatalogData = await res.json();
@@ -226,23 +174,47 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             (p: PublicCatalogProduct) => p.slug.toLowerCase() === requestedSlug
           );
           setErpProduct(matched || null);
+          setCatalogOnline(true);
           setCatalogLoading(false);
+          setCatalogLoaded(true);
         }
       } catch {
-        if (isMounted) setCatalogLoading(false);
+        if (isMounted) {
+          setCatalogLoading(false);
+          setCatalogLoaded(true);
+          setCatalogOnline(false);
+        }
       }
     }
     loadCatalog();
     return () => {
       isMounted = false;
     };
-  }, [requestedSlug, isKnownFlavor]);
+  }, [requestedSlug]);
 
-  // Ensure uncataloged route does NOT render another product.
-  // Must render 404 Not Found with message "Produk tidak ditemukan".
-  if (!isKnownFlavor) {
-    notFound();
+  // Dynamic ERP Authority:
+  // Legitimate ERP products must never 404 simply because they lack hardcoded presentation entry.
+  // Unknown / nonexistent slug must 404 whenever catalog is online and product does not exist in ERP.
+  if (catalogLoaded) {
+    if (catalogOnline) {
+      if (!erpProduct) {
+        notFound();
+      }
+    } else {
+      if (!isKnownFlavor) {
+        notFound();
+      }
+    }
   }
+
+  // Authoritative names and content from ERP
+  const displayName = erpProduct?.name || fallbackFlavor.name;
+  const displayTagline = erpProduct?.description || fallbackFlavor.tagline;
+  const brandColor = presentation.brandColor;
+  const darkBg = presentation.darkBg;
+  const imageSrc =
+    presentation.artwork ||
+    (isKnownFlavor ? (OFFICIAL_PRODUCT_ARTWORK[requestedSlug] || FLAVOR_IMAGES[requestedSlug]) : undefined);
 
   // Authoritative variant matching from ERP via exact net content parsing (250ml, 500ml, 1000ml)
   const variant250 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
@@ -366,7 +338,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="absolute top-3.5 left-3.5 z-10">
                 <span
                   className="text-white font-bold text-[11px] px-3 py-1 rounded-full shadow-sm tracking-wide block"
-                  style={{ backgroundColor: flavor.brandColor }}
+                  style={{ backgroundColor: brandColor }}
                 >
                   Premium Varian
                 </span>
@@ -380,33 +352,50 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </span>
               </div>
 
-              {/* Real Product Image with Instant or Smooth Scale Transition */}
-              <motion.div
-                animate={{ scale: currentScale }}
-                transition={
-                  shouldReduceMotion
-                    ? { duration: 0 }
-                    : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
-                }
-                className="relative w-full h-full flex items-center justify-center"
-              >
-                <Image
-                  src={imageSrc}
-                  alt={flavor.name}
-                  fill
-                  sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
-                  className="object-contain p-2 drop-shadow-md"
-                  priority
-                />
-              </motion.div>
-
-              {/* 1 Liter Photography Notice */}
-              {selectedSize === 1000 && (
-                <div className="absolute bottom-2 left-4 right-4 z-20 text-center pointer-events-none">
-                  <span className="bg-black/60 backdrop-blur-xs text-white text-[9px] font-medium px-2.5 py-0.5 rounded-full inline-block">
+              {/* Product Visual Area: Neutral 1L State or 250/500ml Bottle Artwork */}
+              {selectedSize === 1000 ? (
+                <div className="relative w-full h-full flex flex-col items-center justify-center text-center p-6">
+                  <div
+                    className="w-24 h-36 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-3 mb-3 backdrop-blur-xs"
+                    style={{ borderColor: `${brandColor}80`, backgroundColor: `${brandColor}12` }}
+                  >
+                    <span className="font-black text-2xl tracking-tight" style={{ color: brandColor }}>
+                      1L
+                    </span>
+                    <span className="text-[10px] text-black/60 font-medium uppercase tracking-wider mt-1">
+                      Kemasan 1 Liter
+                    </span>
+                  </div>
+                  <span className="bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-3 py-1 rounded-full shadow-xs">
                     Foto resmi 1L segera hadir
                   </span>
                 </div>
+              ) : (
+                <motion.div
+                  animate={{ scale: currentScale }}
+                  transition={
+                    shouldReduceMotion
+                      ? { duration: 0 }
+                      : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
+                  }
+                  className="relative w-full h-full flex items-center justify-center"
+                >
+                  {imageSrc ? (
+                    <Image
+                      src={imageSrc}
+                      alt={displayName}
+                      fill
+                      sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
+                      className="object-contain p-2 drop-shadow-md"
+                      priority
+                    />
+                  ) : (
+                    <div className="w-28 h-40 rounded-2xl bg-black/5 border border-black/10 flex flex-col items-center justify-center text-black/50 p-2">
+                      <span className="font-extrabold text-3xl tracking-tight">{displayName.slice(0, 2).toUpperCase()}</span>
+                      <span className="text-xs font-semibold mt-1">{selectedSize} ml</span>
+                    </div>
+                  )}
+                </motion.div>
               )}
             </div>
 
@@ -440,10 +429,10 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 Kentalnya Nikmat • Homemade Quality
               </span>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-[#1c1917] tracking-tight mb-2">
-                {flavor.name}
+                {displayName}
               </h1>
               <p className="text-sm sm:text-base text-black/70 leading-relaxed font-normal">
-                {flavor.description}
+                {displayTagline}
               </p>
             </div>
 
@@ -505,9 +494,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   } ${isErpOnline && !is250Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
-                      selectedSize === 250 ? flavor.brandColor : undefined,
+                      selectedSize === 250 ? brandColor : undefined,
                     backgroundColor:
-                      selectedSize === 250 ? `${flavor.brandColor}0d` : undefined,
+                      selectedSize === 250 ? `${brandColor}0d` : undefined,
                   }}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -515,7 +504,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     {selectedSize === 250 && (
                       <span
                         className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: flavor.brandColor }}
+                        style={{ backgroundColor: brandColor }}
                       />
                     )}
                   </div>
@@ -540,9 +529,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   } ${isErpOnline && !is500Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
-                      selectedSize === 500 ? flavor.brandColor : undefined,
+                      selectedSize === 500 ? brandColor : undefined,
                     backgroundColor:
-                      selectedSize === 500 ? `${flavor.brandColor}0d` : undefined,
+                      selectedSize === 500 ? `${brandColor}0d` : undefined,
                   }}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -550,7 +539,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     {selectedSize === 500 && (
                       <span
                         className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: flavor.brandColor }}
+                        style={{ backgroundColor: brandColor }}
                       />
                     )}
                   </div>
@@ -575,9 +564,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   } ${isErpOnline && !is1000Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
-                      selectedSize === 1000 ? flavor.brandColor : undefined,
+                      selectedSize === 1000 ? brandColor : undefined,
                     backgroundColor:
-                      selectedSize === 1000 ? `${flavor.brandColor}0d` : undefined,
+                      selectedSize === 1000 ? `${brandColor}0d` : undefined,
                   }}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -585,7 +574,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     {selectedSize === 1000 && (
                       <span
                         className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: flavor.brandColor }}
+                        style={{ backgroundColor: brandColor }}
                       />
                     )}
                   </div>
@@ -673,7 +662,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                       ? undefined
                       : added
                         ? '#1E3932'
-                        : flavor.brandColor,
+                        : brandColor,
                 }}
               >
                 {added ? (
@@ -705,19 +694,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#00754A] flex items-center gap-2">
                 <Leaf size={14} />
-                <span>Komposisi Alami</span>
+                <span>Informasi Komposisi</span>
               </h3>
-              <ul className="space-y-2.5 text-xs text-black/70">
-                {flavor.ingredients.map((ing, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5">
-                    <span
-                      className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
-                      style={{ backgroundColor: flavor.brandColor }}
-                    />
-                    <span>{ing}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-xs text-black/70 leading-relaxed">
+                Informasi komposisi mengikuti label produk resmi. Dibuat menggunakan susu sapi segar terfermentasi dan bahan berkualitas tinggi.
+              </p>
             </div>
 
             {/* Nutrition Facts */}
@@ -726,30 +707,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <Info size={14} />
                 <span>Informasi Nilai Gizi</span>
               </h3>
-              <div className="space-y-2 text-xs divide-y divide-gray-100">
-                <div className="flex justify-between items-center pt-1.5">
-                  <span className="text-black/60">Kalori</span>
-                  <span className="font-bold text-black/90">{flavor.nutrition.calories}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1.5">
-                  <span className="text-black/60">Protein</span>
-                  <span className="font-bold text-black/90">{flavor.nutrition.protein}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1.5">
-                  <span className="text-black/60">Lemak</span>
-                  <span className="font-bold text-black/90">{flavor.nutrition.fat}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1.5">
-                  <span className="text-black/60">Gula Alami</span>
-                  <span className="font-bold text-black/90">{flavor.nutrition.sugar}</span>
-                </div>
-              </div>
-              <p className="text-[10px] text-black/40 italic pt-1">
-                *Estimasi berbasis profil susu sapi fermentasi alami.
+              <p className="text-xs text-black/70 leading-relaxed">
+                Informasi gizi akan diperbarui berdasarkan label produk resmi.
               </p>
             </div>
 
-            {/* Cold Chain Storage Instructions (Mandatory SOP) */}
+            {/* Cold Chain Storage Instructions (Mandatory SOP 01) */}
             <div className="bg-[#f0f5f2] p-6 rounded-2xl border border-[#00754A]/20 shadow-sm space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#00754A] flex items-center gap-2">
                 <Snowflake size={14} />
@@ -761,12 +724,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   <strong className="text-[#00754A]">0°C hingga 4°C</strong>.
                 </p>
                 <p>
-                  <strong>Ketahanan Produk:</strong> Kualitas terbaik dinikmati dalam 14 hari
-                  setelah kemasan dibuka.
+                  <strong>Ketahanan Produk:</strong> Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima.
                 </p>
                 <p>
                   <strong>Peringatan Mutu:</strong> Jangan dibekukan di dalam freezer atau dibiarkan di
-                  suhu ruang lebih dari 4 jam untuk menjaga kultur probiotik hidup.
+                  suhu ruang lebih dari 4 jam untuk menjaga kualitas kesegaran alami.
                 </p>
               </div>
             </div>

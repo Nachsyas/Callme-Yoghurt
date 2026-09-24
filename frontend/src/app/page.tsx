@@ -23,64 +23,26 @@ import {
 } from "@/components/catalog/CatalogCard";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { useCartStore } from "@/store/cartStore";
+import {
+  getProductPresentation,
+  type PublicCatalogData,
+  type PublicCatalogProduct,
+} from "@/lib/catalog";
 import { MOTION_TOKENS } from "@/lib/motion";
-import type { PublicCatalogData, PublicCatalogProduct } from "@/lib/catalog";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-// Visual presentation metadata only — NO variant IDs, NO SKUs, NO price authority
-const OFFICIAL_FLAVORS_PRESENTATION: FlavorPresentation[] = [
-  {
-    slug: "plain",
-    name: "Plain Pure Original",
-    sub: "Yogurt stirred murni tanpa pemanis buatan",
-    color: "bg-[#cba258]",
-    artwork: "/images/products/plain-250-500.png",
-  },
-  {
-    slug: "stroberi",
-    name: "Stroberi Summer Blush",
-    sub: "Paduan rasa stroberi buah segar aromatik",
-    color: "bg-[#D81E5B]",
-    artwork: "/images/products/stroberi-250-500.png",
-  },
-  {
-    slug: "mangga",
-    name: "Mangga Tropical Gold",
-    sub: "Kombinasi asam manis harum manis eksotis",
-    color: "bg-[#F9A03F]",
-    artwork: "/images/products/mangga-250-500.png",
-  },
-  {
-    slug: "melon",
-    name: "Melon Emerald Fresh",
-    sub: "Sensasi kesegaran buah melon berair renyah",
-    color: "bg-[#A1C349]",
-    artwork: "/images/products/melon-250-500.png",
-  },
-  {
-    slug: "anggur",
-    name: "Anggur Royal Purple",
-    sub: "Sensasi rasa anggur merah premium manis",
-    color: "bg-[#7A3B69]",
-    artwork: "/images/products/anggur-250-500.png",
-  },
-  {
-    slug: "leci",
-    name: "Leci Sweet Bliss",
-    sub: "Rasa leci manis harum khas yang menyegarkan",
-    color: "bg-[#ff8da1]",
-    artwork: "/images/products/leci-250-500.png",
-  },
-  {
-    slug: "vanila",
-    name: "Vanila Velvet Orchid",
-    sub: "Kehangatan rasa vanila klasik susu fermentasi",
-    color: "bg-[#f3e5AB]",
-    artwork: "/images/products/vanila-250-500.png",
-  },
+// Default preview slugs used ONLY when backend ERP is completely unreachable
+const DEFAULT_PREVIEW_SLUGS = [
+  "plain",
+  "stroberi",
+  "mangga",
+  "melon",
+  "anggur",
+  "leci",
+  "vanila",
 ];
 
 export default function Home() {
@@ -413,7 +375,7 @@ export default function Home() {
                 Varian Rasa Pilihan.
               </h2>
               <p className="text-sm text-[#5C6F68] mt-2 max-w-lg">
-                Pilih ukuran resmi 250ml (Rp 16.000), 500ml (Rp 30.000), dan 1 Liter (Rp 55.000) dengan data resmi tersinkronisasi langsung dari ERP.
+                Tersedia dalam ukuran 250ml, 500ml, dan 1 Liter. Data katalog dan harga tersinkronisasi langsung dari ERP.
               </p>
             </div>
 
@@ -442,29 +404,56 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Horizontal Scroll Container */}
+          {/* Horizontal Scroll Container — Dynamically driven by authoritative ERP catalog */}
           <div
             id="catalog-carousel"
             ref={carouselRef}
             className="flex overflow-x-auto scroll-smooth snap-x snap-mandatory gap-6 pb-6 pt-2 px-6 lg:px-20 no-scrollbar"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {OFFICIAL_FLAVORS_PRESENTATION.map((flavor, idx) => {
-              const erpProduct = catalogData?.products.find(
-                (p: PublicCatalogProduct) => p.slug.toLowerCase() === flavor.slug
-              ) || null;
+            {catalogData && catalogData.products.length > 0
+              ? catalogData.products.map((erpProduct: PublicCatalogProduct, idx: number) => {
+                  const presentation = getProductPresentation(erpProduct.slug);
+                  const flavor: FlavorPresentation = {
+                    slug: erpProduct.slug,
+                    name: erpProduct.name,
+                    sub: erpProduct.description || presentation.sub,
+                    color: presentation.colorClass,
+                    artwork: presentation.artwork || "",
+                  };
 
-              return (
-                <CatalogCard
-                  key={flavor.slug}
-                  flavor={flavor}
-                  erpProduct={erpProduct}
-                  isErpOnline={Boolean(catalogData && erpProduct)}
-                  catalogLoading={catalogLoading}
-                  index={idx}
-                />
-              );
-            })}
+                  return (
+                    <CatalogCard
+                      key={erpProduct.slug}
+                      flavor={flavor}
+                      erpProduct={erpProduct}
+                      isErpOnline={true}
+                      catalogLoading={catalogLoading}
+                      index={idx}
+                    />
+                  );
+                })
+              : DEFAULT_PREVIEW_SLUGS.map((slug, idx) => {
+                  const presentation = getProductPresentation(slug);
+                  const flavor: FlavorPresentation = {
+                    slug,
+                    name: slug.charAt(0).toUpperCase() + slug.slice(1),
+                    sub: presentation.sub,
+                    color: presentation.colorClass,
+                    artwork: presentation.artwork || "",
+                  };
+
+                  return (
+                    <CatalogCard
+                      key={slug}
+                      flavor={flavor}
+                      erpProduct={null}
+                      isErpOnline={false}
+                      catalogLoading={catalogLoading}
+                      index={idx}
+                    />
+                  );
+                })}
           </div>
         </section>
 

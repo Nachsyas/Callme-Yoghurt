@@ -15,11 +15,94 @@ export interface PublicCatalogVariant {
 export interface PublicCatalogProduct {
   slug: string;
   name: string;
+  description?: string;
   variants: PublicCatalogVariant[];
 }
 
 export interface PublicCatalogData {
   products: PublicCatalogProduct[];
+}
+
+export interface PresentationMetadata {
+  brandColor: string;
+  darkBg: string;
+  colorClass: string;
+  artwork?: string;
+  sub: string;
+  tagline: string;
+}
+
+export const PRESENTATION_OVERRIDES: Record<string, PresentationMetadata> = {
+  plain: {
+    brandColor: '#cba258',
+    darkBg: '#271900',
+    colorClass: 'bg-[#cba258]',
+    artwork: '/images/products/plain-250-500.png',
+    sub: 'Yoghurt stirred segar kualitas homemade Callme Yoghurt tanpa perisa tambahan.',
+    tagline: 'Murni, Kental, Alami — Standar Baru Yoghurt Segar.',
+  },
+  stroberi: {
+    brandColor: '#D81E5B',
+    darkBg: '#3b1c21',
+    colorClass: 'bg-[#D81E5B]',
+    artwork: '/images/products/stroberi-250-500.png',
+    sub: 'Yoghurt stirred segar dengan sentuhan buah stroberi alami dan rasa asam-manis seimbang.',
+    tagline: 'Paduan rasa stroberi buah segar aromatik.',
+  },
+  mangga: {
+    brandColor: '#F9A03F',
+    darkBg: '#3d230d',
+    colorClass: 'bg-[#F9A03F]',
+    artwork: '/images/products/mangga-250-500.png',
+    sub: 'Yoghurt stirred segar dengan sari mangga tropis harum dan tekstur lembut.',
+    tagline: 'Kombinasi rasa asam manis segar eksotis.',
+  },
+  melon: {
+    brandColor: '#A1C349',
+    darkBg: '#232d0f',
+    colorClass: 'bg-[#A1C349]',
+    artwork: '/images/products/melon-250-500.png',
+    sub: 'Yoghurt stirred segar dengan aroma melon hijau yang harum dan menyegarkan.',
+    tagline: 'Sensasi kesegaran buah melon premium berair.',
+  },
+  anggur: {
+    brandColor: '#7A3B69',
+    darkBg: '#3B1C33',
+    colorClass: 'bg-[#7A3B69]',
+    artwork: '/images/products/anggur-250-500.png',
+    sub: 'Yoghurt stirred segar dengan rasa anggur ungu manis legit dan segar khas Callme Yoghurt.',
+    tagline: 'Sensasi rasa anggur ungu premium segar.',
+  },
+  leci: {
+    brandColor: '#ff8da1',
+    darkBg: '#4a1523',
+    colorClass: 'bg-[#ff8da1]',
+    artwork: '/images/products/leci-250-500.png',
+    sub: 'Yoghurt stirred segar dengan aroma dan rasa leci yang harum lembut.',
+    tagline: 'Rasa leci manis harum khas yang menyegarkan.',
+  },
+  vanila: {
+    brandColor: '#f3e5AB',
+    darkBg: '#3d361c',
+    colorClass: 'bg-[#f3e5AB]',
+    artwork: '/images/products/vanila-250-500.png',
+    sub: 'Yoghurt stirred segar berpadu kelembutan aroma vanila klasik.',
+    tagline: 'Kehangatan rasa vanila klasik.',
+  },
+};
+
+export const DEFAULT_PRESENTATION_FALLBACK: PresentationMetadata = {
+  brandColor: '#00754A',
+  darkBg: '#1E3932',
+  colorClass: 'bg-[#00754A]',
+  artwork: undefined,
+  sub: 'Yoghurt stirred segar kualitas homemade Callme Yoghurt.',
+  tagline: 'Kualitas Segar Terjaga — Standar Baru Yoghurt Dingin.',
+};
+
+export function getProductPresentation(slug: string): PresentationMetadata {
+  const normalized = slug.trim().toLowerCase();
+  return PRESENTATION_OVERRIDES[normalized] || DEFAULT_PRESENTATION_FALLBACK;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,11 +290,15 @@ export function parsePublicCatalogResponse(value: unknown): PublicCatalogData | 
       parsedVariants.push(variant);
     }
 
-    parsedProducts.push({
+    const parsedProduct: PublicCatalogProduct = {
       slug: rawProduct.slug.trim(),
       name: rawProduct.name.trim(),
       variants: parsedVariants,
-    });
+    };
+    if (typeof rawProduct.description === 'string' && rawProduct.description.trim().length > 0) {
+      parsedProduct.description = rawProduct.description.trim();
+    }
+    parsedProducts.push(parsedProduct);
   }
 
   return {
