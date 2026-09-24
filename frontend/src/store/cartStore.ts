@@ -62,6 +62,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
   getTotal: () => get().getEstimatedTotal(),
 }));
 
+if (typeof window !== 'undefined') {
+  (window as unknown as { __cartStore?: typeof useCartStore }).__cartStore = useCartStore;
+}
+
 /**
  * Pure transaction projection from cart items.
  *

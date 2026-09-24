@@ -45,6 +45,10 @@ class OfficialCatalogSeederTest extends TestCase
         sort($expectedSlugs);
         $this->assertSame($expectedSlugs, $actualSlugs);
 
+        $expectedNames = ['Anggur', 'Leci', 'Mangga', 'Melon', 'Plain', 'Stroberi', 'Vanila'];
+        $actualNames = $products->pluck('name')->sort()->values()->toArray();
+        $this->assertSame($expectedNames, $actualNames);
+
         // 3. Proves 21 master variants (7 flavors × 3 sizes)
         $variants = ProductVariant::where('active', true)->get();
         $this->assertCount(21, $variants);

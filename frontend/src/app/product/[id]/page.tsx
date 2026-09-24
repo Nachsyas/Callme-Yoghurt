@@ -41,60 +41,53 @@ interface FlavorData {
 // Visual presentation metadata for known flavors (fallback and styling only, not price or variant authority)
 const FLAVORS: Record<string, FlavorData> = {
   plain: {
-    name: 'Plain Pure Original',
+    name: 'Plain',
     brandColor: '#cba258',
     darkBg: '#271900',
-    tagline: 'Yoghurt stirred segar murni kualitas homemade Callme Yoghurt.',
-    description:
-      'Yoghurt stirred segar murni kualitas homemade Callme Yoghurt tanpa perisa tambahan.',
+    tagline: 'Yoghurt rasa Plain.',
+    description: 'Yoghurt rasa Plain.',
   },
   stroberi: {
-    name: 'Stroberi Summer Blush',
+    name: 'Stroberi',
     brandColor: '#D81E5B',
     darkBg: '#3b1c21',
-    tagline: 'Paduan rasa stroberi buah segar aromatik.',
-    description:
-      'Yoghurt stirred segar dengan sentuhan buah stroberi alami dan rasa asam-manis seimbang.',
+    tagline: 'Yoghurt rasa Stroberi.',
+    description: 'Yoghurt rasa Stroberi.',
   },
   mangga: {
-    name: 'Mangga Tropical Gold',
+    name: 'Mangga',
     brandColor: '#F9A03F',
     darkBg: '#3d230d',
-    tagline: 'Kombinasi rasa asam manis segar eksotis.',
-    description:
-      'Yoghurt stirred segar dengan sari mangga tropis harum dan tekstur lembut.',
+    tagline: 'Yoghurt rasa Mangga.',
+    description: 'Yoghurt rasa Mangga.',
   },
   melon: {
-    name: 'Melon Emerald Fresh',
+    name: 'Melon',
     brandColor: '#A1C349',
     darkBg: '#232d0f',
-    tagline: 'Sensasi kesegaran buah melon premium berair.',
-    description:
-      'Yoghurt stirred segar dengan aroma melon hijau yang harum dan menyegarkan.',
+    tagline: 'Yoghurt rasa Melon.',
+    description: 'Yoghurt rasa Melon.',
   },
   anggur: {
-    name: 'Anggur Royal Purple',
+    name: 'Anggur',
     brandColor: '#7A3B69',
     darkBg: '#3B1C33',
-    tagline: 'Sensasi rasa anggur ungu premium manis segar.',
-    description:
-      'Yoghurt stirred segar dengan rasa anggur ungu manis legit dan segar khas Callme Yoghurt.',
+    tagline: 'Yoghurt rasa Anggur.',
+    description: 'Yoghurt rasa Anggur.',
   },
   leci: {
-    name: 'Leci Sweet Bliss',
+    name: 'Leci',
     brandColor: '#ff8da1',
     darkBg: '#4a1523',
-    tagline: 'Rasa leci manis harum khas yang menyegarkan.',
-    description:
-      'Yoghurt stirred segar dengan aroma dan rasa leci yang harum lembut.',
+    tagline: 'Yoghurt rasa Leci.',
+    description: 'Yoghurt rasa Leci.',
   },
   vanila: {
-    name: 'Vanila Velvet Orchid',
+    name: 'Vanila',
     brandColor: '#f3e5AB',
     darkBg: '#3d361c',
-    tagline: 'Kehangatan rasa vanila klasik.',
-    description:
-      'Yoghurt stirred segar berpadu kelembutan aroma vanila klasik.',
+    tagline: 'Yoghurt rasa Vanila.',
+    description: 'Yoghurt rasa Vanila.',
   },
 };
 
@@ -340,7 +333,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   className="text-white font-bold text-[11px] px-3 py-1 rounded-full shadow-sm tracking-wide block"
                   style={{ backgroundColor: brandColor }}
                 >
-                  Premium Varian
+                  Varian Resmi
                 </span>
               </div>
 
@@ -402,16 +395,16 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             {/* Quality Badges below image */}
             <div className="w-full max-w-[380px] mt-4 flex items-center justify-between px-2 text-[11px] text-black/60 font-medium">
               <span className="flex items-center gap-1">
-                <Leaf size={13} className="text-emerald-600" />
-                <span>Susu Sapi Segar</span>
+                <Snowflake size={13} className="text-[#00754A]" />
+                <span>0°C – 4°C Rantai Dingin</span>
               </span>
               <span className="flex items-center gap-1">
-                <Heart size={13} className="text-rose-500" />
-                <span>Gula Murni</span>
+                <Leaf size={13} className="text-emerald-600" />
+                <span>Halal MUI</span>
               </span>
               <span className="flex items-center gap-1">
                 <Sparkles size={13} className="text-amber-500" />
-                <span>Homemade Kental</span>
+                <span>Izin Edar Resmi</span>
               </span>
             </div>
           </motion.div>
@@ -426,7 +419,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             {/* 1. Header & Title */}
             <div>
               <span className="text-xs font-bold uppercase tracking-widest text-[#00754A] block mb-1.5">
-                Kentalnya Nikmat • Homemade Quality
+                Katalog Resmi Callme Yoghurt
               </span>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-[#1c1917] tracking-tight mb-2">
                 {displayName}
@@ -697,7 +690,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <span>Informasi Komposisi</span>
               </h3>
               <p className="text-xs text-black/70 leading-relaxed">
-                Informasi komposisi mengikuti label produk resmi. Dibuat menggunakan susu sapi segar terfermentasi dan bahan berkualitas tinggi.
+                Informasi komposisi mengikuti label produk resmi.
               </p>
             </div>
 
@@ -728,7 +721,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </p>
                 <p>
                   <strong>Peringatan Mutu:</strong> Jangan dibekukan di dalam freezer atau dibiarkan di
-                  suhu ruang lebih dari 4 jam untuk menjaga kualitas kesegaran alami.
+                  suhu ruang lebih dari 4 jam untuk menjaga kualitas kesegaran yoghurt.
                 </p>
               </div>
             </div>

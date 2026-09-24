@@ -230,7 +230,7 @@ export default function Home() {
                 className="text-[#00754A] font-bold tracking-widest text-xs uppercase mb-4 inline-flex items-center gap-1.5 bg-[#00754A]/10 px-3 py-1 rounded-full"
               >
                 <Sparkles size={12} />
-                <span>Homemade Quality & Stirred Texture</span>
+                <span>Callme Yoghurt — Stirred Yoghurt</span>
               </motion.span>
 
               <h1 className="text-4xl sm:text-6xl md:text-[5.25rem] font-bold leading-[1.08] mb-6 tracking-tight">
@@ -240,7 +240,7 @@ export default function Home() {
                   transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.15 }}
                   className="block text-[#1E3932]"
                 >
-                  Kentalnya
+                  Kesegaran
                 </motion.span>
                 <motion.span
                   initial={{ opacity: 0, y: 16 }}
@@ -248,7 +248,7 @@ export default function Home() {
                   transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.25 }}
                   className="block text-brand-strawberry"
                 >
-                  Nikmat.
+                  Pilihan.
                 </motion.span>
               </h1>
 
@@ -258,7 +258,7 @@ export default function Home() {
                 transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.35 }}
                 className="text-base sm:text-lg md:text-xl text-[#5C6F68] max-w-lg mb-8 leading-relaxed"
               >
-                Stirred yoghurt premium dengan gula pasir murni tanpa pemanis buatan. Tersedia dalam 7 varian kesegaran dengan pengiriman rantai dingin &lt; 5°C.
+                Stirred yoghurt Callme Yoghurt dengan standar pengiriman rantai dingin 0°C – 4°C untuk menjaga kualitas produk.
               </motion.p>
 
               <motion.div
@@ -274,7 +274,7 @@ export default function Home() {
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
                   className="bg-[#1E3932] hover:bg-[#152722] text-white px-7 sm:px-8 py-3.5 rounded-full font-bold text-sm sm:text-base flex items-center gap-2.5 transition-colors shadow-md cursor-pointer"
                 >
-                  <span>Jelajahi 7 Rasa</span>
+                  <span>Jelajahi Varian Rasa</span>
                   <ArrowRight size={16} />
                 </motion.button>
 
@@ -305,7 +305,7 @@ export default function Home() {
               >
                 <Image
                   src="/images/hero-splash.png"
-                  alt="Callme Yoghurt Kemasan Premium"
+                  alt="Callme Yoghurt Kemasan"
                   fill
                   sizes="(max-width: 768px) 380px, 520px"
                   className="object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.20)]"
@@ -338,8 +338,8 @@ export default function Home() {
               },
               {
                 icon: CheckCircle,
-                title: "Homemade Quality",
-                desc: "Dibuat higienis menggunakan susu sapi segar dan gula tebu alami.",
+                title: "Kemasan Tersegel",
+                desc: "Setiap botol Callme Yoghurt dikemas rapat dengan segel keamanan resmi.",
               },
             ].map((item, idx) => (
               <motion.div
@@ -490,10 +490,10 @@ export default function Home() {
                 Dedikasi untuk<br />Keluarga Indonesia.
               </h2>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed">
-                Berawal dari dapur rumahan di tahun 2018, kami berkomitmen menghadirkan <strong>stirred yoghurt</strong> berkualitas premium. Menggunakan susu sapi segar dan kultur probiotik pilihan, setiap botol Callme Yoghurt diproses secara higienis setiap harinya.
+                Callme Yoghurt menghadirkan produk <strong>stirred yoghurt</strong> dengan standar penanganan rantai dingin (Cold Chain) yang terjaga. Kami melayani pemesanan langsung dari fasilitas operasional di Cipayung, Jakarta Timur.
               </p>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed pb-2">
-                Bukan sekadar minuman, ini adalah dedikasi kami untuk gaya hidup sehat yang lezat, segar, tanpa kompromi kualitas—langsung dikirim dingin ke depan pintu rumah Anda.
+                Setiap pesanan dikemas secara rapi dengan penjagaan suhu 0°C – 4°C untuk memastikan kesegaran yoghurt tiba dengan baik di tangan Anda.
               </p>
               <div>
                 <motion.button

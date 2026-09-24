@@ -40,7 +40,7 @@ export function CartDrawer() {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Keranjang Belanja">
+        <div id="cart-drawer" className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Keranjang Belanja">
           {/* Backdrop */}
           <motion.div
             variants={modalBackdropVariants}
@@ -93,7 +93,7 @@ export function CartDrawer() {
                   </div>
                   <h3 className="font-bold text-base text-[#1E3932]">Keranjang Masih Kosong</h3>
                   <p className="text-xs text-[#5C6F68] max-w-xs leading-relaxed">
-                    Pilih varian rasa favorit Anda dari katalog untuk merasakan kesegaran stirred yoghurt kualitas homemade.
+                    Pilih varian rasa favorit Anda dari katalog resmi Callme Yoghurt.
                   </p>
                   <button
                     type="button"
@@ -113,6 +113,7 @@ export function CartDrawer() {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95, height: 0, marginBottom: 0, padding: 0 }}
                       transition={{ duration: MOTION_TOKENS.duration.fast }}
+                      data-variant-id={item.variant_id}
                       className="bg-white p-4 rounded-xl border border-[#E5E2DA] shadow-sm flex flex-col gap-2.5 overflow-hidden"
                     >
                       <div className="flex justify-between items-start gap-2">

@@ -85,7 +85,7 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
 
   test("3. Product detail page toggles sizes and handles add-to-cart feedback", async ({ page }) => {
     await page.goto("/product/plain");
-    await expect(page.getByText("Plain Pure Original")).toBeVisible();
+    await expect(page.locator("h1")).toHaveText("Plain");
 
     // Check 500 ml size toggle
     const btn500 = page.getByRole("button", { name: /500 ml/i }).first();
@@ -166,7 +166,7 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     const detailLink = testArticle.getByRole("link", { name: "Detail" });
     await detailLink.click();
     await expect(page).toHaveURL(/.*product\/plain/);
-    await expect(page.getByText("Plain Pure Original")).toBeVisible();
+    await expect(page.locator("h1")).toHaveText("Plain");
   });
 
   test("5. Checkout page inputs remain stable without animation interference", async ({ page }) => {

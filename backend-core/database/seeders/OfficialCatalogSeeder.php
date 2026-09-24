@@ -45,38 +45,38 @@ class OfficialCatalogSeeder extends Seeder
         $officialFlavors = [
             [
                 'slug' => 'plain',
-                'name' => 'Plain Pure Original',
-                'description' => 'Yoghurt stirred segar kualitas homemade Callme Yoghurt tanpa perisa tambahan.',
+                'name' => 'Plain',
+                'description' => 'Yoghurt rasa Plain.',
             ],
             [
                 'slug' => 'stroberi',
-                'name' => 'Stroberi Summer Blush',
-                'description' => 'Yoghurt stirred segar dengan sentuhan buah stroberi alami dan rasa asam-manis seimbang.',
+                'name' => 'Stroberi',
+                'description' => 'Yoghurt rasa Stroberi.',
             ],
             [
                 'slug' => 'mangga',
-                'name' => 'Mangga Tropical Gold',
-                'description' => 'Yoghurt stirred segar dengan sari mangga tropis harum dan tekstur lembut.',
+                'name' => 'Mangga',
+                'description' => 'Yoghurt rasa Mangga.',
             ],
             [
                 'slug' => 'melon',
-                'name' => 'Melon Emerald Fresh',
-                'description' => 'Yoghurt stirred segar dengan aroma melon hijau yang harum dan menyegarkan.',
+                'name' => 'Melon',
+                'description' => 'Yoghurt rasa Melon.',
             ],
             [
                 'slug' => 'anggur',
-                'name' => 'Anggur Royal Purple',
-                'description' => 'Yoghurt stirred segar dengan rasa anggur ungu manis legit dan segar khas Callme Yoghurt.',
+                'name' => 'Anggur',
+                'description' => 'Yoghurt rasa Anggur.',
             ],
             [
                 'slug' => 'leci',
-                'name' => 'Leci Breeze Lychee',
-                'description' => 'Yoghurt stirred segar dengan aroma dan rasa leci yang harum lembut.',
+                'name' => 'Leci',
+                'description' => 'Yoghurt rasa Leci.',
             ],
             [
                 'slug' => 'vanila',
-                'name' => 'Vanila Velvet Orchid',
-                'description' => 'Yoghurt stirred segar berpadu kelembutan aroma vanila klasik.',
+                'name' => 'Vanila',
+                'description' => 'Yoghurt rasa Vanila.',
             ],
         ];
 
@@ -87,7 +87,7 @@ class OfficialCatalogSeeder extends Seeder
         ];
 
         foreach ($officialFlavors as $flavor) {
-            $product = Product::firstOrCreate(
+            $product = Product::updateOrCreate(
                 ['slug' => $flavor['slug']],
                 [
                     'name' => $flavor['name'],
@@ -99,7 +99,7 @@ class OfficialCatalogSeeder extends Seeder
             foreach ($sizes as $size) {
                 $sku = strtoupper("CY-{$flavor['slug']}-{$size['ml']}");
 
-                $item = InventoryItem::firstOrCreate(
+                $item = InventoryItem::updateOrCreate(
                     ['code' => "FG-{$sku}"],
                     [
                         'name' => "{$flavor['name']} {$size['label']}",
@@ -110,7 +110,7 @@ class OfficialCatalogSeeder extends Seeder
                     ]
                 );
 
-                $variant = ProductVariant::firstOrCreate(
+                $variant = ProductVariant::updateOrCreate(
                     ['sku' => $sku],
                     [
                         'product_id' => $product->id,

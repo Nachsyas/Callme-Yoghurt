@@ -978,7 +978,7 @@ export default function AdminCatalogPage() {
                   <label className="block text-xs font-bold text-[#1E3932] mb-1">Deskripsi Produk</label>
                   <textarea
                     rows={3}
-                    placeholder="Deskripsi cita rasa, sensasi cold chain, dan probiotik..."
+                    placeholder="Deskripsi produk resmi..."
                     value={productForm.description}
                     onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                     className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
