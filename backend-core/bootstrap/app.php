@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'service.auth' => ValidateInternalServiceToken::class,
+            'admin.actor' => \App\Http\Middleware\ValidateAdminActorContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

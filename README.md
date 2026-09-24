@@ -11,3 +11,13 @@ Enterprise-Grade Application untuk manajemen logistik *Cold Chain* dan penjualan
 ## 🛡️ Keamanan & Pengujian
 
 Sistem ini dirancang dengan pendekatan *DevSecOps*. Terintegrasi dengan *Static Application Security Testing* (SAST) menggunakan SonarQube, dilindungi oleh enkripsi AES-256 untuk data pribadi, dan siap menahan gempuran *Dynamic Application Security Testing* (DAST) lokal via OWASP ZAP.
+
+## 🔑 Initial Admin & Operations
+
+Untuk inisialisasi akun administrator pertama (`OWNER`) dan pengoperasian Admin Console, ikuti panduan:
+👉 [docs/admin-setup.md](docs/admin-setup.md)
+```bash
+# Provisioning akun OWNER via Artisan CLI
+cd backend-core
+php artisan callme:create-owner
+```

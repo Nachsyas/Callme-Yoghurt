@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
 import {
   parseNetContentMl,
@@ -146,21 +146,6 @@ const FLAVORS: Record<string, FlavorData> = {
     ],
     nutrition: { calories: '125kcal', protein: '8.2g', fat: '3.5g', sugar: '12g' },
   },
-  pisang: {
-    name: 'Pisang Ambon Smooth',
-    brandColor: '#E8D354',
-    darkBg: '#332D10',
-    tagline: 'Kentalnya nikmat dengan keharuman pisang ambon.',
-    description:
-      'Yogurt lembut stirred premium dengan sensasi dan wangi pisang ambon alami. 100% gula asli tanpa pemanis buatan.',
-    ingredients: [
-      'Yogurt kental (86,3%)',
-      'Gula pasir murni',
-      'Perisa pisang ambon alami',
-      'Topping Jelly / Nata de Coco',
-    ],
-    nutrition: { calories: '125kcal', protein: '8g', fat: '3.2g', sugar: '13g' },
-  },
 };
 
 const FLAVOR_IMAGES: Record<string, string> = {
@@ -171,7 +156,6 @@ const FLAVOR_IMAGES: Record<string, string> = {
   anggur: '/images/anggur.png',
   leci: '/images/leci.png',
   vanila: '/images/vanila.png',
-  pisang: '/images/all-variants.png',
 };
 
 type FlavorKey = keyof typeof FLAVORS;
@@ -188,7 +172,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   // Match visual presentation
   const requestedSlug = id.trim().toLowerCase();
-  const visualFlavorKey = (requestedSlug in FLAVORS ? requestedSlug : 'plain') as FlavorKey;
+  const isKnownFlavor = requestedSlug in FLAVORS;
+
+  const visualFlavorKey = (isKnownFlavor ? requestedSlug : 'plain') as FlavorKey;
   const flavor = FLAVORS[visualFlavorKey];
   const imageSrc = FLAVOR_IMAGES[visualFlavorKey] || '/images/all-variants.png';
 
@@ -197,10 +183,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
   const [erpProduct, setErpProduct] = useState<PublicCatalogProduct | null>(null);
   const [demoNoticeVisible, setDemoNoticeVisible] = useState<boolean>(false);
-
   const addItem = useCartStore((state) => state.addItem);
 
   useEffect(() => {
+    if (!isKnownFlavor) {
+      setCatalogLoading(false);
+      return;
+    }
     let isMounted = true;
     async function loadCatalog() {
       try {
@@ -225,7 +214,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return () => {
       isMounted = false;
     };
-  }, [requestedSlug]);
+  }, [requestedSlug, isKnownFlavor]);
+
+  // Ensure uncataloged route does NOT render another product.
+  // Must render 404 Not Found with message "Produk tidak ditemukan".
+  if (!isKnownFlavor) {
+    notFound();
+  }
 
   // Authoritative variant matching from ERP
   const variant250 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
