@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useTransition } from "react";
 import Image from "next/image";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { modalBackdropVariants, modalDialogVariants, MOTION_TOKENS } from "@/lib/motion";
 import {
   AlertCircle,
   CheckCircle2,
@@ -132,6 +134,7 @@ export default function AdminCatalogPage() {
   }>({ isOpen: false, title: "", description: "", onConfirm: async () => {} });
 
   const [isPending, startTransition] = useTransition();
+  const shouldReduceMotion = useReducedMotion();
 
   const loadData = async () => {
     setLoading(true);
@@ -169,6 +172,20 @@ export default function AdminCatalogPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Keyboard accessibility: Close modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmDialog.isOpen) setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        else if (priceModalVariant) setPriceModalVariant(null);
+        else if (variantModalMode) setVariantModalMode(null);
+        else if (productModalMode) setProductModalMode(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [confirmDialog.isOpen, priceModalVariant, variantModalMode, productModalMode]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);
@@ -417,29 +434,43 @@ export default function AdminCatalogPage() {
   return (
     <div className="space-y-6">
       {/* Notifications */}
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1E3932] text-xs font-semibold flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00754A]" />
-            <span>{successMsg}</span>
-          </div>
-          <button type="button" onClick={() => setSuccessMsg(null)} className="text-[#5C6F68] hover:text-[#1E3932]">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {successMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: MOTION_TOKENS.duration.fast }}
+            className="p-4 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1E3932] text-xs font-semibold flex items-center justify-between shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#00754A]" />
+              <span>{successMsg}</span>
+            </div>
+            <button type="button" onClick={() => setSuccessMsg(null)} className="text-[#5C6F68] hover:text-[#1E3932] cursor-pointer">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
 
-      {errorMsg && (
-        <div className="p-4 rounded-xl bg-[#FFEBEE] border border-[#FFCDD2] text-[#B71C1C] text-xs font-semibold flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-[#D32F2F]" />
-            <span>{errorMsg}</span>
-          </div>
-          <button type="button" onClick={() => setErrorMsg(null)} className="text-[#B71C1C] hover:opacity-80">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+        {errorMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: MOTION_TOKENS.duration.fast }}
+            className="p-4 rounded-xl bg-[#FFEBEE] border border-[#FFCDD2] text-[#B71C1C] text-xs font-semibold flex items-center justify-between shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-[#D32F2F]" />
+              <span>{errorMsg}</span>
+            </div>
+            <button type="button" onClick={() => setErrorMsg(null)} className="text-[#B71C1C] hover:opacity-80 cursor-pointer">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header Info Banner */}
       <div className="bg-white p-4 sm:p-5 rounded-xl border border-[#E5E2DA] shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -868,219 +899,356 @@ export default function AdminCatalogPage() {
       </div>
 
       {/* Modal: Tambah / Edit Produk */}
-      {productModalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">
-                  {productModalMode === "CREATE" ? "Tambah Produk Master Baru" : "Edit Metadata Produk"}
-                </h3>
-                <p className="text-[11px] text-[#5C6F68]">
-                  Otoritas master katalog tersimpan langsung di ERP Core.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setProductModalMode(null)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveProduct} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Produk *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Yoghurt Rasa Melon"
-                  value={productForm.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    setProductForm((prev) => ({
-                      ...prev,
-                      name,
-                      slug:
-                        productModalMode === "CREATE" && !prev.slug
-                          ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
-                          : prev.slug,
-                    }));
-                  }}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Slug URL (Unik) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="contoh: melon"
-                  value={productForm.slug}
-                  onChange={(e) => setProductForm({ ...productForm, slug: e.target.value.toLowerCase().trim() })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-                <p className="text-[10px] text-[#8A9590] mt-1">
-                  Digunakan untuk routing URL storefront (/product/[slug]).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Deskripsi Produk</label>
-                <textarea
-                  rows={3}
-                  placeholder="Deskripsi cita rasa, sensasi cold chain, dan probiotik..."
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="prod_active"
-                  checked={productForm.active}
-                  onChange={(e) => setProductForm({ ...productForm, active: e.target.checked })}
-                  className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
-                />
-                <label htmlFor="prod_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
-                  Produk Aktif (Tersedia untuk dijual)
-                </label>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+      <AnimatePresence>
+        {productModalMode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setProductModalMode(null)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-md overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#1E3932]">
+                    {productModalMode === "CREATE" ? "Tambah Produk Master Baru" : "Edit Metadata Produk"}
+                  </h3>
+                  <p className="text-[11px] text-[#5C6F68]">
+                    Otoritas master katalog tersimpan langsung di ERP Core.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setProductModalMode(null)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
                 >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Simpan Produk</span>
+                  <X size={16} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleSaveProduct} className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Produk *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Yoghurt Rasa Melon"
+                    value={productForm.name}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setProductForm((prev) => ({
+                        ...prev,
+                        name,
+                        slug:
+                          productModalMode === "CREATE" && !prev.slug
+                            ? name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
+                            : prev.slug,
+                      }));
+                    }}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Slug URL (Unik) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="contoh: melon"
+                    value={productForm.slug}
+                    onChange={(e) => setProductForm({ ...productForm, slug: e.target.value.toLowerCase().trim() })}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                  <p className="text-[10px] text-[#8A9590] mt-1">
+                    Digunakan untuk routing URL storefront (/product/[slug]).
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Deskripsi Produk</label>
+                  <textarea
+                    rows={3}
+                    placeholder="Deskripsi cita rasa, sensasi cold chain, dan probiotik..."
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="prod_active"
+                    checked={productForm.active}
+                    onChange={(e) => setProductForm({ ...productForm, active: e.target.checked })}
+                    className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
+                  />
+                  <label htmlFor="prod_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
+                    Produk Aktif (Tersedia untuk dijual)
+                  </label>
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setProductModalMode(null)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Simpan Produk</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Modal: Tambah / Edit Varian */}
-      {variantModalMode && targetProductForVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">
-                  {variantModalMode === "CREATE"
-                    ? `Tambah Varian untuk ${targetProductForVariant.name}`
-                    : `Edit Varian ${selectedVariant?.sku}`}
-                </h3>
-                <p className="text-[11px] text-[#5C6F68]">
-                  Setiap varian harus ditautkan ke item inventaris riil untuk alokasi FEFO.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setVariantModalMode(null)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveVariant} className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <AnimatePresence>
+        {variantModalMode && targetProductForVariant && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setVariantModalMode(null)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">SKU Varian *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: CY-MANGGA-250"
-                    value={variantForm.sku}
-                    onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value.toUpperCase().trim() })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
+                  <h3 className="text-sm font-bold text-[#1E3932]">
+                    {variantModalMode === "CREATE"
+                      ? `Tambah Varian untuk ${targetProductForVariant.name}`
+                      : `Edit Varian ${selectedVariant?.sku}`}
+                  </h3>
+                  <p className="text-[11px] text-[#5C6F68]">
+                    Setiap varian harus ditautkan ke item inventaris riil untuk alokasi FEFO.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Varian *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Contoh: 250 ml Botol"
-                    value={variantForm.variant_name}
-                    onChange={(e) => setVariantForm({ ...variantForm, variant_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">
-                  Item Inventaris Terkait (Authoritative ERP Item) *
-                </label>
-                <select
-                  required
-                  value={variantForm.inventory_item_id}
-                  onChange={(e) => setVariantForm({ ...variantForm, inventory_item_id: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                <button
+                  type="button"
+                  onClick={() => setVariantModalMode(null)}
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
                 >
-                  <option value="" disabled>
-                    Pilih Item Inventaris ERP...
-                  </option>
-                  {inventoryItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.code} — {item.name} ({item.type})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-[#8A9590] mt-1">
-                  Reservasi stok FEFO saat checkout terikat ke item inventaris ini.
-                </p>
+                  <X size={16} />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Isi Bersih</label>
-                  <input
-                    type="number"
-                    step="any"
-                    placeholder="250"
-                    value={variantForm.net_content_quantity}
-                    onChange={(e) => setVariantForm({ ...variantForm, net_content_quantity: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
+              <form onSubmit={handleSaveVariant} className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">SKU Varian *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: CY-MANGGA-250"
+                      value={variantForm.sku}
+                      onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value.toUpperCase().trim() })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Varian *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contoh: 250 ml Botol"
+                      value={variantForm.variant_name}
+                      onChange={(e) => setVariantForm({ ...variantForm, variant_name: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Satuan (UOM)</label>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">
+                    Item Inventaris Terkait (Authoritative ERP Item) *
+                  </label>
                   <select
-                    value={variantForm.net_content_uom_id}
-                    onChange={(e) => setVariantForm({ ...variantForm, net_content_uom_id: e.target.value })}
+                    required
+                    value={variantForm.inventory_item_id}
+                    onChange={(e) => setVariantForm({ ...variantForm, inventory_item_id: e.target.value })}
                     className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
                   >
-                    <option value="">Pilih UOM...</option>
-                    {uoms.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.code})
+                    <option value="" disabled>
+                      Pilih Item Inventaris ERP...
+                    </option>
+                    {inventoryItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.code} — {item.name} ({item.type})
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-[#8A9590] mt-1">
+                    Reservasi stok FEFO saat checkout terikat ke item inventaris ini.
+                  </p>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Isi Bersih</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="250"
+                      value={variantForm.net_content_quantity}
+                      onChange={(e) => setVariantForm({ ...variantForm, net_content_quantity: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Satuan (UOM)</label>
+                    <select
+                      value={variantForm.net_content_uom_id}
+                      onChange={(e) => setVariantForm({ ...variantForm, net_content_uom_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="">Pilih UOM...</option>
+                      {uoms.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {variantModalMode === "CREATE" && (
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Harga Awal (IDR Rupiah) *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#5C6F68]">
+                        Rp
+                      </span>
+                      <input
+                        type="number"
+                        required
+                        min={0}
+                        step={1}
+                        placeholder="15000"
+                        value={variantForm.price}
+                        onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })}
+                        className="w-full pl-9 pr-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="var_active"
+                    checked={variantForm.active}
+                    onChange={(e) => setVariantForm({ ...variantForm, active: e.target.checked })}
+                    className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
+                  />
+                  <label htmlFor="var_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
+                    Varian Aktif (Dapat dipesan di storefront)
+                  </label>
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setVariantModalMode(null)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Simpan Varian</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Ubah Harga */}
+      <AnimatePresence>
+        {priceModalVariant && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setPriceModalVariant(null)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#1E3932]">Ubah Harga Varian</h3>
+                  <p className="text-[11px] text-[#5C6F68] font-mono">{priceModalVariant.sku}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPriceModalVariant(null)}
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
               </div>
 
-              {variantModalMode === "CREATE" && (
+              <form onSubmit={handleSavePrice} className="p-5 space-y-4">
+                <div className="p-3 rounded-xl bg-[#FAF9F7] border border-[#E5E2DA] space-y-1">
+                  <span className="text-[10px] text-[#5C6F68] uppercase font-bold tracking-wider block">
+                    Harga Aktif Saat Ini
+                  </span>
+                  <span className="text-sm font-bold text-[#1E3932]">
+                    {priceModalVariant.price
+                      ? `Rp ${priceModalVariant.price.amount.toLocaleString("id-ID")}`
+                      : "Belum diset"}
+                  </span>
+                </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Harga Awal (IDR Rupiah) *</label>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">
+                    Harga Baru (Integer Rupiah) *
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#5C6F68]">
                       Rp
@@ -1090,157 +1258,88 @@ export default function AdminCatalogPage() {
                       required
                       min={0}
                       step={1}
-                      placeholder="15000"
-                      value={variantForm.price}
-                      onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })}
-                      className="w-full pl-9 pr-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
                     />
                   </div>
+                  <p className="text-[10px] text-[#8A9590] mt-1.5">
+                    Harga baru akan menggantikan harga aktif sebelumnya. Seluruh riwayat harga tetap tersimpan untuk audit
+                    finansial.
+                  </p>
                 </div>
-              )}
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="var_active"
-                  checked={variantForm.active}
-                  onChange={(e) => setVariantForm({ ...variantForm, active: e.target.checked })}
-                  className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
-                />
-                <label htmlFor="var_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
-                  Varian Aktif (Dapat dipesan di storefront)
-                </label>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
-                <button
-                  type="button"
-                  onClick={() => setVariantModalMode(null)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Simpan Varian</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Ubah Harga */}
-      {priceModalVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">Ubah Harga Varian</h3>
-                <p className="text-[11px] text-[#5C6F68] font-mono">{priceModalVariant.sku}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPriceModalVariant(null)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSavePrice} className="p-5 space-y-4">
-              <div className="p-3 rounded-xl bg-[#FAF9F7] border border-[#E5E2DA] space-y-1">
-                <span className="text-[10px] text-[#5C6F68] uppercase font-bold tracking-wider block">
-                  Harga Aktif Saat Ini
-                </span>
-                <span className="text-sm font-bold text-[#1E3932]">
-                  {priceModalVariant.price
-                    ? `Rp ${priceModalVariant.price.amount.toLocaleString("id-ID")}`
-                    : "Belum diset"}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">
-                  Harga Baru (Integer Rupiah) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#5C6F68]">
-                    Rp
-                  </span>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step={1}
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
+                <div className="pt-3 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setPriceModalVariant(null)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Perbarui Harga</span>
+                  </button>
                 </div>
-                <p className="text-[10px] text-[#8A9590] mt-1.5">
-                  Harga baru akan menggantikan harga aktif sebelumnya. Seluruh riwayat harga tetap tersimpan untuk audit
-                  finansial.
-                </p>
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
-                <button
-                  type="button"
-                  onClick={() => setPriceModalVariant(null)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Perbarui Harga</span>
-                </button>
-              </div>
-            </form>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Confirmation Dialog (Nonaktifkan Produk / Varian) */}
-      {confirmDialog.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#D32F2F] flex items-center justify-center">
-                <AlertCircle size={20} />
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden font-sans"
+            >
+              <div className="p-5 space-y-3">
+                <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#D32F2F] flex items-center justify-center">
+                  <AlertCircle size={20} />
+                </div>
+                <h3 className="text-sm font-bold text-[#1E3932]">{confirmDialog.title}</h3>
+                <p className="text-xs text-[#5C6F68] leading-relaxed">{confirmDialog.description}</p>
               </div>
-              <h3 className="text-sm font-bold text-[#1E3932]">{confirmDialog.title}</h3>
-              <p className="text-xs text-[#5C6F68] leading-relaxed">{confirmDialog.description}</p>
-            </div>
 
-            <div className="p-4 bg-[#FAF9F7] border-t border-[#E5E2DA] flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                className="px-3 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-white cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={confirmDialog.onConfirm}
-                className="px-3.5 py-1.5 rounded-xl bg-[#C62828] hover:bg-[#B71C1C] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-              >
-                Konfirmasi Nonaktifkan
-              </button>
-            </div>
+              <div className="p-4 bg-[#FAF9F7] border-t border-[#E5E2DA] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-3 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-white cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDialog.onConfirm}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#C62828] hover:bg-[#B71C1C] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                >
+                  Konfirmasi Nonaktifkan
+                </button>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { motion, useReducedMotion } from 'framer-motion';
 import { getValidOrderConfirmation, type StoredConfirmationRecord } from '@/lib/checkout-client';
 import { AlertCircle, ArrowRight, CheckCircle2, Package, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -12,6 +13,7 @@ function ReturnPageContent() {
 
   const [confirmation, setConfirmation] = useState<StoredConfirmationRecord | null>(null);
   const [checked, setChecked] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     const validRecord = getValidOrderConfirmation(orderId);
@@ -34,7 +36,12 @@ function ReturnPageContent() {
   if (!confirmation) {
     return (
       <div className="min-h-screen bg-[#f2f0eb] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden">
+        <motion.div
+          initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24 }}
+          className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden"
+        >
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle size={40} className="text-black/40" />
           </div>
@@ -54,19 +61,29 @@ function ReturnPageContent() {
             Kembali ke Beranda
             <ArrowRight size={18} />
           </Link>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-[#f2f0eb] flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden">
+      <motion.div
+        initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24 }}
+        className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden"
+      >
         <div className="absolute top-0 left-0 w-full h-2 bg-[#00754A]"></div>
 
-        <div className="w-20 h-20 bg-[#00754A]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+        <motion.div
+          initial={shouldReduceMotion ? { scale: 1, opacity: 1 } : { scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.08, type: "spring", stiffness: 350, damping: 25 }}
+          className="w-20 h-20 bg-[#00754A]/10 rounded-full flex items-center justify-center mx-auto mb-6"
+        >
           <CheckCircle2 size={40} className="text-[#00754A]" />
-        </div>
+        </motion.div>
 
         <h1 className="text-2xl md:text-3xl font-extrabold text-black/87 tracking-tight mb-2">
           Pesanan Berhasil!
@@ -111,7 +128,7 @@ function ReturnPageContent() {
           Kembali ke Beranda
           <ArrowRight size={18} />
         </Link>
-      </div>
+      </motion.div>
     </div>
   );
 }

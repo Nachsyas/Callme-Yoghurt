@@ -2,6 +2,7 @@
 
 import React, { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Shield, ShieldAlert, Lock, ArrowRight } from "lucide-react";
 
 function AdminLoginForm() {
@@ -12,6 +13,7 @@ function AdminLoginForm() {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const shouldReduceMotion = useReducedMotion();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -46,7 +48,12 @@ function AdminLoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F2F0EB] text-[#1E3932] py-12 px-4 sm:px-6 lg:px-8 font-sans antialiased">
-      <div className="max-w-md w-full space-y-7 bg-white p-8 sm:p-10 rounded-2xl shadow-[0_4px_20px_rgba(30,57,50,0.06)] border border-[#E5E2DA]">
+      <motion.div
+        initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: "easeOut" }}
+        className="max-w-md w-full space-y-7 bg-white p-8 sm:p-10 rounded-2xl shadow-[0_4px_20px_rgba(30,57,50,0.06)] border border-[#E5E2DA]"
+      >
         {/* Brand Header */}
         <div className="text-center">
           <div className="mx-auto w-14 h-14 bg-[#1E3932] rounded-xl flex items-center justify-center text-white font-black text-xl shadow-sm tracking-wider">
@@ -60,15 +67,21 @@ function AdminLoginForm() {
           </p>
         </div>
 
-        {errorMessage && (
-          <div
-            role="alert"
-            className="p-3.5 text-xs text-[#C62828] bg-[#FFEBEE] rounded-xl border border-[#FFCDD2] flex items-center gap-2.5"
-          >
-            <ShieldAlert size={16} className="text-[#C62828] flex-shrink-0" />
-            <span className="font-medium">{errorMessage}</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.16 }}
+              role="alert"
+              className="p-3.5 text-xs text-[#C62828] bg-[#FFEBEE] rounded-xl border border-[#FFCDD2] flex items-center gap-2.5"
+            >
+              <ShieldAlert size={16} className="text-[#C62828] flex-shrink-0" />
+              <span className="font-medium">{errorMessage}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -116,14 +129,15 @@ function AdminLoginForm() {
           </div>
 
           <div>
-            <button
+            <motion.button
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
               type="submit"
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl shadow-sm text-sm font-bold text-white bg-[#00754A] hover:bg-[#1E3932] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00754A] disabled:opacity-50 transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl shadow-sm text-sm font-bold text-white bg-[#00754A] hover:bg-[#1E3932] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00754A] disabled:opacity-50 transition-colors cursor-pointer"
             >
               <span>{isSubmitting ? "Authenticating..." : "Sign In to Operations"}</span>
               {!isSubmitting && <ArrowRight size={15} />}
-            </button>
+            </motion.button>
           </div>
         </form>
 
@@ -134,7 +148,7 @@ function AdminLoginForm() {
           </span>
           <span className="font-mono text-[10px]">Argon2id • HttpOnly</span>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

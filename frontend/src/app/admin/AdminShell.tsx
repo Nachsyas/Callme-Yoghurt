@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Boxes,
   ChevronLeft,
@@ -43,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
+  const shouldReduceMotion = useReducedMotion();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [tabletCollapsed, setTabletCollapsed] = useState(false);
 
@@ -147,15 +149,27 @@ export function AdminShell({ children }: AdminShellProps) {
                   key={item.id}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors ${
+                  className={`relative flex items-center justify-between px-3 py-2.5 rounded-xl transition-colors ${
                     active
-                      ? "bg-[#00754A] text-white font-semibold shadow-sm"
+                      ? "text-white font-semibold shadow-xs"
                       : "text-white/80 hover:text-white hover:bg-white/10"
                   }`}
                   title={item.label}
                   aria-current={active ? "page" : undefined}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  {active && (
+                    <motion.div
+                      layoutId="admin-active-nav-indicator"
+                      transition={
+                        shouldReduceMotion
+                          ? { duration: 0 }
+                          : { type: "spring", stiffness: 450, damping: 35 }
+                      }
+                      className="absolute inset-0 bg-[#00754A] rounded-xl z-0"
+                    />
+                  )}
+
+                  <div className="relative z-10 flex items-center gap-3 min-w-0">
                     <Icon size={18} className="flex-shrink-0" />
                     <span className={`${tabletCollapsed ? "md:hidden lg:inline" : "inline"} truncate`}>
                       {item.label}
@@ -164,7 +178,7 @@ export function AdminShell({ children }: AdminShellProps) {
 
                   {active && (
                     <span
-                      className={`w-1.5 h-1.5 rounded-full bg-white flex-shrink-0 ${
+                      className={`relative z-10 w-1.5 h-1.5 rounded-full bg-white flex-shrink-0 ${
                         tabletCollapsed ? "md:hidden lg:block" : "block"
                       }`}
                     />

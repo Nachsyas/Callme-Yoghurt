@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useTransition } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { modalBackdropVariants, modalDialogVariants, MOTION_TOKENS } from "@/lib/motion";
 import {
   AlertCircle,
   ArrowDownLeft,
@@ -141,6 +143,21 @@ export default function AdminInventoryPage() {
   }>({ isOpen: false, title: "", description: "", onConfirm: async () => {} });
 
   const [isPending, startTransition] = useTransition();
+  const shouldReduceMotion = useReducedMotion();
+
+  // Close modals on ESC key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setItemModalMode(null);
+        setReceiptModalOpen(false);
+        setAdjustModalOpen(false);
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -399,29 +416,45 @@ export default function AdminInventoryPage() {
   return (
     <div className="space-y-6">
       {/* Notifications */}
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1E3932] text-xs font-semibold flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00754A]" />
-            <span>{successMsg}</span>
-          </div>
-          <button type="button" onClick={() => setSuccessMsg(null)} className="text-[#5C6F68] hover:text-[#1E3932]">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {successMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="p-4 rounded-xl bg-[#E8F5E9] border border-[#C8E6C9] text-[#1E3932] text-xs font-semibold flex items-center justify-between shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#00754A]" />
+              <span>{successMsg}</span>
+            </div>
+            <button type="button" onClick={() => setSuccessMsg(null)} className="text-[#5C6F68] hover:text-[#1E3932] cursor-pointer">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {errorMsg && (
-        <div className="p-4 rounded-xl bg-[#FFEBEE] border border-[#FFCDD2] text-[#B71C1C] text-xs font-semibold flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-[#D32F2F]" />
-            <span>{errorMsg}</span>
-          </div>
-          <button type="button" onClick={() => setErrorMsg(null)} className="text-[#B71C1C] hover:opacity-80">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="p-4 rounded-xl bg-[#FFEBEE] border border-[#FFCDD2] text-[#B71C1C] text-xs font-semibold flex items-center justify-between shadow-sm"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle size={16} className="text-[#D32F2F]" />
+              <span>{errorMsg}</span>
+            </div>
+            <button type="button" onClick={() => setErrorMsg(null)} className="text-[#B71C1C] hover:opacity-80 cursor-pointer">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header Info Banner */}
       <div className="bg-white p-4 sm:p-5 rounded-xl border border-[#E5E2DA] shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -514,42 +547,35 @@ export default function AdminInventoryPage() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-[#E5E2DA] flex items-center gap-4 text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => setActiveTab("ITEMS")}
-          className={`pb-2.5 px-1 border-b-2 cursor-pointer transition-colors ${
-            activeTab === "ITEMS"
-              ? "border-[#00754A] text-[#00754A] font-bold"
-              : "border-transparent text-[#5C6F68] hover:text-[#1E3932]"
-          }`}
-        >
-          Ringkasan Item & Stok ({items.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("LOTS")}
-          className={`pb-2.5 px-1 border-b-2 cursor-pointer transition-colors ${
-            activeTab === "LOTS"
-              ? "border-[#00754A] text-[#00754A] font-bold"
-              : "border-transparent text-[#5C6F68] hover:text-[#1E3932]"
-          }`}
-        >
-          Lot & Pelacakan FEFO ({lots.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("LEDGER")}
-          className={`pb-2.5 px-1 border-b-2 cursor-pointer transition-colors ${
-            activeTab === "LEDGER"
-              ? "border-[#00754A] text-[#00754A] font-bold"
-              : "border-transparent text-[#5C6F68] hover:text-[#1E3932]"
-          }`}
-        >
-          Riwayat Buku Besar (Stock Ledger)
-        </button>
+      <div className="border-b border-[#E5E2DA] flex items-center gap-4 text-xs font-semibold relative">
+        {(
+          [
+            { id: "ITEMS", label: `Ringkasan Item & Stok (${items.length})` },
+            { id: "LOTS", label: `Lot & Pelacakan FEFO (${lots.length})` },
+            { id: "LEDGER", label: "Riwayat Buku Besar (Stock Ledger)" },
+          ] as const
+        ).map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-2.5 px-1 relative cursor-pointer transition-colors ${
+                isActive ? "text-[#00754A] font-bold" : "text-[#5C6F68] hover:text-[#1E3932]"
+              }`}
+            >
+              <span>{tab.label}</span>
+              {isActive && (
+                <motion.div
+                  layoutId="inventory-active-tab"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00754A]"
+                  transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filter and Search Bar */}
@@ -872,461 +898,529 @@ export default function AdminInventoryPage() {
       </div>
 
       {/* Modal: Tambah / Edit Item */}
-      {itemModalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">
-                  {itemModalMode === "CREATE" ? "Tambah Item Inventaris Baru" : "Edit Item Inventaris"}
-                </h3>
-                <p className="text-[11px] text-[#5C6F68]">
-                  Entitas inventaris resmi ERP untuk manajemen mutasi buku besar.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setItemModalMode(null)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveItem} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Kode Item (Unik) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: FG-MELON-250"
-                  value={itemForm.code}
-                  onChange={(e) => setItemForm({ ...itemForm, code: e.target.value.toUpperCase().trim() })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Item *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: Callme Yoghurt Melon 250ml"
-                  value={itemForm.name}
-                  onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+      <AnimatePresence>
+        {itemModalMode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setItemModalMode(null)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-md overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Tipe Item *</label>
-                  <select
-                    value={itemForm.type}
-                    onChange={(e) => setItemForm({ ...itemForm, type: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="FINISHED_GOOD">FINISHED_GOOD</option>
-                    <option value="RAW_MATERIAL">RAW_MATERIAL</option>
-                    <option value="PACKAGING">PACKAGING</option>
-                  </select>
+                  <h3 className="text-sm font-bold text-[#1E3932]">
+                    {itemModalMode === "CREATE" ? "Tambah Item Inventaris Baru" : "Edit Item Inventaris"}
+                  </h3>
+                  <p className="text-[11px] text-[#5C6F68]">
+                    Entitas inventaris resmi ERP untuk manajemen mutasi buku besar.
+                  </p>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Satuan Dasar *</label>
-                  <select
-                    required
-                    value={itemForm.base_uom_id}
-                    onChange={(e) => setItemForm({ ...itemForm, base_uom_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="" disabled>
-                      Pilih UOM...
-                    </option>
-                    {uoms.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="item_lot_tracked"
-                    checked={itemForm.lot_tracked}
-                    onChange={(e) => setItemForm({ ...itemForm, lot_tracked: e.target.checked })}
-                    className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
-                  />
-                  <label htmlFor="item_lot_tracked" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
-                    Lot-Tracked (Memerlukan nomor lot saat mutasi)
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="item_active"
-                    checked={itemForm.active}
-                    onChange={(e) => setItemForm({ ...itemForm, active: e.target.checked })}
-                    className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
-                  />
-                  <label htmlFor="item_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
-                    Item Aktif
-                  </label>
-                </div>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
                 <button
                   type="button"
                   onClick={() => setItemModalMode(null)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
                 >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Simpan Item</span>
+                  <X size={16} />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* Modal: Terima Stok */}
-      {receiptModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">Form Terima Stok Masuk (Stock Receipt)</h3>
-                <p className="text-[11px] text-[#5C6F68]">
-                  Mencatat mutasi masuk ke buku besar append-only (+ delta).
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReceiptModalOpen(false)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveReceipt} className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <form onSubmit={handleSaveItem} className="p-5 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Item Inventaris *</label>
-                  <select
-                    required
-                    value={receiptForm.inventory_item_id}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      const selected = items.find((i) => i.id === id);
-                      setReceiptForm((prev) => ({
-                        ...prev,
-                        inventory_item_id: id,
-                        lot_number: selected?.lot_tracked ? `LOT-${selected.code}-001` : "",
-                      }));
-                    }}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="" disabled>
-                      Pilih Item...
-                    </option>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.code} — {i.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Gudang Penyimpanan *</label>
-                  <select
-                    required
-                    value={receiptForm.warehouse_id}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, warehouse_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="" disabled>
-                      Pilih Gudang...
-                    </option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} — {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Kuantitas Masuk *</label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    step="any"
-                    placeholder="50"
-                    value={receiptForm.quantity}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, quantity: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Lot (Wajib jika Lot-Tracked)</label>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Kode Item (Unik) *</label>
                   <input
                     type="text"
-                    placeholder="Contoh: LOT-2026-09-01"
-                    value={receiptForm.lot_number}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, lot_number: e.target.value.toUpperCase().trim() })}
+                    required
+                    placeholder="Contoh: FG-MELON-250"
+                    value={itemForm.code}
+                    onChange={(e) => setItemForm({ ...itemForm, code: e.target.value.toUpperCase().trim() })}
                     className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Tgl Produksi (Opsional)</label>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nama Item *</label>
                   <input
-                    type="date"
-                    value={receiptForm.production_date}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, production_date: e.target.value })}
+                    type="text"
+                    required
+                    placeholder="Contoh: Callme Yoghurt Melon 250ml"
+                    value={itemForm.name}
+                    onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
                     className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Tgl Kedaluwarsa (Opsional)</label>
-                  <input
-                    type="date"
-                    value={receiptForm.expiration_date}
-                    onChange={(e) => setReceiptForm({ ...receiptForm, expiration_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Tipe Item *</label>
+                    <select
+                      value={itemForm.type}
+                      onChange={(e) => setItemForm({ ...itemForm, type: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="FINISHED_GOOD">FINISHED_GOOD</option>
+                      <option value="RAW_MATERIAL">RAW_MATERIAL</option>
+                      <option value="PACKAGING">PACKAGING</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Satuan Dasar *</label>
+                    <select
+                      required
+                      value={itemForm.base_uom_id}
+                      onChange={(e) => setItemForm({ ...itemForm, base_uom_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="" disabled>
+                        Pilih UOM...
+                      </option>
+                      {uoms.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.code})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Referensi Penerimaan</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: PO-2026-001 / BAST-GUDANG"
-                  value={receiptForm.reference}
-                  onChange={(e) => setReceiptForm({ ...receiptForm, reference: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="item_lot_tracked"
+                      checked={itemForm.lot_tracked}
+                      onChange={(e) => setItemForm({ ...itemForm, lot_tracked: e.target.checked })}
+                      className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
+                    />
+                    <label htmlFor="item_lot_tracked" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
+                      Lot-Tracked (Memerlukan nomor lot saat mutasi)
+                    </label>
+                  </div>
 
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="item_active"
+                      checked={itemForm.active}
+                      onChange={(e) => setItemForm({ ...itemForm, active: e.target.checked })}
+                      className="rounded border-[#D5D1C7] text-[#00754A] focus:ring-[#00754A]"
+                    />
+                    <label htmlFor="item_active" className="text-xs font-semibold text-[#1E3932] cursor-pointer">
+                      Item Aktif
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setItemModalMode(null)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Simpan Item</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Terima Stok */}
+      <AnimatePresence>
+        {receiptModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setReceiptModalOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#1E3932]">Form Terima Stok Masuk (Stock Receipt)</h3>
+                  <p className="text-[11px] text-[#5C6F68]">
+                    Mencatat mutasi masuk ke buku besar append-only (+ delta).
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setReceiptModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
                 >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-                >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Catat Penerimaan Stok</span>
+                  <X size={16} />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* Modal: Penyesuaian Stok */}
-      {adjustModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
-              <div>
-                <h3 className="text-sm font-bold text-[#1E3932]">Penyesuaian Stok (Stock Adjustment)</h3>
-                <p className="text-[11px] text-[#5C6F68]">
-                  Menambahkan baris penyesuaian ke buku besar (+/- delta). Tidak pernah mengedit baris historis.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAdjustModalOpen(false)}
-                className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveAdjust} className="p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Item Inventaris *</label>
-                  <select
-                    required
-                    value={adjustForm.inventory_item_id}
-                    onChange={(e) => setAdjustForm({ ...adjustForm, inventory_item_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="" disabled>
-                      Pilih Item...
-                    </option>
-                    {items.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.code} — {i.name} (Tersedia: {i.stock.available})
+              <form onSubmit={handleSaveReceipt} className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Item Inventaris *</label>
+                    <select
+                      required
+                      value={receiptForm.inventory_item_id}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const selected = items.find((i) => i.id === id);
+                        setReceiptForm((prev) => ({
+                          ...prev,
+                          inventory_item_id: id,
+                          lot_number: selected?.lot_tracked ? `LOT-${selected.code}-001` : "",
+                        }));
+                      }}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="" disabled>
+                        Pilih Item...
                       </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Gudang *</label>
-                  <select
-                    required
-                    value={adjustForm.warehouse_id}
-                    onChange={(e) => setAdjustForm({ ...adjustForm, warehouse_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="" disabled>
-                      Pilih Gudang...
-                    </option>
-                    {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.code} — {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Delta Jumlah (+ atau -) *</label>
-                  <input
-                    type="number"
-                    required
-                    step="any"
-                    placeholder="-5 atau +10"
-                    value={adjustForm.quantity_delta}
-                    onChange={(e) => setAdjustForm({ ...adjustForm, quantity_delta: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  />
-                  <p className="text-[10px] text-[#8A9590] mt-1">
-                    Gunakan tanda minus (-) untuk pengurangan stok rusak / susut.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Lot Spesifik (Opsional)</label>
-                  <select
-                    value={adjustForm.inventory_lot_id}
-                    onChange={(e) => setAdjustForm({ ...adjustForm, inventory_lot_id: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                  >
-                    <option value="">Semua / Tanpa Lot Spesifik</option>
-                    {lots
-                      .filter((l) => l.inventory_item_id === adjustForm.inventory_item_id)
-                      .map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.lot_number} (Tersedia: {l.available})
+                      {items.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.code} — {i.name}
                         </option>
                       ))}
-                  </select>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Gudang Penyimpanan *</label>
+                    <select
+                      required
+                      value={receiptForm.warehouse_id}
+                      onChange={(e) => setReceiptForm({ ...receiptForm, warehouse_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="" disabled>
+                        Pilih Gudang...
+                      </option>
+                      {warehouses.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.code} — {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Dokumen / Referensi *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: OPNAME-2026-09 / RETUR-001"
-                  value={adjustForm.reference}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, reference: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Kuantitas Masuk *</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      step="any"
+                      placeholder="50"
+                      value={receiptForm.quantity}
+                      onChange={(e) => setReceiptForm({ ...receiptForm, quantity: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#1E3932] mb-1">Alasan Penyesuaian (Audit Log) *</label>
-                <textarea
-                  rows={2}
-                  required
-                  placeholder="Alasan detail penyesuaian untuk catatan audit resmi..."
-                  value={adjustForm.reason}
-                  onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Lot (Wajib jika Lot-Tracked)</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: LOT-2026-09-01"
+                      value={receiptForm.lot_number}
+                      onChange={(e) => setReceiptForm({ ...receiptForm, lot_number: e.target.value.toUpperCase().trim() })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
+                </div>
 
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Tgl Produksi (Opsional)</label>
+                    <input
+                      type="date"
+                      value={receiptForm.production_date}
+                      onChange={(e) => setReceiptForm({ ...receiptForm, production_date: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Tgl Kedaluwarsa (Opsional)</label>
+                    <input
+                      type="date"
+                      value={receiptForm.expiration_date}
+                      onChange={(e) => setReceiptForm({ ...receiptForm, expiration_date: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Referensi Penerimaan</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: PO-2026-001 / BAST-GUDANG"
+                    value={receiptForm.reference}
+                    onChange={(e) => setReceiptForm({ ...receiptForm, reference: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setReceiptModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Catat Penerimaan Stok</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal: Penyesuaian Stok */}
+      <AnimatePresence>
+        {adjustModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setAdjustModalOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-lg overflow-hidden font-sans"
+            >
+              <div className="p-5 border-b border-[#E5E2DA] flex items-center justify-between bg-[#FAF9F7]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#1E3932]">Penyesuaian Stok (Stock Adjustment)</h3>
+                  <p className="text-[11px] text-[#5C6F68]">
+                    Menambahkan baris penyesuaian ke buku besar (+/- delta). Tidak pernah mengedit baris historis.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setAdjustModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  className="p-1 rounded-lg text-[#5C6F68] hover:text-[#1E3932] hover:bg-[#EFECE6] cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAdjust} className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Item Inventaris *</label>
+                    <select
+                      required
+                      value={adjustForm.inventory_item_id}
+                      onChange={(e) => setAdjustForm({ ...adjustForm, inventory_item_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="" disabled>
+                        Pilih Item...
+                      </option>
+                      {items.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.code} — {i.name} (Tersedia: {i.stock.available})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Gudang *</label>
+                    <select
+                      required
+                      value={adjustForm.warehouse_id}
+                      onChange={(e) => setAdjustForm({ ...adjustForm, warehouse_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="" disabled>
+                        Pilih Gudang...
+                      </option>
+                      {warehouses.map((w) => (
+                        <option key={w.id} value={w.id}>
+                          {w.code} — {w.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Delta Jumlah (+ atau -) *</label>
+                    <input
+                      type="number"
+                      required
+                      step="any"
+                      placeholder="-5 atau +10"
+                      value={adjustForm.quantity_delta}
+                      onChange={(e) => setAdjustForm({ ...adjustForm, quantity_delta: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono font-bold text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    />
+                    <p className="text-[10px] text-[#8A9590] mt-1">
+                      Gunakan tanda minus (-) untuk pengurangan stok rusak / susut.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#1E3932] mb-1">Lot Spesifik (Opsional)</label>
+                    <select
+                      value={adjustForm.inventory_lot_id}
+                      onChange={(e) => setAdjustForm({ ...adjustForm, inventory_lot_id: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                    >
+                      <option value="">Semua / Tanpa Lot Spesifik</option>
+                      {lots
+                        .filter((l) => l.inventory_item_id === adjustForm.inventory_item_id)
+                        .map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.lot_number} (Tersedia: {l.available})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Nomor Dokumen / Referensi *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: OPNAME-2026-09 / RETUR-001"
+                    value={adjustForm.reference}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, reference: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#1E3932] mb-1">Alasan Penyesuaian (Audit Log) *</label>
+                  <textarea
+                    rows={2}
+                    required
+                    placeholder="Alasan detail penyesuaian untuk catatan audit resmi..."
+                    value={adjustForm.reason}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"
+                  />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-2 border-t border-[#E5E2DA]">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-[#FAF9F7] cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  >
+                    {isPending && <Loader2 size={13} className="animate-spin" />}
+                    <span>Eksekusi Penyesuaian</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Dialog (Nonaktifkan Item) */}
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              aria-hidden="true"
+            />
+            <motion.div
+              variants={modalDialogVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="relative z-10 bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden font-sans"
+            >
+              <div className="p-5 space-y-3">
+                <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#D32F2F] flex items-center justify-center">
+                  <AlertCircle size={20} />
+                </div>
+                <h3 className="text-sm font-bold text-[#1E3932]">{confirmDialog.title}</h3>
+                <p className="text-xs text-[#5C6F68] leading-relaxed">{confirmDialog.description}</p>
+              </div>
+
+              <div className="p-4 bg-[#FAF9F7] border-t border-[#E5E2DA] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-3 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-white cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#00754A] hover:bg-[#005a38] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                  type="button"
+                  onClick={confirmDialog.onConfirm}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#C62828] hover:bg-[#B71C1C] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
                 >
-                  {isPending && <Loader2 size={13} className="animate-spin" />}
-                  <span>Eksekusi Penyesuaian</span>
+                  Konfirmasi Nonaktifkan
                 </button>
               </div>
-            </form>
+            </motion.div>
           </div>
-        </div>
-      )}
-
-      {/* Confirmation Dialog (Nonaktifkan Item) */}
-      {confirmDialog.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-[#E5E2DA] shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 space-y-3">
-              <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#D32F2F] flex items-center justify-center">
-                <AlertCircle size={20} />
-              </div>
-              <h3 className="text-sm font-bold text-[#1E3932]">{confirmDialog.title}</h3>
-              <p className="text-xs text-[#5C6F68] leading-relaxed">{confirmDialog.description}</p>
-            </div>
-
-            <div className="p-4 bg-[#FAF9F7] border-t border-[#E5E2DA] flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-                className="px-3 py-1.5 rounded-xl border border-[#D5D1C7] text-xs font-semibold text-[#5C6F68] hover:bg-white cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={confirmDialog.onConfirm}
-                className="px-3.5 py-1.5 rounded-xl bg-[#C62828] hover:bg-[#B71C1C] text-white text-xs font-bold shadow-sm transition-colors cursor-pointer"
-              >
-                Konfirmasi Nonaktifkan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

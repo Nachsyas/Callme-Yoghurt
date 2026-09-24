@@ -20,6 +20,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound, useRouter } from 'next/navigation';
 import { use, useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { CartDrawer } from '@/components/cart/CartDrawer';
+import { MOTION_TOKENS } from '@/lib/motion';
 import {
   parseNetContentMl,
   type PublicCatalogData,
@@ -183,7 +186,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
   const [erpProduct, setErpProduct] = useState<PublicCatalogProduct | null>(null);
   const [demoNoticeVisible, setDemoNoticeVisible] = useState<boolean>(false);
+  const [added, setAdded] = useState<boolean>(false);
+
   const addItem = useCartStore((state) => state.addItem);
+  const items = useCartStore((state) => state.items);
+  const openCart = useCartStore((state) => state.openCart);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!isKnownFlavor) {
@@ -259,11 +267,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         quantity: quantity,
         display_price: currentVariant.price.amount,
       });
-      alert(`${currentVariant.name} (${selectedSize}ml) telah ditambahkan ke pesanan!`);
-      router.push('/checkout');
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1400);
+      openCart();
     } else {
       // Catalog Preview Mode (ERP offline)
-      // Allow user to explore the UX, but with clear notice per Part 4 specification
       addItem({
         variant_id: `preview-${requestedSlug}-${selectedSize}`,
         sku: `CY-${requestedSlug.toUpperCase().slice(0, 3)}-${selectedSize}`,
@@ -273,10 +281,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         display_price: currentPrice,
       });
       setDemoNoticeVisible(true);
-      alert(
-        `[Mode Pratinjau Katalog] ${flavor.name} (${selectedSize}ml) ditambahkan ke simulasi keranjang.\n\nPemesanan online live akan diproses setelah backend ERP VPS aktif (Phase 1.5).`
-      );
-      router.push('/checkout');
+      setAdded(true);
+      setTimeout(() => setAdded(false), 1400);
+      openCart();
     }
   };
 
@@ -302,12 +309,19 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             Callme Yoghurt
           </Link>
 
-          <Link href="/checkout">
-            <button className="flex items-center gap-2 px-4 py-2 bg-[#00754A] text-white rounded-full font-semibold text-xs hover:bg-[#006241] active:scale-95 transition-all shadow-sm">
-              <ShoppingBag size={14} />
-              <span>Keranjang</span>
-            </button>
-          </Link>
+          <button
+            type="button"
+            onClick={openCart}
+            className="flex items-center gap-2 px-4 py-2 bg-[#00754A] text-white rounded-full font-semibold text-xs hover:bg-[#006241] active:scale-95 transition-all shadow-sm cursor-pointer"
+          >
+            <ShoppingBag size={14} />
+            <span>Keranjang</span>
+            {items.length > 0 && (
+              <span className="bg-[#A1C349] text-[#1E3932] text-[10px] font-black rounded-full px-1.5 py-0.2 min-w-[16px] text-center">
+                {items.reduce((acc, i) => acc + i.quantity, 0)}
+              </span>
+            )}
+          </button>
         </div>
       </nav>
 
@@ -324,7 +338,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
         {/* E-Commerce Product Hero Grid (Desktop: Left Image 350-400px, Right Info) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
           {/* LEFT COLUMN: Product Image Container */}
-          <div className="lg:col-span-5 flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }}
+            className="lg:col-span-5 flex flex-col items-center"
+          >
             {/* Square Container: Desktop 350-400px (max-w-[380px]), Mobile 250-300px (max-w-[280px]) */}
             <div className="w-full max-w-[280px] sm:max-w-[340px] lg:max-w-[380px] aspect-square mx-auto bg-white rounded-2xl shadow-sm border border-black/5 p-4 sm:p-6 relative flex items-center justify-center overflow-hidden">
               {/* Flavor Tag */}
@@ -345,17 +364,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </span>
               </div>
 
-              {/* Real Product Image (object-fit: contain to show full bottle and bowl) */}
-              <div className="relative w-full h-full flex items-center justify-center">
+              {/* Real Product Image with Smooth Scale Transition */}
+              <motion.div
+                animate={{ scale: selectedSize === 1000 ? 1.05 : 0.95 }}
+                transition={{ duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }}
+                className="relative w-full h-full flex items-center justify-center"
+              >
                 <Image
                   src={imageSrc}
                   alt={flavor.name}
                   fill
                   sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
-                  className="object-contain p-2 drop-shadow-md transition-transform duration-300 hover:scale-105"
+                  className="object-contain p-2 drop-shadow-md"
                   priority
                 />
-              </div>
+              </motion.div>
             </div>
 
             {/* Quality Badges below image */}
@@ -373,10 +396,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 <span>Homemade Kental</span>
               </span>
             </div>
-          </div>
+          </motion.div>
 
           {/* RIGHT COLUMN: Product Information & Purchase Hierarchy */}
-          <div className="lg:col-span-7 flex flex-col space-y-6">
+          <motion.div
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.05 }}
+            className="lg:col-span-7 flex flex-col space-y-6"
+          >
             {/* 1. Header & Title */}
             <div>
               <span className="text-xs font-bold uppercase tracking-widest text-[#00754A] block mb-1.5">
@@ -394,9 +422,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="border-y border-black/5 py-4 flex items-baseline justify-between">
               <div>
                 <span className="text-xs font-semibold text-black/50 block">Harga Satuan</span>
-                <span className="text-3xl font-extrabold text-[#00754A] tracking-tight">
+                <motion.span
+                  key={selectedSize}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: MOTION_TOKENS.duration.fast }}
+                  className="text-3xl font-extrabold text-[#00754A] tracking-tight block"
+                >
                   Rp {currentPrice.toLocaleString('id-ID')}
-                </span>
+                </motion.span>
               </div>
               <span className="text-xs text-black/40 font-medium text-right">
                 Ukuran: <strong>{selectedSize} ml</strong>
@@ -550,30 +584,48 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
-              <button
+              <motion.button
                 type="button"
                 onClick={handleAddToCart}
                 disabled={!isCurrentAvailable || catalogLoading}
-                className={`w-full text-white py-3.5 rounded-full font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-md ${
+                whileHover={shouldReduceMotion || !isCurrentAvailable ? undefined : { scale: 1.01 }}
+                whileTap={shouldReduceMotion || !isCurrentAvailable ? undefined : { scale: 0.98 }}
+                className={`w-full text-white py-3.5 rounded-full font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-md cursor-pointer ${
                   !isCurrentAvailable || catalogLoading
                     ? 'opacity-50 cursor-not-allowed bg-gray-400'
-                    : 'hover:opacity-95 active:scale-[0.98]'
+                    : added
+                      ? 'bg-[#1E3932]'
+                      : 'hover:opacity-95'
                 }`}
                 style={{
-                  backgroundColor: isCurrentAvailable ? flavor.brandColor : undefined,
+                  backgroundColor:
+                    !isCurrentAvailable || catalogLoading
+                      ? undefined
+                      : added
+                        ? '#1E3932'
+                        : flavor.brandColor,
                 }}
               >
-                <ShoppingCart size={18} />
-                <span>
-                  {catalogLoading
-                    ? 'Memeriksa Katalog...'
-                    : isCurrentAvailable
-                      ? 'Tambahkan ke Pesanan'
-                      : 'Varian Belum Tersedia'}
-                </span>
-              </button>
+                {added ? (
+                  <>
+                    <Check size={18} className="text-[#A1C349]" />
+                    <span>Berhasil Ditambahkan!</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart size={18} />
+                    <span>
+                      {catalogLoading
+                        ? 'Memeriksa Katalog...'
+                        : isCurrentAvailable
+                          ? 'Tambahkan ke Pesanan'
+                          : 'Varian Belum Tersedia'}
+                    </span>
+                  </>
+                )}
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* BOTTOM SECTION: Ingredients, Nutrition Facts & Cold Chain Storage */}
@@ -678,14 +730,28 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
       </main>
 
       {/* Floating Checkout Cart Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <Link
-          href="/checkout"
+      <div className="fixed bottom-6 right-6 z-40">
+        <motion.button
+          type="button"
+          onClick={openCart}
+          whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
+          whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
           aria-label="Buka Keranjang Belanja"
-          className="flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-lg hover:scale-110 active:scale-95 transition-all"
+          className="relative flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-lg cursor-pointer transition-colors"
         >
           <ShoppingBag size={22} />
-        </Link>
+          {items.length > 0 && (
+            <motion.span
+              key={items.length}
+              initial={shouldReduceMotion ? undefined : { scale: 1.3 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: MOTION_TOKENS.duration.fast }}
+              className="absolute -top-1 -right-1 bg-brand-strawberry text-white text-[11px] font-black rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-xs"
+            >
+              {items.reduce((acc, i) => acc + i.quantity, 0)}
+            </motion.span>
+          )}
+        </motion.button>
       </div>
 
       {/* Footer */}
@@ -711,6 +777,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </footer>
+
+      {/* Cart Drawer */}
+      <CartDrawer />
     </div>
   );
 }

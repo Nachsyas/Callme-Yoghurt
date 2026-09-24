@@ -31,7 +31,7 @@ export default defineConfig({
   webServer: {
     command: "ADMIN_SESSION_SECRET=dev_insecure_admin_session_secret_32chars_min npx next start -p 3000",
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 30000,
   },
 });

@@ -6,9 +6,12 @@ import { AlertCircle, ArrowLeft, CheckCircle2, MapPin, Phone, ShieldCheck, Shopp
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { MOTION_TOKENS } from '@/lib/motion';
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
   const { items, getEstimatedTotal, removeItem, clearCart } = useCartStore();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -71,11 +74,21 @@ export default function CheckoutPage() {
   if (committedFallback) {
     return (
       <div className="min-h-screen bg-[#f2f0eb] flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }}
+          className="max-w-md w-full bg-white p-8 md:p-10 rounded-[24px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] text-center relative overflow-hidden"
+        >
           <div className="absolute top-0 left-0 w-full h-2 bg-[#00754A]"></div>
-          <div className="w-16 h-16 bg-[#00754A]/10 text-[#00754A] rounded-full flex items-center justify-center mx-auto mb-4">
+          <motion.div
+            initial={{ scale: shouldReduceMotion ? 1 : 0.6 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            className="w-16 h-16 bg-[#00754A]/10 text-[#00754A] rounded-full flex items-center justify-center mx-auto mb-4"
+          >
             <CheckCircle2 size={36} />
-          </div>
+          </motion.div>
           <h2 className="text-2xl font-bold text-black/87 mb-2">Pesanan Berhasil Diterima!</h2>
           <p className="text-sm text-black/58 mb-6">
             Pesanan Anda telah berhasil diproses dan tercatat di sistem ERP kami.
@@ -103,7 +116,7 @@ export default function CheckoutPage() {
           <Link href="/" className="w-full inline-block bg-[#1E3932] text-white py-4 rounded-[50px] font-bold text-sm hover:bg-black transition-colors">
             Kembali ke Beranda
           </Link>
-        </div>
+        </motion.div>
       </div>
     );
   }
@@ -111,14 +124,21 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-[#f2f0eb] flex flex-col items-center justify-center p-6">
-        <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-6">
-          <ShoppingBag className="w-8 h-8 text-black/20" />
-        </div>
-        <h2 className="text-2xl font-bold text-black/87 mb-2">Keranjangmu masih kosong</h2>
-        <p className="text-black/58 mb-8">Pilih yoghurt favoritmu dan rasakan kesegarannya!</p>
-        <Link href="/" className="px-8 py-3 bg-[#00754A] text-white rounded-[50px] font-semibold hover:scale-95 transition-transform shadow-md">
-          Kembali ke Katalog
-        </Link>
+        <motion.div
+          initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: MOTION_TOKENS.duration.normal }}
+          className="text-center flex flex-col items-center"
+        >
+          <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-6">
+            <ShoppingBag className="w-8 h-8 text-black/20" />
+          </div>
+          <h2 className="text-2xl font-bold text-black/87 mb-2">Keranjangmu masih kosong</h2>
+          <p className="text-black/58 mb-8">Pilih yoghurt favoritmu dan rasakan kesegarannya!</p>
+          <Link href="/" className="px-8 py-3 bg-[#00754A] text-white rounded-[50px] font-semibold hover:scale-95 transition-transform shadow-md">
+            Kembali ke Katalog
+          </Link>
+        </motion.div>
       </div>
     );
   }
@@ -133,12 +153,20 @@ export default function CheckoutPage() {
           <h1 className="text-3xl font-extrabold tracking-tight">Checkout Pesanan</h1>
         </div>
 
-        {errorMessage && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-[12px] text-sm flex items-start gap-3 shadow-sm">
-            <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 font-medium">{errorMessage}</div>
-          </div>
-        )}
+        <AnimatePresence>
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: MOTION_TOKENS.duration.fast }}
+              className="mb-6 bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-[12px] text-sm flex items-start gap-3 shadow-sm"
+            >
+              <AlertCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{errorMessage}</div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-7 space-y-6">
@@ -224,20 +252,30 @@ export default function CheckoutPage() {
             <div className="bg-white p-6 md:p-8 rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] sticky top-8">
               <h2 className="font-bold text-lg border-b border-gray-100 pb-4 mb-4">Ringkasan Pesanan</h2>
               <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
-                {items.map((item) => (
-                  <div key={item.variant_id} className="flex justify-between items-start gap-4 bg-gray-50 p-4 rounded-[12px]">
-                    <div className="flex-1">
-                      <h4 className="font-bold text-sm text-black/87">{item.name}</h4>
-                      <p className="text-xs font-medium text-black/58 mt-1">
-                        {item.sku} {item.volume_ml ? `• ${item.volume_ml}ml` : ''} <span className="mx-1">•</span> Qty: {item.quantity}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="font-bold text-sm text-black/87">Rp {(item.display_price * item.quantity).toLocaleString('id-ID')}</span>
-                      <button onClick={() => removeItem(item.variant_id)} className="block text-xs text-red-500 font-medium mt-1 hover:underline ml-auto">Hapus</button>
-                    </div>
-                  </div>
-                ))}
+                <AnimatePresence initial={false}>
+                  {items.map((item) => (
+                    <motion.div
+                      key={item.variant_id}
+                      layout
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0, padding: 0 }}
+                      transition={{ duration: MOTION_TOKENS.duration.fast }}
+                      className="flex justify-between items-start gap-4 bg-gray-50 p-4 rounded-[12px] overflow-hidden"
+                    >
+                      <div className="flex-1">
+                        <h4 className="font-bold text-sm text-black/87">{item.name}</h4>
+                        <p className="text-xs font-medium text-black/58 mt-1">
+                          {item.sku} {item.volume_ml ? `• ${item.volume_ml}ml` : ''} <span className="mx-1">•</span> Qty: {item.quantity}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="font-bold text-sm text-black/87">Rp {(item.display_price * item.quantity).toLocaleString('id-ID')}</span>
+                        <button type="button" onClick={() => removeItem(item.variant_id)} className="block text-xs text-red-500 font-medium mt-1 hover:underline ml-auto cursor-pointer">Hapus</button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
               <div className="border-t border-gray-100 mt-6 pt-6 space-y-3">
                 <div className="flex justify-between items-end pt-2">
@@ -245,17 +283,27 @@ export default function CheckoutPage() {
                     <span className="font-bold text-black/87 block">Estimasi Total</span>
                     <span className="text-[11px] text-black/40 block mt-0.5">Total akhir diverifikasi oleh sistem saat pesanan dibuat.</span>
                   </div>
-                  <span className="text-2xl font-black text-[#00754A]">Rp {getEstimatedTotal().toLocaleString('id-ID')}</span>
+                  <motion.span
+                    key={getEstimatedTotal()}
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: MOTION_TOKENS.duration.fast }}
+                    className="text-2xl font-black text-[#00754A]"
+                  >
+                    Rp {getEstimatedTotal().toLocaleString('id-ID')}
+                  </motion.span>
                 </div>
               </div>
-              <button
+              <motion.button
                 type="submit"
                 form="checkout-form"
                 disabled={isLoading}
-                className="w-full mt-8 bg-[#00754A] text-white py-4 rounded-[50px] font-bold text-base hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                whileHover={isLoading || shouldReduceMotion ? undefined : { scale: 1.01 }}
+                whileTap={isLoading || shouldReduceMotion ? undefined : { scale: 0.98 }}
+                className="w-full mt-8 bg-[#00754A] hover:bg-[#006241] text-white py-4 rounded-[50px] font-bold text-base transition-colors shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-h-[56px]"
               >
                 {isLoading ? <span className="animate-pulse">Memproses Pesanan...</span> : <><Truck size={20} />Selesaikan Pesanan</>}
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
