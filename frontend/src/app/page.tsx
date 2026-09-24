@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Lenis from "@studio-freight/lenis";
@@ -8,7 +8,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
 import {
-  ArrowLeft,
   ArrowRight,
   CheckCircle,
   ChevronLeft,
@@ -18,64 +17,69 @@ import {
   Sparkles,
   Truck,
 } from "lucide-react";
-import { CatalogCard, type CatalogFlavor } from "@/components/catalog/CatalogCard";
+import {
+  CatalogCard,
+  type FlavorPresentation,
+} from "@/components/catalog/CatalogCard";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { useCartStore } from "@/store/cartStore";
 import { MOTION_TOKENS } from "@/lib/motion";
+import type { PublicCatalogData, PublicCatalogProduct } from "@/lib/catalog";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-const OFFICIAL_CATALOG_FLAVORS: CatalogFlavor[] = [
+// Visual presentation metadata only — NO variant IDs, NO SKUs, NO price authority
+const OFFICIAL_FLAVORS_PRESENTATION: FlavorPresentation[] = [
   {
-    id: "plain",
+    slug: "plain",
     name: "Plain Pure Original",
     sub: "Yogurt stirred murni tanpa pemanis buatan",
     color: "bg-[#cba258]",
-    prices: { 250: 22000, 500: 38000, 1000: 55000 },
+    artwork: "/images/products/plain-250-500.png",
   },
   {
-    id: "stroberi",
+    slug: "stroberi",
     name: "Stroberi Summer Blush",
     sub: "Paduan rasa stroberi buah segar aromatik",
     color: "bg-[#D81E5B]",
-    prices: { 250: 25000, 500: 42000, 1000: 60000 },
+    artwork: "/images/products/stroberi-250-500.png",
   },
   {
-    id: "mangga",
+    slug: "mangga",
     name: "Mangga Tropical Gold",
     sub: "Kombinasi asam manis harum manis eksotis",
     color: "bg-[#F9A03F]",
-    prices: { 250: 28000, 500: 45000, 1000: 65000 },
+    artwork: "/images/products/mangga-250-500.png",
   },
   {
-    id: "melon",
+    slug: "melon",
     name: "Melon Emerald Fresh",
     sub: "Sensasi kesegaran buah melon berair renyah",
     color: "bg-[#A1C349]",
-    prices: { 250: 25000, 500: 42000, 1000: 60000 },
+    artwork: "/images/products/melon-250-500.png",
   },
   {
-    id: "anggur",
+    slug: "anggur",
     name: "Anggur Royal Purple",
     sub: "Sensasi rasa anggur merah premium manis",
     color: "bg-[#7A3B69]",
-    prices: { 250: 28000, 500: 45000, 1000: 65000 },
+    artwork: "/images/products/anggur-250-500.png",
   },
   {
-    id: "leci",
+    slug: "leci",
     name: "Leci Sweet Bliss",
     sub: "Rasa leci manis harum khas yang menyegarkan",
     color: "bg-[#ff8da1]",
-    prices: { 250: 25000, 500: 42000, 1000: 60000 },
+    artwork: "/images/products/leci-250-500.png",
   },
   {
-    id: "vanila",
+    slug: "vanila",
     name: "Vanila Velvet Orchid",
     sub: "Kehangatan rasa vanila klasik susu fermentasi",
     color: "bg-[#f3e5AB]",
-    prices: { 250: 25000, 500: 42000, 1000: 60000 },
+    artwork: "/images/products/vanila-250-500.png",
   },
 ];
 
@@ -89,9 +93,37 @@ export default function Home() {
   const items = useCartStore((state) => state.items);
   const openCart = useCartStore((state) => state.openCart);
 
+  // Authoritative ERP Catalog fetching
+  const [catalogData, setCatalogData] = useState<PublicCatalogData | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const res = await fetch("/api/catalog");
+        if (!res.ok) {
+          if (isMounted) setCatalogLoading(false);
+          return;
+        }
+        const data: PublicCatalogData = await res.json();
+        if (isMounted) {
+          setCatalogData(data);
+          setCatalogLoading(false);
+        }
+      } catch {
+        if (isMounted) setCatalogLoading(false);
+      }
+    }
+    loadCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const totalItemsCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
-  // Smooth scroll and subtle GSAP storytelling parallax
+  // Smooth scroll and subtle GSAP storytelling parallax with verified recursive RAF cleanup
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -100,11 +132,12 @@ export default function Home() {
       smoothWheel: true,
     });
 
+    let rafId: number;
     function raf(time: number) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
-    const rafId = requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
 
     // Controlled GSAP Parallax on storytelling assets without scroll hijacking
     const ctx = gsap.context(() => {
@@ -146,7 +179,7 @@ export default function Home() {
     };
   }, [shouldReduceMotion]);
 
-  // Carousel Arrow Controls
+  // Carousel Arrow Controls with smooth non-hijacked scroll
   const handleScrollCarousel = (direction: "left" | "right") => {
     if (!carouselRef.current) return;
     const scrollAmount = 380;
@@ -263,7 +296,7 @@ export default function Home() {
                 transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.35 }}
                 className="text-base sm:text-lg md:text-xl text-[#5C6F68] max-w-lg mb-8 leading-relaxed"
               >
-                Stirred yoghurt premium dengan 100% gula asli tanpa pemanis buatan. Tersedia dalam 7 varian kesegaran murni dengan pengiriman rantai dingin &lt; 5°C.
+                Stirred yoghurt premium dengan gula pasir murni tanpa pemanis buatan. Tersedia dalam 7 varian kesegaran dengan pengiriman rantai dingin &lt; 5°C.
               </motion.p>
 
               <motion.div
@@ -344,7 +377,7 @@ export default function Home() {
               {
                 icon: CheckCircle,
                 title: "Homemade Quality",
-                desc: "Dibuat higienis menggunakan 100% susu sapi segar dan gula tebu asli tanpa pengawet sintetis.",
+                desc: "Dibuat higienis menggunakan susu sapi segar dan gula tebu alami.",
               },
             ].map((item, idx) => (
               <motion.div
@@ -353,7 +386,7 @@ export default function Home() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{
-                  duration: MOTION_TOKENS.duration.normal,
+                  duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal,
                   delay: shouldReduceMotion ? 0 : idx * 0.1,
                   ease: MOTION_TOKENS.ease.out,
                 }}
@@ -380,7 +413,7 @@ export default function Home() {
                 Varian Rasa Pilihan.
               </h2>
               <p className="text-sm text-[#5C6F68] mt-2 max-w-lg">
-                Geser ke samping, gunakan trackpad, atau klik tombol navigasi untuk memilih ukuran 250ml, 500ml, dan 1 Liter.
+                Pilih ukuran resmi 250ml (Rp 16.000), 500ml (Rp 30.000), dan 1 Liter (Rp 55.000) dengan data resmi tersinkronisasi langsung dari ERP.
               </p>
             </div>
 
@@ -416,9 +449,22 @@ export default function Home() {
             className="flex overflow-x-auto scroll-smooth snap-x snap-mandatory gap-6 pb-6 pt-2 px-6 lg:px-20 no-scrollbar"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {OFFICIAL_CATALOG_FLAVORS.map((flavor, idx) => (
-              <CatalogCard key={flavor.id} flavor={flavor} index={idx} />
-            ))}
+            {OFFICIAL_FLAVORS_PRESENTATION.map((flavor, idx) => {
+              const erpProduct = catalogData?.products.find(
+                (p: PublicCatalogProduct) => p.slug.toLowerCase() === flavor.slug
+              ) || null;
+
+              return (
+                <CatalogCard
+                  key={flavor.slug}
+                  flavor={flavor}
+                  erpProduct={erpProduct}
+                  isErpOnline={Boolean(catalogData && erpProduct)}
+                  catalogLoading={catalogLoading}
+                  index={idx}
+                />
+              );
+            })}
           </div>
         </section>
 
@@ -445,7 +491,7 @@ export default function Home() {
               initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: MOTION_TOKENS.duration.normal }}
+              transition={{ duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal }}
               className="w-full md:w-1/2 space-y-6 relative z-10"
             >
               <span className="text-[#00754A] font-bold tracking-widest text-xs uppercase inline-block">
@@ -455,7 +501,7 @@ export default function Home() {
                 Dedikasi untuk<br />Keluarga Indonesia.
               </h2>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed">
-                Berawal dari dapur rumahan di tahun 2018, kami berkomitmen menghadirkan <strong>stirred yoghurt</strong> berkualitas premium. Menggunakan 100% susu sapi segar dan kultur probiotik pilihan, setiap botol Callme Yoghurt diproses secara higienis setiap harinya.
+                Berawal dari dapur rumahan di tahun 2018, kami berkomitmen menghadirkan <strong>stirred yoghurt</strong> berkualitas premium. Menggunakan susu sapi segar dan kultur probiotik pilihan, setiap botol Callme Yoghurt diproses secara higienis setiap harinya.
               </p>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed pb-2">
                 Bukan sekadar minuman, ini adalah dedikasi kami untuk gaya hidup sehat yang lezat, segar, tanpa kompromi kualitas—langsung dikirim dingin ke depan pintu rumah Anda.

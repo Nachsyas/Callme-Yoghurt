@@ -84,7 +84,8 @@ class OfficialCatalogSeeder extends Seeder
         ];
 
         $sizes = [
-            ['ml' => 250, 'price' => 15000, 'label' => '250ml'],
+            ['ml' => 250, 'price' => 16000, 'label' => '250ml'],
+            ['ml' => 500, 'price' => 30000, 'label' => '500ml'],
             ['ml' => 1000, 'price' => 55000, 'label' => '1000ml'],
         ];
 
@@ -124,16 +125,27 @@ class OfficialCatalogSeeder extends Seeder
                     ]
                 );
 
-                ProductVariantPrice::firstOrCreate(
-                    [
+                $existingPrice = ProductVariantPrice::where('product_variant_id', $variant->id)
+                    ->where('currency', 'IDR')
+                    ->where('active', true)
+                    ->first();
+
+                if ($existingPrice === null) {
+                    ProductVariantPrice::create([
                         'product_variant_id' => $variant->id,
                         'currency' => 'IDR',
-                    ],
-                    [
                         'amount' => $size['price'],
                         'active' => true,
-                    ]
-                );
+                    ]);
+                } elseif ($existingPrice->amount !== $size['price']) {
+                    $existingPrice->update(['active' => false]);
+                    ProductVariantPrice::create([
+                        'product_variant_id' => $variant->id,
+                        'currency' => 'IDR',
+                        'amount' => $size['price'],
+                        'active' => true,
+                    ]);
+                }
 
                 // Create initial FEFO lot with 60 days shelf life (Cold Chain standard)
                 $lotNumber = "LOT-" . strtoupper($flavor['slug']) . "-{$size['ml']}-001";

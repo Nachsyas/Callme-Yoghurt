@@ -345,6 +345,23 @@ export async function executeCheckoutSubmission(
   const storage = options?.storage;
   const fetchImpl = options?.fetchFn || fetch;
 
+  // Zero-Trust verification: items must strictly contain valid UUIDs, never preview-* or fabricated IDs
+  if (!Array.isArray(payload.items) || payload.items.length === 0) {
+    return {
+      success: false,
+      error: 'Keranjang belanja kosong!',
+    };
+  }
+
+  for (const item of payload.items) {
+    if (!isUuid(item.variant_id)) {
+      return {
+        success: false,
+        error: 'Pesanan tidak dapat diproses: terdapat item dengan varian tidak valid atau dalam mode pratinjau. Silakan periksa kembali keranjang belanja Anda.',
+      };
+    }
+  }
+
   let idempotencyKey: string;
   try {
     idempotencyKey = await getOrGenerateIdempotencyKey(payload, storage);
