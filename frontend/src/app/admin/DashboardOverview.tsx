@@ -176,7 +176,7 @@ export function DashboardOverview() {
             <Snowflake size={17} className="text-[#00754A]" />
           </div>
           <p className="mt-2.5 sm:mt-3 text-2xl font-black text-[#00754A] tracking-tight">
-            &lt; 4.0°C Nominal
+            &lt; 5.0°C Nominal
           </p>
           <p className="text-xs text-[#5C6F68] mt-1.5 flex items-center gap-1.5">
             <CheckCircle2 size={13} className="text-[#00754A]" />
@@ -540,7 +540,7 @@ export function DashboardOverview() {
 
             <div className="text-[11px] text-[#5C6F68] flex items-center justify-between pt-1 border-t border-[#E5E2DA]">
               <span>Standar Penyimpanan:</span>
-              <span className="font-bold text-[#00754A]">0.0°C – 4.0°C</span>
+              <span className="font-bold text-[#00754A]">0.0°C – 5.0°C</span>
             </div>
           </div>
         </div>

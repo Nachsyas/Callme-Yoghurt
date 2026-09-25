@@ -132,7 +132,7 @@ export function CatalogCard({
         {/* Cold Chain Badge */}
         <div className="absolute top-4 left-4 z-20">
           <span className="bg-white/90 backdrop-blur-xs text-[#1E3932] text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs">
-            0°C – 4°C Cold Chain
+            0–5°C Cold Chain
           </span>
         </div>
 

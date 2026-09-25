@@ -3,6 +3,7 @@
 import { useCartStore } from '@/store/cartStore';
 import {
   ArrowLeft,
+  Award,
   Check,
   Clock,
   Heart,
@@ -10,6 +11,7 @@ import {
   Leaf,
   Minus,
   Plus,
+  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
   Snowflake,
@@ -341,7 +343,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="absolute top-3.5 right-3.5 z-10">
                 <span className="bg-[#1E3932] text-white font-bold text-[10px] px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
                   <Snowflake size={11} className="text-emerald-300" />
-                  <span>0°C – 4°C</span>
+                  <span>0–5°C</span>
                 </span>
               </div>
 
@@ -396,15 +398,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="w-full max-w-[380px] mt-4 flex items-center justify-between px-2 text-[11px] text-black/60 font-medium">
               <span className="flex items-center gap-1">
                 <Snowflake size={13} className="text-[#00754A]" />
-                <span>0°C – 4°C Rantai Dingin</span>
+                <span>0–5°C Rantai Dingin</span>
               </span>
               <span className="flex items-center gap-1">
-                <Leaf size={13} className="text-emerald-600" />
-                <span>Halal MUI</span>
+                <ShieldCheck size={13} className="text-[#00754A]" />
+                <span>Standar CPPOB</span>
               </span>
               <span className="flex items-center gap-1">
-                <Sparkles size={13} className="text-amber-500" />
-                <span>Izin Edar Resmi</span>
+                <Award size={13} className="text-[#00754A]" />
+                <span>HAKI IDM000981336</span>
               </span>
             </div>
           </motion.div>
@@ -714,7 +716,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <div className="space-y-2 text-xs text-black/75 leading-relaxed">
                 <p>
                   <strong>Suhu Optimal:</strong> Simpan segera di kulkas pada suhu{' '}
-                  <strong className="text-[#00754A]">0°C hingga 4°C</strong>.
+                  <strong className="text-[#00754A]">0–5°C</strong>.
                 </p>
                 <p>
                   <strong>Ketahanan Produk:</strong> Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima.
@@ -761,9 +763,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           <div className="mt-2 flex justify-center gap-4 text-black/60 font-medium">
             <span>Bambu Apus, Cipayung, Jakarta Timur</span>
             <span>•</span>
-            <span>Cold Chain Standard</span>
+            <span>Cold Chain Standard (0–5°C)</span>
             <span>•</span>
-            <span>Halal MUI</span>
+            <span>HAKI IDM000981336</span>
           </div>
         </div>
       </footer>

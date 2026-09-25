@@ -22,7 +22,7 @@ export default function AdminColdChainPage() {
             Monitoring Kepatuhan Cold Chain
           </h2>
           <p className="text-xs text-[#5C6F68] mt-0.5">
-            Standar integritas temperatur produk (&lt; 4.0°C) dan manajemen kualitas stirred yogurt
+            Standar integritas temperatur produk (&lt; 5.0°C) dan manajemen kualitas stirred yogurt
           </p>
         </div>
 

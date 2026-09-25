@@ -76,34 +76,86 @@ class OfficialCatalogSeederTest extends TestCase
     }
 
     /**
-     * Test: OfficialCatalogSeeder preserves price history non-destructively when updating prices.
+     * Test: OfficialCatalogSeeder rerun preserves legitimate Admin price changes and does NOT restore bootstrap price.
      */
-    public function test_seeder_preserves_price_history_non_destructively(): void
+    public function test_seeder_rerun_preserves_legitimate_admin_price_change(): void
     {
+        // 1. Seed fresh DB (Plain 250ml gets initial price 16,000)
         $this->seed(OfficialCatalogSeeder::class);
 
-        // Manually simulate an older historical price for Plain 250ml
         $plain250 = ProductVariant::where('sku', 'CY-PLAIN-250')->firstOrFail();
-        $currentPrice = ProductVariantPrice::where('product_variant_id', $plain250->id)
+        $initialPrice = ProductVariantPrice::where('product_variant_id', $plain250->id)
             ->where('active', true)
             ->firstOrFail();
+        $this->assertSame(16000, $initialPrice->amount);
 
-        // Update the active price to an older value (e.g. 15,000)
-        $currentPrice->update(['amount' => 15000]);
+        // 2. Simulate legitimate Admin price update to 17,000 (deactivate old, create new active)
+        $initialPrice->update(['active' => false]);
+        $adminPrice = ProductVariantPrice::create([
+            'product_variant_id' => $plain250->id,
+            'currency' => 'IDR',
+            'amount' => 17000,
+            'active' => true,
+        ]);
 
-        // Re-run the seeder (which specifies 16,000 for 250ml)
+        // 3. Rerun OfficialCatalogSeeder
         $this->seed(OfficialCatalogSeeder::class);
 
-        // Verify the old price (15k) was deactivated, not deleted
-        $prices = ProductVariantPrice::where('product_variant_id', $plain250->id)->get();
-        $this->assertCount(2, $prices, 'Price history must be preserved as multiple immutable records.');
+        // 4. Assert 17,000 remains active
+        $activePrice = ProductVariantPrice::where('product_variant_id', $plain250->id)
+            ->where('active', true)
+            ->firstOrFail();
+        $this->assertSame(17000, $activePrice->amount, 'Admin price 17,000 must remain active after reseed.');
+        $this->assertSame($adminPrice->id, $activePrice->id);
 
-        $inactivePrice = $prices->firstWhere('active', false);
-        $this->assertNotNull($inactivePrice);
-        $this->assertSame(15000, $inactivePrice->amount);
+        // 5. Assert seeder did not restore 16,000 as active
+        $allActive16k = ProductVariantPrice::where('product_variant_id', $plain250->id)
+            ->where('amount', 16000)
+            ->where('active', true)
+            ->count();
+        $this->assertSame(0, $allActive16k, 'Seeder must not restore 16,000 as active.');
 
-        $activePrice = $prices->firstWhere('active', true);
-        $this->assertNotNull($activePrice);
-        $this->assertSame(16000, $activePrice->amount);
+        // Total price records for Plain 250ml should still be 2 (initial deactivated 16k + active 17k)
+        $totalPrices = ProductVariantPrice::where('product_variant_id', $plain250->id)->count();
+        $this->assertSame(2, $totalPrices);
+    }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun preserves Admin product inactive state.
+     */
+    public function test_seeder_rerun_preserves_product_inactive_state(): void
+    {
+        // 1. Seed fresh DB
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // 2. Admin intentionally deactivates a product (e.g. Melon)
+        $melon = Product::where('slug', 'melon')->firstOrFail();
+        $this->assertTrue($melon->active);
+        $melon->update(['active' => false]);
+
+        // 3. Rerun OfficialCatalogSeeder
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // 4. Assert product remains inactive
+        $melonRefreshed = Product::where('slug', 'melon')->firstOrFail();
+        $this->assertFalse($melonRefreshed->active, 'Admin deactivated product must remain inactive after reseed.');
+    }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun does not duplicate products or variants.
+     */
+    public function test_seeder_rerun_does_not_duplicate_products_or_variants(): void
+    {
+        // 1. First seed
+        $this->seed(OfficialCatalogSeeder::class);
+        $this->assertSame(7, Product::count());
+        $this->assertSame(21, ProductVariant::count());
+        $this->assertSame(21, ProductVariantPrice::count());
+
+        // 2. Second seed (rerun)
+        $this->seed(OfficialCatalogSeeder::class);
+        $this->assertSame(7, Product::count(), 'Products must not be duplicated on reseed.');
+        $this->assertSame(21, ProductVariant::count(), 'Variants must not be duplicated on reseed.');
+        $this->assertSame(21, ProductVariantPrice::count(), 'Prices must not be duplicated on reseed.');
     }
 }

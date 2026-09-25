@@ -79,4 +79,26 @@ describe("Admin Catalog Management & Authoritative Architecture (Phase 1.7C)", (
     // Must NEVER include pisang
     assert.equal(content.toLowerCase().includes("pisang"), false, "Catalog page must NEVER contain 'pisang'");
   });
+
+  it("proves create-variant form starts with blank price and net content without assuming fixed defaults (Phase 1.7C.5)", () => {
+    const catalogPath = path.resolve(process.cwd(), "src/app/admin/catalog/page.tsx");
+    const content = fs.readFileSync(catalogPath, "utf-8");
+
+    // Must start with blank price in initial state and open variant handler
+    assert.ok(content.includes('price: "",'), "Variant create form must initialize price with an empty string");
+    assert.ok(content.includes('net_content_quantity: "",'), "Variant create form must initialize net content with an empty string");
+
+    // Must NOT contain hardcoded stale price defaults
+    assert.equal(content.includes('price: "15000"'), false, "Must not default price to 15000");
+    assert.equal(content.includes('price: "16000"'), false, "Must not default price to 16000");
+    assert.equal(content.includes('price: "30000"'), false, "Must not default price to 30000");
+    assert.equal(content.includes('price: "55000"'), false, "Must not default price to 55000");
+    assert.equal(content.includes('placeholder="15000"'), false, "Must not use placeholder 15000");
+
+    // Must enforce explicit required input before submit
+    assert.ok(
+      content.includes("Harga awal wajib diisi"),
+      "Must validate that price is explicitly provided before submit"
+    );
+  });
 });

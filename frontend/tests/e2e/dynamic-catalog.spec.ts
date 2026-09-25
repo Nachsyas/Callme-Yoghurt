@@ -53,6 +53,35 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
   });
 
   test("A-H: Proves dynamic ERP product renders, resolves variants, and adds to cart with pure transaction projection", async ({ page }) => {
+    // Intercept checkout submission and capture the actual browser request payload
+    let capturedCheckoutPayload: any = null;
+    await page.route("**/api/checkout", async (route) => {
+      const req = route.request();
+      if (req.method() === "POST") {
+        try {
+          capturedCheckoutPayload = JSON.parse(req.postData() || "{}");
+        } catch {
+          capturedCheckoutPayload = req.postData();
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            data: {
+              order_id: "01940a00-cccc-7000-8000-000000000001",
+              order_number: "CY-20260925-TEST",
+              status: "CONFIRMED",
+              total_amount: 32000,
+              request_id: "req-dyn-test-1",
+            },
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
     // A. Homepage receives the mocked ERP catalog
     await page.goto("/");
     await page.waitForLoadState("networkidle");
@@ -106,28 +135,71 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
     await expect(cartItem).toBeVisible();
     await expect(cartItem.getByText("Blueberry 500ml")).toBeVisible();
 
-    // H. Cart transaction remains variant_id + quantity only
-    const transactionProjection = await page.evaluate(() => {
-      const store = (window as unknown as { __cartStore?: { getState: () => { items: Array<{ variant_id: string; quantity: number }> } } }).__cartStore?.getState();
-      if (!store) return null;
-      return store.items.map((item) => ({
-        variant_id: item.variant_id,
-        quantity: item.quantity,
-      }));
-    });
+    // H. Navigate to checkout via UI, fill form, select delivery, and submit
+    const checkoutLink = drawer.getByRole("link", { name: /Lanjut ke Checkout/i });
+    await expect(checkoutLink).toBeVisible();
+    await checkoutLink.click();
 
-    expect(transactionProjection).not.toBeNull();
-    expect(transactionProjection).toEqual([
-      {
-        variant_id: expectedVariantId,
-        quantity: 1,
-      },
-    ]);
+    // Verify checkout page is reached
+    await expect(page).toHaveURL(/.*\/checkout/);
+    await expect(page.getByRole("heading", { name: /Checkout Pesanan/i })).toBeVisible();
 
-    // Ensure transaction payload contains strictly variant_id and quantity (no price, total, etc.)
-    const firstProjectedItem = transactionProjection![0];
-    const keys = Object.keys(firstProjectedItem);
-    expect(keys.sort()).toEqual(["quantity", "variant_id"]);
+    // Fill required customer fields
+    await page.locator('input[name="name"]').fill("Budi Santoso");
+    await page.locator('input[name="whatsapp"]').fill("081234567890");
+    await page.locator('textarea[name="address"]').fill("Jl. Raya Bambu Apus No. 10, Cipayung, Jakarta Timur");
+
+    // Select delivery method (cold chain instant)
+    const deliveryRadio = page.locator('input[name="delivery"][value="instant"]');
+    await deliveryRadio.check();
+    await expect(deliveryRadio).toBeChecked();
+
+    // Set up response listener for checkout submission
+    const checkoutResponsePromise = page.waitForResponse(
+      (res) => res.url().includes("/api/checkout") && res.request().method() === "POST"
+    );
+
+    // Submit checkout form via the real button
+    const submitBtn = page.locator('button[type="submit"][form="checkout-form"]');
+    await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+
+    // Wait for the checkout request/response cycle to complete
+    await checkoutResponsePromise;
+
+    // I. Assert actual captured browser request body
+    expect(capturedCheckoutPayload).not.toBeNull();
+    expect(capturedCheckoutPayload.items).toBeDefined();
+    expect(Array.isArray(capturedCheckoutPayload.items)).toBe(true);
+    expect(capturedCheckoutPayload.items.length).toBeGreaterThanOrEqual(1);
+
+    // Assert each transaction item has EXACTLY variant_id and quantity
+    for (const item of capturedCheckoutPayload.items) {
+      const keys = Object.keys(item).sort();
+      expect(keys).toEqual(["quantity", "variant_id"]);
+    }
+
+    // Assert mocked Blueberry UUID is the real selected UUID
+    expect(capturedCheckoutPayload.items[0].variant_id).toBe(expectedVariantId);
+    expect(capturedCheckoutPayload.items[0].quantity).toBe(1);
+
+    // Assert transaction body contains NO forbidden keys
+    const forbiddenKeys = [
+      "display_price",
+      "price",
+      "subtotal",
+      "total",
+      "sku",
+      "name",
+      "volume_ml",
+    ];
+
+    for (const key of forbiddenKeys) {
+      expect(capturedCheckoutPayload).not.toHaveProperty(key);
+      for (const item of capturedCheckoutPayload.items) {
+        expect(item).not.toHaveProperty(key);
+      }
+    }
   });
 
   test("Nonexistent product returns 404 when ERP catalog is online and product is absent", async ({ page }) => {

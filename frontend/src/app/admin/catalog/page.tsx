@@ -117,9 +117,9 @@ export default function AdminCatalogPage() {
     sku: "",
     variant_name: "",
     inventory_item_id: "",
-    net_content_quantity: "250",
+    net_content_quantity: "",
     net_content_uom_id: "",
-    price: "15000",
+    price: "",
     active: true,
   });
 
@@ -271,12 +271,12 @@ export default function AdminCatalogPage() {
     const defaultUom = uoms.find((u) => u.code === "ML")?.id || uoms[0]?.id || "";
     const defaultItem = inventoryItems[0]?.id || "";
     setVariantForm({
-      sku: `CY-${prod.slug.toUpperCase()}-250`,
-      variant_name: `${prod.name} 250ml`,
+      sku: `CY-${prod.slug.toUpperCase()}-`,
+      variant_name: `${prod.name} `,
       inventory_item_id: defaultItem,
-      net_content_quantity: "250",
+      net_content_quantity: "",
       net_content_uom_id: defaultUom,
-      price: "15000",
+      price: "",
       active: true,
     });
     setSelectedVariant(null);
@@ -302,6 +302,27 @@ export default function AdminCatalogPage() {
     e.preventDefault();
     if (!targetProductForVariant) return;
     setErrorMsg(null);
+
+    if (variantModalMode === "CREATE") {
+      if (!variantForm.price || variantForm.price.trim() === "") {
+        setErrorMsg("Harga awal wajib diisi untuk varian baru");
+        return;
+      }
+      const priceNum = parseInt(variantForm.price, 10);
+      if (isNaN(priceNum) || priceNum < 0) {
+        setErrorMsg("Harga awal harus berupa angka bulat positif");
+        return;
+      }
+      if (!variantForm.net_content_quantity || variantForm.net_content_quantity.trim() === "") {
+        setErrorMsg("Volume / berat bersih varian wajib diisi");
+        return;
+      }
+      const qtyNum = Number(variantForm.net_content_quantity);
+      if (isNaN(qtyNum) || qtyNum <= 0) {
+        setErrorMsg("Volume / berat bersih varian harus berupa angka positif");
+        return;
+      }
+    }
 
     startTransition(async () => {
       try {
@@ -377,7 +398,7 @@ export default function AdminCatalogPage() {
   // Price Actions
   const handleOpenPriceModal = (variant: CatalogVariant) => {
     setPriceModalVariant(variant);
-    setPriceInput(variant.price ? String(variant.price.amount) : "15000");
+    setPriceInput(variant.price ? String(variant.price.amount) : "");
   };
 
   const handleSavePrice = async (e: React.FormEvent) => {
@@ -1154,7 +1175,7 @@ export default function AdminCatalogPage() {
                         required
                         min={0}
                         step={1}
-                        placeholder="15000"
+                        placeholder="Masukkan nominal harga"
                         value={variantForm.price}
                         onChange={(e) => setVariantForm({ ...variantForm, price: e.target.value })}
                         className="w-full pl-9 pr-3 py-2 bg-[#FAF9F7] border border-[#D5D1C7] rounded-xl text-xs font-mono text-[#1E3932] focus:outline-none focus:ring-2 focus:ring-[#00754A]"

@@ -9,6 +9,7 @@ import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
 import {
   ArrowRight,
+  Award,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -258,7 +259,7 @@ export default function Home() {
                 transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.35 }}
                 className="text-base sm:text-lg md:text-xl text-[#5C6F68] max-w-lg mb-8 leading-relaxed"
               >
-                Stirred yoghurt Callme Yoghurt dengan standar pengiriman rantai dingin 0°C – 4°C untuk menjaga kualitas produk.
+                Stirred yoghurt Callme Yoghurt dengan standar pengiriman rantai dingin 0–5°C untuk menjaga kualitas produk.
               </motion.p>
 
               <motion.div
@@ -329,17 +330,17 @@ export default function Home() {
               {
                 icon: Truck,
                 title: "Cold Chain Logistics",
-                desc: "Suhu terjaga ketat 0°C – 4°C dari fasilitas pengolahan hingga tiba di tangan Anda.",
+                desc: "Suhu terjaga ketat 0–5°C dari fasilitas pengolahan hingga tiba di tangan Anda.",
               },
               {
                 icon: ShieldCheck,
-                title: "Legalitas & Halal MUI",
-                desc: "Tersertifikasi 100% Halal LPPOM MUI, berstandar CPPOB dan nomor izin edar BPOM resmi.",
+                title: "Standar CPPOB",
+                desc: "Penerapan Cara Produksi Pangan Olahan yang Baik (CPPOB) dan standar IUKM pangan olahan.",
               },
               {
-                icon: CheckCircle,
-                title: "Kemasan Tersegel",
-                desc: "Setiap botol Callme Yoghurt dikemas rapat dengan segel keamanan resmi.",
+                icon: Award,
+                title: "HAKI IDM000981336",
+                desc: "Merek resmi Callme Yoghurt terdaftar pada Direktorat Jenderal Kekayaan Intelektual.",
               },
             ].map((item, idx) => (
               <motion.div
@@ -493,7 +494,7 @@ export default function Home() {
                 Callme Yoghurt menghadirkan produk <strong>stirred yoghurt</strong> dengan standar penanganan rantai dingin (Cold Chain) yang terjaga. Kami melayani pemesanan langsung dari fasilitas operasional di Cipayung, Jakarta Timur.
               </p>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed pb-2">
-                Setiap pesanan dikemas secara rapi dengan penjagaan suhu 0°C – 4°C untuk memastikan kesegaran yoghurt tiba dengan baik di tangan Anda.
+                Setiap pesanan dikemas secara rapi dengan penjagaan suhu 0–5°C untuk memastikan kesegaran yoghurt tiba dengan baik di tangan Anda.
               </p>
               <div>
                 <motion.button
@@ -534,7 +535,6 @@ export default function Home() {
               </div>
               <div className="flex flex-col gap-3">
                 <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Legalitas</span>
-                <span className="text-sm font-medium text-white/80">100% Halal MUI</span>
                 <span className="text-sm font-medium text-white/80">Standar CPPOB</span>
                 <span className="text-sm font-medium text-white/80">HAKI IDM000981336</span>
               </div>

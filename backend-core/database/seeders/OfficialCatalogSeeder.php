@@ -87,7 +87,7 @@ class OfficialCatalogSeeder extends Seeder
         ];
 
         foreach ($officialFlavors as $flavor) {
-            $product = Product::updateOrCreate(
+            $product = Product::firstOrCreate(
                 ['slug' => $flavor['slug']],
                 [
                     'name' => $flavor['name'],
@@ -99,7 +99,7 @@ class OfficialCatalogSeeder extends Seeder
             foreach ($sizes as $size) {
                 $sku = strtoupper("CY-{$flavor['slug']}-{$size['ml']}");
 
-                $item = InventoryItem::updateOrCreate(
+                $item = InventoryItem::firstOrCreate(
                     ['code' => "FG-{$sku}"],
                     [
                         'name' => "{$flavor['name']} {$size['label']}",
@@ -110,7 +110,7 @@ class OfficialCatalogSeeder extends Seeder
                     ]
                 );
 
-                $variant = ProductVariant::updateOrCreate(
+                $variant = ProductVariant::firstOrCreate(
                     ['sku' => $sku],
                     [
                         'product_id' => $product->id,
@@ -122,20 +122,14 @@ class OfficialCatalogSeeder extends Seeder
                     ]
                 );
 
-                $existingPrice = ProductVariantPrice::where('product_variant_id', $variant->id)
+                // Bootstrap price: only create if variant has NO active IDR price.
+                // Authorized ERP/Admin price updates must win; seeder must NEVER reset existing active prices.
+                $hasActivePrice = ProductVariantPrice::where('product_variant_id', $variant->id)
                     ->where('currency', 'IDR')
                     ->where('active', true)
-                    ->first();
+                    ->exists();
 
-                if ($existingPrice === null) {
-                    ProductVariantPrice::create([
-                        'product_variant_id' => $variant->id,
-                        'currency' => 'IDR',
-                        'amount' => $size['price'],
-                        'active' => true,
-                    ]);
-                } elseif ($existingPrice->amount !== $size['price']) {
-                    $existingPrice->update(['active' => false]);
+                if (! $hasActivePrice) {
                     ProductVariantPrice::create([
                         'product_variant_id' => $variant->id,
                         'currency' => 'IDR',
