@@ -206,10 +206,15 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const displayName = erpProduct?.name || fallbackFlavor.name;
   const displayTagline = erpProduct?.description || fallbackFlavor.tagline;
   const brandColor = presentation.brandColor;
-  const darkBg = presentation.darkBg;
-  const imageSrc =
-    presentation.artwork ||
-    (isKnownFlavor ? (OFFICIAL_PRODUCT_ARTWORK[requestedSlug] || FLAVOR_IMAGES[requestedSlug]) : undefined);
+  // Size-specific image mapping:
+  // - 1000ml (1 Liter): Official 1L bottle artwork (/images/{slug}.png)
+  // - 250ml / 500ml: Official 250/500ml bottle artwork (/images/products/{slug}-250-500.png)
+  const image1L =
+    (isKnownFlavor ? FLAVOR_IMAGES[requestedSlug] : undefined) || presentation.artwork;
+  const image250_500 =
+    (isKnownFlavor ? OFFICIAL_PRODUCT_ARTWORK[requestedSlug] : undefined) || presentation.artwork;
+  const currentImageSrc =
+    selectedSize === 1000 ? image1L : image250_500;
 
   // Authoritative variant matching from ERP via exact net content parsing (250ml, 500ml, 1000ml)
   const variant250 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
@@ -347,51 +352,33 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </span>
               </div>
 
-              {/* Product Visual Area: Neutral 1L State or 250/500ml Bottle Artwork */}
-              {selectedSize === 1000 ? (
-                <div className="relative w-full h-full flex flex-col items-center justify-center text-center p-6">
-                  <div
-                    className="w-24 h-36 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-3 mb-3 backdrop-blur-xs"
-                    style={{ borderColor: `${brandColor}80`, backgroundColor: `${brandColor}12` }}
-                  >
-                    <span className="font-black text-2xl tracking-tight" style={{ color: brandColor }}>
-                      1L
-                    </span>
-                    <span className="text-[10px] text-black/60 font-medium uppercase tracking-wider mt-1">
-                      Kemasan 1 Liter
-                    </span>
+              {/* Product Visual Area: Updates image and scale according to selected size */}
+              <motion.div
+                key={selectedSize}
+                animate={{ scale: currentScale }}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : { duration: MOTION_TOKENS.duration.fast, ease: MOTION_TOKENS.ease.out }
+                }
+                className="relative w-full h-full flex items-center justify-center"
+              >
+                {currentImageSrc ? (
+                  <Image
+                    src={currentImageSrc}
+                    alt={`${displayName} ${selectedSize === 1000 ? '1 Liter' : `${selectedSize} ml`}`}
+                    fill
+                    sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
+                    className="object-contain p-2 drop-shadow-md"
+                    priority
+                  />
+                ) : (
+                  <div className="w-28 h-40 rounded-2xl bg-black/5 border border-black/10 flex flex-col items-center justify-center text-black/50 p-2">
+                    <span className="font-extrabold text-3xl tracking-tight">{displayName.slice(0, 2).toUpperCase()}</span>
+                    <span className="text-xs font-semibold mt-1">{selectedSize === 1000 ? '1 Liter' : `${selectedSize} ml`}</span>
                   </div>
-                  <span className="bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-3 py-1 rounded-full shadow-xs">
-                    Foto resmi 1L segera hadir
-                  </span>
-                </div>
-              ) : (
-                <motion.div
-                  animate={{ scale: currentScale }}
-                  transition={
-                    shouldReduceMotion
-                      ? { duration: 0 }
-                      : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
-                  }
-                  className="relative w-full h-full flex items-center justify-center"
-                >
-                  {imageSrc ? (
-                    <Image
-                      src={imageSrc}
-                      alt={displayName}
-                      fill
-                      sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
-                      className="object-contain p-2 drop-shadow-md"
-                      priority
-                    />
-                  ) : (
-                    <div className="w-28 h-40 rounded-2xl bg-black/5 border border-black/10 flex flex-col items-center justify-center text-black/50 p-2">
-                      <span className="font-extrabold text-3xl tracking-tight">{displayName.slice(0, 2).toUpperCase()}</span>
-                      <span className="text-xs font-semibold mt-1">{selectedSize} ml</span>
-                    </div>
-                  )}
-                </motion.div>
-              )}
+                )}
+              </motion.div>
             </div>
 
             {/* Quality Badges below image */}

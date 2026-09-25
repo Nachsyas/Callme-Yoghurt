@@ -224,11 +224,13 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     await page.waitForTimeout(200);
     await expect(page.getByText(/30\.000/).first()).toBeVisible();
 
-    // 4. Select 1 Liter -> price updates to Rp 55.000 and shows neutral placeholder
+    // 4. Select 1 Liter -> price updates to Rp 55.000 and renders official 1L image
     await btn1000.click();
     await page.waitForTimeout(200);
     await expect(page.getByText(/55\.000/).first()).toBeVisible();
-    await expect(page.getByText("Foto resmi 1L segera hadir")).toBeVisible();
+    await expect(page.getByText("Foto resmi 1L segera hadir")).toHaveCount(0);
+    const oneLiterImg = page.locator("img[alt*='Plain 1 Liter']");
+    await expect(oneLiterImg).toBeVisible();
 
     // 5. Select 250 ml again -> returns to Rp 16.000
     await btn250.click();
