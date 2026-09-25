@@ -1,0 +1,119 @@
+# OWASP ZAP Automation Framework Configuration (Phase 1.4A)
+# Target: Callme Yoghurt Staging Environment
+# IMPORTANT: Staging targets only. Never execute against production.
+
+env:
+  contexts:
+    - name: "Callme-Customer-Storefront"
+      urls:
+        - "https://staging.callmeyoghurt.com"
+      includePaths:
+        - "https://staging.callmeyoghurt.com/"
+        - "https://staging.callmeyoghurt.com/product/.*"
+        - "https://staging.callmeyoghurt.com/checkout.*"
+        - "https://staging.callmeyoghurt.com/return.*"
+        - "https://staging.callmeyoghurt.com/api/catalog.*"
+        - "https://staging.callmeyoghurt.com/api/checkout.*"
+      excludePaths:
+        - "https://staging.callmeyoghurt.com/.*\\.(png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf)$"
+        - "https://staging.callmeyoghurt.com/_next/static/.*"
+
+    - name: "Callme-Admin-Portal"
+      urls:
+        - "https://admin-staging.callmeyoghurt.com"
+      includePaths:
+        - "https://admin-staging.callmeyoghurt.com/admin/.*"
+        - "https://admin-staging.callmeyoghurt.com/api/admin/.*"
+      excludePaths:
+        - "https://admin-staging.callmeyoghurt.com/.*\\.(png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf)$"
+        - "https://admin-staging.callmeyoghurt.com/_next/static/.*"
+      authentication:
+        method: "json"
+        parameters:
+          loginPageUrl: "https://admin-staging.callmeyoghurt.com/admin/login"
+          loginRequestUrl: "https://admin-staging.callmeyoghurt.com/api/admin/login"
+          loginRequestBody: '{"email":"{%username%}","password":"{%password%}"}'
+        verification:
+          method: "response"
+          pollFrequency: 60
+          loggedInRegex: '.*"role":"(OWNER|ADMIN)".*'
+          loggedOutRegex: '.*"error":"(Invalid credentials|Unauthorized)".*'
+      sessionManagement:
+        method: "cookie"
+        parameters:
+          cookieName: "callme_admin_session"
+      users:
+        - name: "staging-security-admin"
+          credentials:
+            username: "audit.sec@callmeyoghurt.com"
+            password: "${ZAP_ADMIN_PASSWORD:-SecOpsAdminStaging2026!}"
+
+  parameters:
+    failOnError: false
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+      maxBodySizeInBytes: 0
+
+  # Spider Customer Storefront
+  - type: spider
+    parameters:
+      context: "Callme-Customer-Storefront"
+      user: ""
+      maxDuration: 5
+      maxDepth: 4
+      maxChildren: 20
+      acceptCookies: true
+      handleParameters: "USE_ALL"
+
+  # Spider Admin Portal with Authentication Flow
+  - type: spider
+    parameters:
+      context: "Callme-Admin-Portal"
+      user: "staging-security-admin"
+      maxDuration: 5
+      maxDepth: 4
+      maxChildren: 20
+      acceptCookies: true
+      handleParameters: "USE_ALL"
+
+  # Wait for passive scanner queue to drain
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
+
+  # Active Security Assessment (Injection, Auth Bypass, Insecure Headers)
+  - type: activeScan
+    parameters:
+      context: "Callme-Customer-Storefront"
+      user: ""
+      policy: "API-Minimal"
+      maxRuleDurationInMins: 2
+      maxScanDurationInMins: 10
+      addQueryParam: false
+      handleAntiCSRFTokens: true
+      injectPluginIdInHeader: false
+
+  # Generate Executive and Technical Reports
+  - type: report
+    parameters:
+      template: "traditional-html"
+      reportDir: "/zap/wrk/zap-report"
+      reportFile: "zap-report.html"
+      reportTitle: "OWASP ZAP DAST Assessment Report — Callme Yoghurt Staging"
+      reportDescription: "Automated dynamic application security testing against staging infrastructure."
+      displayReport: false
+
+  - type: report
+    parameters:
+      template: "traditional-md"
+      reportDir: "/zap/wrk/zap-report"
+      reportFile: "zap-report.md"
+      reportTitle: "OWASP ZAP DAST Assessment Report — Callme Yoghurt Staging"
+      reportDescription: "Automated dynamic application security testing against staging infrastructure."
+      displayReport: false

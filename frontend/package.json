@@ -7,28 +7,32 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:security": "node --test --experimental-strip-types tests/security/*.test.ts",
+    "test:catalog": "node --test --experimental-strip-types tests/catalog/*.test.ts",
+    "test:admin": "node --test --experimental-strip-types tests/admin/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@prisma/client": "^7.8.0",
-    "@studio-freight/lenis": "^1.0.42",
-    "framer-motion": "^12.42.2",
-    "gsap": "^3.15.0",
-    "lucide-react": "^1.23.0",
-    "next": "15.0.0",
-    "react": "19.0.0-rc-65a56d0e-20241020",
-    "react-dom": "19.0.0-rc-65a56d0e-20241020",
-    "zustand": "^4.5.5"
+    "@studio-freight/lenis": "1.0.42",
+    "framer-motion": "12.42.2",
+    "gsap": "3.15.0",
+    "lucide-react": "1.23.0",
+    "next": "15.5.25",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zustand": "4.5.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "autoprefixer": "^10.5.2",
-    "postcss": "^8.5.16",
-    "prisma": "^7.8.0",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "@playwright/test": "1.63.0",
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.1",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
   }
 }

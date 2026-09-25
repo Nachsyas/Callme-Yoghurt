@@ -1,35 +1,77 @@
 import { create } from 'zustand';
 
-interface CartItem {
-  id: string;
+export interface CartItem {
+  variant_id: string;
+  sku: string;
   name: string;
-  volume_ml: number;
+  volume_ml?: number;
   quantity: number;
-  price: number;
+
+  // presentation only
+  display_price: number;
 }
 
-interface CartStore {
+export interface CartStore {
   items: CartItem[];
+  isOpen: boolean;
   addItem: (item: CartItem) => void;
-  removeItem: (id: string) => void;
+  removeItem: (variant_id: string) => void;
+  updateQuantity: (variant_id: string, delta: number) => void;
   clearCart: () => void;
+  openCart: () => void;
+  closeCart: () => void;
+  getEstimatedTotal: () => number;
   getTotal: () => number;
 }
 
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
+  isOpen: false,
+  openCart: () => set({ isOpen: true }),
+  closeCart: () => set({ isOpen: false }),
   addItem: (item) => set((state) => {
-    const existingItem = state.items.find((i) => i.id === item.id);
-    if (existingItem) {
-      return {
-        items: state.items.map((i) => i.id === item.id ? { ...i, quantity: i.quantity + item.quantity } : i)
+    const existingIndex = state.items.findIndex((i) => i.variant_id === item.variant_id);
+    if (existingIndex >= 0) {
+      const updatedItems = [...state.items];
+      const existing = updatedItems[existingIndex];
+      updatedItems[existingIndex] = {
+        ...existing,
+        quantity: existing.quantity + item.quantity,
       };
+      return { items: updatedItems };
     }
     return { items: [...state.items, item] };
   }),
-  removeItem: (id) => set((state) => ({
-    items: state.items.filter((i) => i.id !== id)
+  removeItem: (variant_id) => set((state) => ({
+    items: state.items.filter((i) => i.variant_id !== variant_id),
   })),
+  updateQuantity: (variant_id, delta) => set((state) => {
+    const updatedItems = state.items
+      .map((item) => {
+        if (item.variant_id === variant_id) {
+          const newQty = item.quantity + delta;
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      })
+      .filter((item): item is CartItem => item !== null);
+    return { items: updatedItems };
+  }),
   clearCart: () => set({ items: [] }),
-  getTotal: () => get().items.reduce((acc, item) => acc + (item.price * item.quantity), 0),
+  getEstimatedTotal: () => get().items.reduce((acc, item) => acc + (item.display_price * item.quantity), 0),
+  getTotal: () => get().getEstimatedTotal(),
 }));
+
+/**
+ * Pure transaction projection from cart items.
+ *
+ * Invariants (Gate 0E.2A):
+ * - Contains ONLY variant_id and quantity.
+ * - Must NOT contain display_price, price, subtotal, total, SKU, name, volume, etc.
+ */
+export function toTransactionProjection(items: CartItem[]): Array<{ variant_id: string; quantity: number }> {
+  return items.map((item) => ({
+    variant_id: item.variant_id,
+    quantity: item.quantity,
+  }));
+}

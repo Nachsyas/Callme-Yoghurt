@@ -1,0 +1,20 @@
+# ==============================================================================
+# Callme Yoghurt ERP Core — Cloudflare Zero Trust Tunnel Configuration
+# Connects Vercel BFF securely to VPS Nginx without exposing public inbound ports.
+# ==============================================================================
+
+tunnel: <TUNNEL_UUID>
+credentials-file: /etc/cloudflared/<TUNNEL_UUID>.json
+
+ingress:
+  # Internal ERP API routed to local Nginx reverse proxy
+  - hostname: erp-internal.callmeyoghurt.com
+    service: http://localhost:80
+    originRequest:
+      noTLSVerify: false
+      httpHostHeader: erp-internal.callmeyoghurt.com
+      connectTimeout: 30s
+      keepAliveTimeout: 90s
+
+  # Catch-all rule returning 404 for unmapped requests
+  - service: http_status:404

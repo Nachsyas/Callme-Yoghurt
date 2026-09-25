@@ -1,33 +1,92 @@
 "use client";
 
-import Lenis from "@studio-freight/lenis";
-import { motion } from "framer-motion";
-import gsap from "gsap";
-import ScrollTrigger from "gsap/ScrollTrigger";
-import { CheckCircle, ShieldCheck, ShoppingBag, Truck } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import Lenis from "@studio-freight/lenis";
+import { motion, useReducedMotion } from "framer-motion";
+import gsap from "gsap";
+import ScrollTrigger from "gsap/ScrollTrigger";
+import {
+  ArrowRight,
+  Award,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Truck,
+} from "lucide-react";
+import {
+  CatalogCard,
+  type FlavorPresentation,
+} from "@/components/catalog/CatalogCard";
+import { CartDrawer } from "@/components/cart/CartDrawer";
+import { useCartStore } from "@/store/cartStore";
+import {
+  getProductPresentation,
+  type PublicCatalogData,
+  type PublicCatalogProduct,
+} from "@/lib/catalog";
+import { MOTION_TOKENS } from "@/lib/motion";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-const flavors = [
-  { id: "plain", name: "Plain", sub: "Pure Vanilla", price: "Rp 22.000", color: "bg-[#cba258]" },
-  { id: "stroberi", name: "Stroberi", sub: "Summer Blush Berry", price: "Rp 25.000", color: "bg-[#D81E5B]" },
-  { id: "mangga", name: "Mangga", sub: "Tropical Gold Premium", price: "Rp 28.000", color: "bg-[#F9A03F]" },
-  { id: "melon", name: "Melon", sub: "Emerald Fresh Dew", price: "Rp 25.000", color: "bg-[#A1C349]" },
-  { id: "anggur", name: "Anggur", sub: "Royal Purple Grape", price: "Rp 28.000", color: "bg-[#7A3B69]" },
-  { id: "leci", name: "Leci", sub: "Sweet Lychee Bliss", price: "Rp 25.000", color: "bg-[#ff8da1]" },
-  { id: "vanila", name: "Vanila", sub: "Velvet Orchid Vanilla", price: "Rp 25.000", color: "bg-[#f3e5AB]" },
-  { id: "pisang", name: "Pisang Ambon", sub: "Sweet Banana Smooth", price: "Rp 25.000", color: "bg-[#E8D354]" },
+// Default preview slugs used ONLY when backend ERP is completely unreachable
+const DEFAULT_PREVIEW_SLUGS = [
+  "plain",
+  "stroberi",
+  "mangga",
+  "melon",
+  "anggur",
+  "leci",
+  "vanila",
 ];
 
 export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const horizontalRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const heroGlowRef = useRef<HTMLDivElement>(null);
+  const storyImageRef = useRef<HTMLDivElement>(null);
 
+  const shouldReduceMotion = useReducedMotion();
+  const items = useCartStore((state) => state.items);
+  const openCart = useCartStore((state) => state.openCart);
+
+  // Authoritative ERP Catalog fetching
+  const [catalogData, setCatalogData] = useState<PublicCatalogData | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const res = await fetch("/api/catalog");
+        if (!res.ok) {
+          if (isMounted) setCatalogLoading(false);
+          return;
+        }
+        const data: PublicCatalogData = await res.json();
+        if (isMounted) {
+          setCatalogData(data);
+          setCatalogLoading(false);
+        }
+      } catch {
+        if (isMounted) setCatalogLoading(false);
+      }
+    }
+    loadCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalItemsCount = items.reduce((acc, item) => acc + item.quantity, 0);
+
+  // Smooth scroll and subtle GSAP storytelling parallax with verified recursive RAF cleanup
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -36,191 +95,478 @@ export default function Home() {
       smoothWheel: true,
     });
 
+    let rafId: number;
     function raf(time: number) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
-    requestAnimationFrame(raf);
+    rafId = requestAnimationFrame(raf);
 
+    // Controlled GSAP Parallax on storytelling assets without scroll hijacking
     const ctx = gsap.context(() => {
-      const sections = gsap.utils.toArray(".product-card");
+      if (!shouldReduceMotion && heroGlowRef.current) {
+        gsap.to(heroGlowRef.current, {
+          y: 40,
+          ease: "none",
+          scrollTrigger: {
+            trigger: heroGlowRef.current,
+            start: "top center",
+            end: "bottom top",
+            scrub: true,
+          },
+        });
+      }
 
-      gsap.to(sections, {
-        xPercent: -100 * (sections.length - 1),
-        ease: "none",
-        scrollTrigger: {
-          trigger: horizontalRef.current,
-          pin: true,
-          scrub: 1,
-          snap: 1 / (sections.length - 1),
-          end: () => "+=" + horizontalRef.current?.offsetWidth,
-        }
-      });
+      if (!shouldReduceMotion && storyImageRef.current) {
+        gsap.fromTo(
+          storyImageRef.current,
+          { y: 30 },
+          {
+            y: -20,
+            ease: "none",
+            scrollTrigger: {
+              trigger: storyImageRef.current,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: true,
+            },
+          }
+        );
+      }
     }, scrollRef);
 
     return () => {
+      cancelAnimationFrame(rafId);
       lenis.destroy();
       ctx.revert();
     };
+  }, [shouldReduceMotion]);
+
+  // Direction-locked gesture management on carousel to prevent vertical scroll interference
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let initialScrollLeft = 0;
+    let isHorizontalGesture = false;
+    let isVerticalGesture = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      initialScrollLeft = carousel.scrollLeft;
+      isHorizontalGesture = false;
+      isVerticalGesture = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffX = Math.abs(currentX - touchStartX);
+      const diffY = Math.abs(currentY - touchStartY);
+
+      if (!isHorizontalGesture && !isVerticalGesture) {
+        const threshold = 10;
+        if (diffX > threshold || diffY > threshold) {
+          if (diffY >= diffX) {
+            isVerticalGesture = true;
+          } else {
+            isHorizontalGesture = true;
+          }
+        }
+      }
+
+      // If vertical gesture is detected, hold carousel scrollLeft to initial position
+      if (isVerticalGesture) {
+        carousel.scrollLeft = initialScrollLeft;
+      }
+    };
+
+    carousel.addEventListener("touchstart", handleTouchStart, { passive: true });
+    carousel.addEventListener("touchmove", handleTouchMove, { passive: true });
+
+    return () => {
+      carousel.removeEventListener("touchstart", handleTouchStart);
+      carousel.removeEventListener("touchmove", handleTouchMove);
+    };
   }, []);
 
-  return (
-    <div className="bg-[#f2f0eb] min-h-screen font-sans antialiased overflow-x-hidden">
+  // Carousel Arrow Controls with smooth non-hijacked scroll
+  const handleScrollCarousel = (direction: "left" | "right") => {
+    if (!carouselRef.current) return;
+    const scrollAmount = 380;
+    carouselRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  };
 
-      <nav className="fixed top-0 w-full z-50 bg-[#f2f0eb]/90 backdrop-blur-md shadow-sm h-20 flex items-center border-b border-black/5">
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  return (
+    <div ref={scrollRef} className="bg-[#f2f0eb] min-h-screen font-sans antialiased overflow-x-hidden selection:bg-[#00754A] selection:text-white">
+      {/* 1. TOP NAVBAR */}
+      <nav className="fixed top-0 w-full z-40 bg-[#f2f0eb]/90 backdrop-blur-md shadow-xs h-20 flex items-center border-b border-black/5 transition-colors">
         <div className="flex justify-between items-center px-6 w-full max-w-7xl mx-auto">
           <Link href="/" className="font-extrabold text-xl text-[#00754A] tracking-tight">
             Callme Yoghurt
           </Link>
-          <div className="hidden md:flex gap-8">
-            <button onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })} className="font-medium text-black/58 hover:text-[#00754A] transition-colors">Katalog</button>
-            <Link className="font-medium text-black/58 hover:text-[#00754A] transition-colors" href="#kisah">Kisah Kami</Link>
-          </div>
-          <Link href="/checkout">
-            <button className="px-6 py-2.5 bg-[#00754A] text-white rounded-[50px] font-semibold text-sm hover:scale-95 transition-transform duration-200 shadow-sm">
-              Keranjang
+
+          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-black/70">
+            <button
+              type="button"
+              onClick={() => scrollToSection("katalog")}
+              className="hover:text-[#00754A] transition-colors cursor-pointer"
+            >
+              Katalog
             </button>
-          </Link>
+            <button
+              type="button"
+              onClick={() => scrollToSection("kisah")}
+              className="hover:text-[#00754A] transition-colors cursor-pointer"
+            >
+              Kisah Kami
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection("standar")}
+              className="hover:text-[#00754A] transition-colors cursor-pointer"
+            >
+              Standar Kualitas
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <motion.button
+              type="button"
+              onClick={openCart}
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+              className="relative px-5 py-2.5 bg-[#00754A] hover:bg-[#006241] text-white rounded-full font-semibold text-xs flex items-center gap-2 transition-colors shadow-sm cursor-pointer"
+            >
+              <ShoppingBag size={15} />
+              <span>Keranjang</span>
+
+              {totalItemsCount > 0 && (
+                <motion.span
+                  key={totalItemsCount}
+                  initial={shouldReduceMotion ? undefined : { scale: 1.4 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: MOTION_TOKENS.duration.fast }}
+                  className="bg-[#A1C349] text-[#1E3932] text-[10px] font-black rounded-full px-1.5 py-0.2 min-w-[18px] text-center"
+                >
+                  {totalItemsCount}
+                </motion.span>
+              )}
+            </motion.button>
+          </div>
         </div>
       </nav>
 
-      <main ref={scrollRef} className="pt-20">
-
-        {/* 1. HERO SECTION ESTETIK */}
+      <main className="pt-20">
+        {/* 2. HERO SECTION */}
         <section className="w-full min-h-[calc(100vh-80px)] flex items-center justify-center px-6 lg:px-20 relative py-12">
           <div className="max-w-7xl w-full flex flex-col lg:flex-row items-center justify-between gap-12 z-10">
             <div className="w-full lg:w-[50%] flex flex-col items-start relative z-20">
-              <span className="text-[#00754A] font-bold tracking-widest text-sm uppercase mb-4 block">Homemade Quality</span>
-              <h1 className="text-6xl md:text-[5.5rem] font-bold leading-[1.1] mb-6">
-                <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="block">
-                  Kentalnya
+              <motion.span
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.1 }}
+                className="text-[#00754A] font-bold tracking-widest text-xs uppercase mb-4 inline-flex items-center gap-1.5 bg-[#00754A]/10 px-3 py-1 rounded-full"
+              >
+                <Sparkles size={12} />
+                <span>Callme Yoghurt — Stirred Yoghurt</span>
+              </motion.span>
+
+              <h1 className="text-4xl sm:text-6xl md:text-[5.25rem] font-bold leading-[1.08] mb-6 tracking-tight">
+                <motion.span
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.15 }}
+                  className="block text-[#1E3932]"
+                >
+                  Kesegaran
                 </motion.span>
-                <motion.span initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="block text-brand-strawberry">
-                  Nikmat.
+                <motion.span
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.25 }}
+                  className="block text-brand-strawberry"
+                >
+                  Pilihan.
                 </motion.span>
               </h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-lg md:text-xl text-brand-textSoft max-w-lg mb-10 leading-[1.5]">
-                Stirred yoghurt premium dengan 100% gula asli tanpa pemanis buatan. Tersedia dalam 8 varian kesegaran murni yang siap menyehatkan hari Anda.
+
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.35 }}
+                className="text-base sm:text-lg md:text-xl text-[#5C6F68] max-w-lg mb-8 leading-relaxed"
+              >
+                Stirred yoghurt Callme Yoghurt dengan standar pengiriman rantai dingin 0–5°C untuk menjaga kualitas produk.
               </motion.p>
-              <motion.button onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.7 }} className="bg-[#1E3932] text-white px-8 py-4 rounded-[50px] font-semibold text-lg flex items-center gap-3 active:scale-95 hover:scale-95 transition-transform duration-200 shadow-md">
-                Jelajahi Rasa
-              </motion.button>
+
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.45 }}
+                className="flex items-center gap-4 flex-wrap"
+              >
+                <motion.button
+                  type="button"
+                  onClick={() => scrollToSection("katalog")}
+                  whileHover={shouldReduceMotion ? undefined : { y: -2 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                  className="bg-[#1E3932] hover:bg-[#152722] text-white px-7 sm:px-8 py-3.5 rounded-full font-bold text-sm sm:text-base flex items-center gap-2.5 transition-colors shadow-md cursor-pointer"
+                >
+                  <span>Jelajahi Varian Rasa</span>
+                  <ArrowRight size={16} />
+                </motion.button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToSection("kisah")}
+                  className="text-xs sm:text-sm font-bold text-[#1E3932] px-4 py-3 rounded-full hover:bg-black/5 transition-colors cursor-pointer"
+                >
+                  Kisah Kami
+                </button>
+              </motion.div>
             </div>
 
-            {/* FOTO HERO SPLASH: Sengaja dibuat membesar (scale-125) agar cipratan susunya terkesan keluar dari layar */}
+            {/* HERO VISUAL WITH SUBTLE FLOATING */}
             <div className="w-full lg:w-[50%] flex justify-center lg:justify-end relative">
-              <motion.div animate={{ y: [-10, 10, -10] }} transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }} className="w-full max-w-[550px] aspect-square relative z-20 flex items-center justify-center transform scale-110 lg:scale-125">
+              <motion.div
+                animate={
+                  shouldReduceMotion
+                    ? undefined
+                    : { y: [-6, 6, -6] }
+                }
+                transition={{
+                  repeat: Infinity,
+                  duration: 5,
+                  ease: "easeInOut",
+                }}
+                className="w-full max-w-[520px] aspect-square relative z-20 flex items-center justify-center transform scale-100 sm:scale-105 lg:scale-115"
+              >
                 <Image
                   src="/images/hero-splash.png"
-                  alt="Callme Yoghurt Varian"
+                  alt="Callme Yoghurt Kemasan"
                   fill
-                  className="object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.25)]"
+                  sizes="(max-width: 768px) 380px, 520px"
+                  className="object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,0.20)]"
                   priority
                 />
               </motion.div>
-              {/* Efek Cahaya di belakang botol */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-[#d4e9e2] blur-[100px] rounded-full z-0 opacity-70" />
+
+              {/* Decorative Glow */}
+              <div
+                ref={heroGlowRef}
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] h-[85%] bg-[#d4e9e2] blur-[90px] rounded-full z-0 opacity-70 pointer-events-none"
+              />
             </div>
           </div>
         </section>
 
-        <section className="bg-[#1E3932] w-full py-20 px-6 lg:px-20 relative z-20">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12">
+        {/* 3. STANDAR LOGISTIK & KUALITAS */}
+        <section id="standar" className="bg-[#1E3932] w-full py-16 sm:py-20 px-6 lg:px-20 relative z-20">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 sm:gap-12">
             {[
-              { icon: Truck, title: "Cold Chain Logistics", desc: "Suhu terjaga < 5°C dari pabrik hingga ke tangan Anda." },
-              { icon: ShieldCheck, title: "Kualitas Terjamin", desc: "Terdaftar resmi BPOM RI & tersertifikasi 100% Halal MUI." },
-              { icon: CheckCircle, title: "Homemade Quality", desc: "Dibuat higienis 100% gula asli tanpa pemanis buatan." }
+              {
+                icon: Truck,
+                title: "Cold Chain Logistics",
+                desc: "Suhu terjaga ketat 0–5°C dari fasilitas pengolahan hingga tiba di tangan Anda.",
+              },
+              {
+                icon: ShieldCheck,
+                title: "Standar CPPOB",
+                desc: "Penerapan Cara Produksi Pangan Olahan yang Baik (CPPOB) dan standar IUKM pangan olahan.",
+              },
+              {
+                icon: Award,
+                title: "HAKI IDM000981336",
+                desc: "Merek resmi Callme Yoghurt terdaftar pada Direktorat Jenderal Kekayaan Intelektual.",
+              },
             ].map((item, idx) => (
-              <div key={idx} className="flex flex-col items-start gap-4">
-                <div className="w-14 h-14 bg-white/10 rounded-full flex items-center justify-center">
-                  <item.icon className="w-7 h-7 text-white" />
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{
+                  duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal,
+                  delay: shouldReduceMotion ? 0 : idx * 0.1,
+                  ease: MOTION_TOKENS.ease.out,
+                }}
+                className="flex flex-col items-start gap-3.5 bg-white/5 p-6 rounded-2xl border border-white/10"
+              >
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-white">
+                  <item.icon className="w-6 h-6 text-[#A1C349]" />
                 </div>
-                <h3 className="text-2xl font-bold text-white tracking-tightest">{item.title}</h3>
-                <p className="text-white/70 leading-relaxed">{item.desc}</p>
-              </div>
+                <h3 className="text-xl font-bold text-white tracking-tight">{item.title}</h3>
+                <p className="text-white/75 text-sm leading-relaxed">{item.desc}</p>
+              </motion.div>
             ))}
           </div>
         </section>
 
-        {/* 2. KATALOG ESTETIK */}
-        <section ref={horizontalRef} className="h-screen bg-brand-ceramic overflow-hidden flex flex-col justify-center">
-          <div className="px-6 lg:px-20 pt-10 pb-8">
-            <h2 className="text-4xl md:text-5xl font-bold text-brand-textMain">Varian Rasa Pilihan.</h2>
-            <p className="text-brand-textSoft mt-2">Scroll ke bawah untuk menggeser katalog.</p>
+        {/* 4. HORIZONTAL PRODUCT CATALOG CAROUSEL */}
+        <section id="katalog" className="py-20 bg-brand-ceramic relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-6 lg:px-20 mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-[#00754A] block mb-2">
+                Katalog Resmi 7 Varian
+              </span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#1E3932] tracking-tight">
+                Varian Rasa Pilihan.
+              </h2>
+              <p className="text-sm text-[#5C6F68] mt-2 max-w-lg">
+                Tersedia dalam ukuran 250ml, 500ml, dan 1 Liter. Pilih varian untuk melihat detail produk.
+              </p>
+            </div>
+
+            {/* Carousel Arrow Controls */}
+            <div className="flex items-center gap-2">
+              <motion.button
+                type="button"
+                onClick={() => handleScrollCarousel("left")}
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
+                aria-label="Geser katalog ke kiri"
+                className="w-11 h-11 rounded-full bg-white border border-[#E5E2DA] flex items-center justify-center text-[#1E3932] hover:bg-[#00754A] hover:text-white transition-colors shadow-xs cursor-pointer"
+              >
+                <ChevronLeft size={20} />
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => handleScrollCarousel("right")}
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
+                aria-label="Geser katalog ke kanan"
+                className="w-11 h-11 rounded-full bg-white border border-[#E5E2DA] flex items-center justify-center text-[#1E3932] hover:bg-[#00754A] hover:text-white transition-colors shadow-xs cursor-pointer"
+              >
+                <ChevronRight size={20} />
+              </motion.button>
+            </div>
           </div>
 
-          <div className="w-[450%] md:w-[280%] h-[60vh] flex flex-nowrap items-center px-6 lg:px-20 gap-8 mt-4">
-            {flavors.map((flavor, idx) => (
-              <div key={idx} className="product-card w-[80vw] md:w-[360px] flex-shrink-0 h-full bg-white rounded-[20px] shadow-card flex flex-col overflow-hidden relative group">
+          {/* Horizontal Scroll Container — Dynamically driven by authoritative ERP catalog */}
+          <div
+            id="catalog-carousel"
+            ref={carouselRef}
+            className="flex overflow-x-auto scroll-smooth snap-x snap-proximity overscroll-x-contain gap-6 pb-6 pt-2 px-6 lg:px-20 no-scrollbar"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+          >
+            {catalogData && catalogData.products.length > 0
+              ? catalogData.products.map((erpProduct: PublicCatalogProduct, idx: number) => {
+                  const presentation = getProductPresentation(erpProduct.slug);
+                  const flavor: FlavorPresentation = {
+                    slug: erpProduct.slug,
+                    name: erpProduct.name,
+                    sub: erpProduct.description || presentation.sub,
+                    color: presentation.colorClass,
+                    artwork: presentation.artwork || "",
+                  };
 
-                {/* Kotak Gambar: Disesuaikan agar mangkok dan cipratan susu tidak terpotong (menggunakan scale-110) */}
-                <div className={`w-full h-[60%] ${flavor.color} flex items-end justify-center relative px-6 pb-2 pt-10 overflow-visible transition-colors duration-500`}>
-                  <div className="absolute top-0 w-full h-full bg-black/5 mix-blend-overlay"></div>
-                  <div className="relative w-full h-full transform transition-transform duration-500 group-hover:scale-110 group-hover:-translate-y-4 z-10">
-                    <Image
-                      src={`/images/${flavor.id}.png`}
-                      alt={flavor.name}
-                      fill
-                      className="object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.15)]"
+                  return (
+                    <CatalogCard
+                      key={erpProduct.slug}
+                      flavor={flavor}
+                      erpProduct={erpProduct}
+                      isErpOnline={true}
+                      catalogLoading={catalogLoading}
+                      index={idx}
                     />
-                  </div>
-                </div>
+                  );
+                })
+              : DEFAULT_PREVIEW_SLUGS.map((slug, idx) => {
+                  const presentation = getProductPresentation(slug);
+                  const flavor: FlavorPresentation = {
+                    slug,
+                    name: slug.charAt(0).toUpperCase() + slug.slice(1),
+                    sub: presentation.sub,
+                    color: presentation.colorClass,
+                    artwork: presentation.artwork || "",
+                  };
 
-                <div className="p-6 md:p-8 flex flex-col flex-grow justify-between bg-white z-20 rounded-t-[20px] -mt-4 relative">
-                  <div>
-                    <h3 className="text-2xl font-bold text-brand-textMain tracking-tight">{flavor.name}</h3>
-                    <p className="text-sm text-brand-textSoft mt-1.5">{flavor.sub}</p>
-                  </div>
-                  <div className="flex items-center justify-between mt-6">
-                    <span className="font-bold text-xl text-brand-textMain">{flavor.price}</span>
-                    <Link href={`/product/${flavor.id}`}>
-                      <button className="border-2 border-brand-accent text-brand-accent px-6 py-2.5 rounded-[50px] font-bold text-sm hover:bg-brand-accent hover:text-white active:scale-95 transition-all">
-                        Lihat Detail
-                      </button>
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))}
+                  return (
+                    <CatalogCard
+                      key={slug}
+                      flavor={flavor}
+                      erpProduct={null}
+                      isErpOnline={false}
+                      catalogLoading={catalogLoading}
+                      index={idx}
+                    />
+                  );
+                })}
           </div>
         </section>
 
-        {/* 3. KISAH KAMI ESTETIK (Memakai all-variants.png) */}
-        <section id="kisah" className="w-full bg-white py-24 px-6 lg:px-20 relative z-20 border-t border-gray-100 overflow-hidden">
+        {/* 5. KISAH KAMI SECTION */}
+        <section id="kisah" className="w-full bg-white py-24 px-6 lg:px-20 relative z-20 border-t border-[#E5E2DA] overflow-hidden">
           <div className="max-w-7xl mx-auto flex flex-col-reverse md:flex-row items-center gap-16">
-            <div className="w-full md:w-1/2 aspect-[4/3] flex items-center justify-center relative">
-              {/* Gambar 8 botol akan melayang bebas di atas cipratan warna */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[#E8D354]/10 blur-[80px] rounded-full z-0" />
-              <div className="z-10 relative w-full h-full transform scale-110 md:scale-125 transition-transform duration-700 hover:scale-[1.30]">
+            <div
+              ref={storyImageRef}
+              className="w-full md:w-1/2 aspect-[4/3] flex items-center justify-center relative"
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[#E8D354]/10 blur-[80px] rounded-full z-0 pointer-events-none" />
+              <div className="z-10 relative w-full h-full transform scale-105 md:scale-115 transition-transform duration-500 hover:scale-[1.2]">
                 <Image
                   src="/images/all-variants.png"
-                  alt="Callme Yoghurt All Variants"
+                  alt="Callme Yoghurt All Variants Official Collection"
                   fill
-                  className="object-contain drop-shadow-2xl"
+                  sizes="(max-width: 768px) 340px, 500px"
+                  className="object-contain drop-shadow-xl"
                 />
               </div>
             </div>
-            <div className="w-full md:w-1/2 space-y-6 relative z-10">
-              <span className="text-[#00754A] font-bold tracking-widest text-sm uppercase">Kisah Kami</span>
-              <h2 className="text-4xl md:text-5xl font-extrabold text-brand-textMain tracking-tight leading-tight">Dedikasi untuk<br />Keluarga Indonesia.</h2>
-              <p className="text-lg text-brand-textSoft leading-relaxed">
-                Berawal dari dapur rumahan di tahun 2018, kami berkomitmen menghadirkan <strong>stirred yoghurt</strong> berkualitas premium. Menggunakan 100% susu sapi segar dan kultur probiotik pilihan, setiap botol Callme Yoghurt diproses secara higienis setiap harinya.
+
+            <motion.div
+              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal }}
+              className="w-full md:w-1/2 space-y-6 relative z-10"
+            >
+              <span className="text-[#00754A] font-bold tracking-widest text-xs uppercase inline-block">
+                Kisah Kami
+              </span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-[#1E3932] tracking-tight leading-tight">
+                Dedikasi untuk<br />Keluarga Indonesia.
+              </h2>
+              <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed">
+                Callme Yoghurt menghadirkan produk <strong>stirred yoghurt</strong> dengan standar penanganan rantai dingin (Cold Chain) yang terjaga. Kami melayani pemesanan langsung dari fasilitas operasional di Cipayung, Jakarta Timur.
               </p>
-              <p className="text-lg text-brand-textSoft leading-relaxed pb-4">
-                Bukan sekadar minuman, ini adalah dedikasi kami untuk gaya hidup sehat yang lezat, segar, tanpa kompromi kualitas—langsung dikirim dingin ke depan pintu rumah Anda.
+              <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed pb-2">
+                Setiap pesanan dikemas secara rapi dengan penjagaan suhu 0–5°C untuk memastikan kesegaran yoghurt tiba dengan baik di tangan Anda.
               </p>
-              <Link href="#kisah">
-                <button className="bg-[#1E3932] text-white px-8 py-3.5 rounded-[50px] font-bold text-sm hover:opacity-90 active:scale-95 transition-all shadow-md">
-                  Pelajari Lebih Lanjut
-                </button>
-              </Link>
-            </div>
+              <div>
+                <motion.button
+                  type="button"
+                  onClick={() => scrollToSection("katalog")}
+                  whileHover={shouldReduceMotion ? undefined : { y: -2 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                  className="bg-[#1E3932] hover:bg-[#152722] text-white px-8 py-3.5 rounded-full font-bold text-sm transition-colors shadow-md cursor-pointer"
+                >
+                  Pesan Sekarang
+                </motion.button>
+              </div>
+            </motion.div>
           </div>
         </section>
-
       </main>
 
-      <footer className="bg-[#1E3932] text-white">
+      {/* 6. FOOTER */}
+      <footer className="bg-[#1E3932] text-white border-t border-[#172C27]">
         <div className="max-w-7xl mx-auto px-6 py-16">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-8">
             <div className="md:col-span-4 lg:col-span-5 space-y-4">
@@ -235,40 +581,58 @@ export default function Home() {
             </div>
 
             <div className="md:col-span-8 lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Socials</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Instagram</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Facebook</a>
+                <span className="text-sm font-medium text-white/80">Instagram</span>
+                <span className="text-sm font-medium text-white/80">Facebook</span>
               </div>
-              <div className="flex flex-col gap-4">
-                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Legal</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Privacy Policy</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Terms of Service</a>
+              <div className="flex flex-col gap-3">
+                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Legalitas</span>
+                <span className="text-sm font-medium text-white/80">Standar CPPOB</span>
+                <span className="text-sm font-medium text-white/80">HAKI IDM000981336</span>
               </div>
-              <div className="flex flex-col gap-4">
-                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Help</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Contact Us</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">FAQ</a>
+              <div className="flex flex-col gap-3">
+                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Operasional</span>
+                <span className="text-sm font-medium text-white/80">Suhu &lt; 5°C Terjaga</span>
+                <span className="text-sm font-medium text-white/80">Pengiriman Instant & Sameday</span>
               </div>
             </div>
           </div>
         </div>
         <div className="border-t border-white/10 bg-black/20">
           <div className="max-w-7xl mx-auto px-6 py-6 text-center md:text-left text-xs font-medium text-white/40">
-            <p>© 2026 Callme Yoghurt. All rights reserved.</p>
+            <p>© 2026 Callme Yoghurt. Seluruh hak cipta dilindungi undang-undang.</p>
           </div>
         </div>
       </footer>
 
-      <div className="fixed bottom-8 right-8 z-50">
-        <Link
-          href="/checkout"
-          className="flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-[0_0_6px_rgba(0,0,0,0.24),_0_8px_12px_rgba(0,0,0,0.14)] hover:scale-110 active:scale-95 transition-all duration-200"
+      {/* 7. FLOATING CART ACTION BUTTON */}
+      <div className="fixed bottom-6 right-6 z-30">
+        <motion.button
+          type="button"
+          onClick={openCart}
+          whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
+          whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
+          aria-label="Buka Keranjang Belanja"
+          className="relative flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-lg cursor-pointer transition-colors"
         >
-          <ShoppingBag size={24} />
-        </Link>
+          <ShoppingBag size={22} />
+          {totalItemsCount > 0 && (
+            <motion.span
+              key={totalItemsCount}
+              initial={shouldReduceMotion ? undefined : { scale: 1.3 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: MOTION_TOKENS.duration.fast }}
+              className="absolute -top-1 -right-1 bg-brand-strawberry text-white text-[11px] font-black rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-xs"
+            >
+              {totalItemsCount}
+            </motion.span>
+          )}
+        </motion.button>
       </div>
 
+      {/* 8. CART DRAWER OVERLAY */}
+      <CartDrawer />
     </div>
   );
 }

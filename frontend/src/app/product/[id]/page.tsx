@@ -1,10 +1,36 @@
 'use client';
 
 import { useCartStore } from '@/store/cartStore';
-import { CupSoda, Heart, Leaf, Milk, Minus, Plus, ShoppingBag, ShoppingCart, Snowflake, ThumbsUp } from 'lucide-react';
+import {
+  ArrowLeft,
+  Award,
+  Check,
+  Clock,
+  Heart,
+  Info,
+  Leaf,
+  Minus,
+  Plus,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  Snowflake,
+  Sparkles,
+} from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { use, useState } from 'react';
+import { notFound, useRouter } from 'next/navigation';
+import { use, useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { CartDrawer } from '@/components/cart/CartDrawer';
+import { MOTION_TOKENS } from '@/lib/motion';
+import {
+  getProductPresentation,
+  parseNetContentMl,
+  type PublicCatalogData,
+  type PublicCatalogProduct,
+  type PublicCatalogVariant,
+} from '@/lib/catalog';
 
 interface FlavorData {
   name: string;
@@ -12,370 +38,740 @@ interface FlavorData {
   darkBg: string;
   tagline: string;
   description: string;
-  prices: { 250: number; 1000: number; };
-  ingredients: string[];
-  nutrition: { calories: string; protein: string; fat: string; sugar: string; };
-  svgGradient: React.ReactNode;
 }
 
+// Visual presentation metadata for known flavors (fallback and styling only, not price or variant authority)
 const FLAVORS: Record<string, FlavorData> = {
   plain: {
-    name: 'Plain Pure Original',
+    name: 'Plain',
     brandColor: '#cba258',
     darkBg: '#271900',
-    tagline: 'Yogurt stirred murni tanpa tambahan gula.',
-    description: 'Yogurt stirred murni tanpa tambahan gula dengan tekstur super kental, lembut, dan creamy kualitas homemade terbaik.',
-    prices: { 250: 22000, 1000: 65000 },
-    ingredients: ['Yogurt kental murni (99,5%)', 'Kultur Bakteri Probiotik Hidup (L. Bulgaricus, S. Thermophilus, L. Acidophilus)'],
-    nutrition: { calories: '110kcal', protein: '8.5g', fat: '3.2g', sugar: '0g' },
-    svgGradient: (<linearGradient id="detail-grad-plain" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#f7ebd3" /><stop offset="50%" stopColor="#cba258" /><stop offset="100%" stopColor="#9a7127" /></linearGradient>)
+    tagline: 'Yoghurt rasa Plain.',
+    description: 'Yoghurt rasa Plain.',
   },
   stroberi: {
-    name: 'Stroberi Summer Blush',
+    name: 'Stroberi',
     brandColor: '#D81E5B',
     darkBg: '#3b1c21',
-    tagline: 'Paduan rasa stroberi buah segar aromatik.',
-    description: 'Paduan rasa stroberi buah segar aromatik dengan yogurt kental premium dan tambahan topping jelly / nata de coco yang kenyal.',
-    prices: { 250: 25000, 1000: 75000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa stroberi buah alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '120kcal', protein: '8g', fat: '3g', sugar: '12g' },
-    svgGradient: (<linearGradient id="detail-grad-stroberi" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffb3c1" /><stop offset="50%" stopColor="#E85D75" /><stop offset="100%" stopColor="#D81E5B" /></linearGradient>)
+    tagline: 'Yoghurt rasa Stroberi.',
+    description: 'Yoghurt rasa Stroberi.',
   },
   mangga: {
-    name: 'Mangga Tropical Gold',
+    name: 'Mangga',
     brandColor: '#F9A03F',
     darkBg: '#3d230d',
-    tagline: 'Kombinasi rasa asam manis segar eksotis.',
-    description: 'Yogurt lembut stirred premium dengan mangga harum manis masak pohon pilihan. Kaya probiotik hidup.',
-    prices: { 250: 28000, 1000: 80000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa mangga alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '130kcal', protein: '7.5g', fat: '2.8g', sugar: '14g' },
-    svgGradient: (<linearGradient id="detail-grad-mangga" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffe3b3" /><stop offset="50%" stopColor="#F9A03F" /><stop offset="100%" stopColor="#e07a16" /></linearGradient>)
+    tagline: 'Yoghurt rasa Mangga.',
+    description: 'Yoghurt rasa Mangga.',
   },
   melon: {
-    name: 'Melon Emerald Fresh',
+    name: 'Melon',
     brandColor: '#A1C349',
     darkBg: '#232d0f',
-    tagline: 'Sensasi kesegaran buah melon premium berair.',
-    description: 'Kaya probiotik aktif untuk kesehatan pencernaan maksimal sehari-hari berpadu dengan kesegaran melon.',
-    prices: { 250: 25000, 1000: 75000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa melon alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '115kcal', protein: '8.2g', fat: '3g', sugar: '10g' },
-    svgGradient: (<linearGradient id="detail-grad-melon" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#e2f0b6" /><stop offset="50%" stopColor="#A1C349" /><stop offset="100%" stopColor="#7da226" /></linearGradient>)
+    tagline: 'Yoghurt rasa Melon.',
+    description: 'Yoghurt rasa Melon.',
   },
   anggur: {
-    name: 'Anggur Royal Purple',
+    name: 'Anggur',
     brandColor: '#7A3B69',
     darkBg: '#3B1C33',
-    tagline: 'Sensasi rasa anggur merah premium manis eksklusif.',
-    description: 'Dipadu dengan stirred yoghurt kental yang lembut, lengkap dengan sensasi mengunyah dari topping jelly.',
-    prices: { 250: 28000, 1000: 80000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa anggur alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '120kcal', protein: '8g', fat: '3g', sugar: '12g' },
-    svgGradient: (<linearGradient id="detail-grad-anggur" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#dfb7d8" /><stop offset="50%" stopColor="#7A3B69" /><stop offset="100%" stopColor="#552246" /></linearGradient>)
+    tagline: 'Yoghurt rasa Anggur.',
+    description: 'Yoghurt rasa Anggur.',
   },
   leci: {
-    name: 'Leci Sweet Bliss',
+    name: 'Leci',
     brandColor: '#ff8da1',
     darkBg: '#4a1523',
-    tagline: 'Rasa leci manis harum khas yang menyegarkan.',
-    description: 'Berpadu dengan kelembutan stirred yoghurt alami. Memberi kesegaran instan bernutrisi.',
-    prices: { 250: 25000, 1000: 75000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa leci alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '118kcal', protein: '8g', fat: '3g', sugar: '13g' },
-    svgGradient: (<linearGradient id="detail-grad-leci" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#ffc2cf" /><stop offset="50%" stopColor="#ff8da1" /><stop offset="100%" stopColor="#c75066" /></linearGradient>)
+    tagline: 'Yoghurt rasa Leci.',
+    description: 'Yoghurt rasa Leci.',
   },
   vanila: {
-    name: 'Vanila Velvet Orchid',
+    name: 'Vanila',
     brandColor: '#f3e5AB',
     darkBg: '#3d361c',
-    tagline: 'Kehangatan rasa vanila klasik.',
-    description: 'Berpadu kentalnya susu fermentasi dari peternakan lokal terbaik. Halus, manis pas, dan menenangkan.',
-    prices: { 250: 25000, 1000: 75000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa vanila alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '125kcal', protein: '8.2g', fat: '3.5g', sugar: '12g' },
-    svgGradient: (<linearGradient id="detail-grad-vanila" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fdf7db" /><stop offset="50%" stopColor="#f3e5AB" /><stop offset="100%" stopColor="#bba755" /></linearGradient>)
+    tagline: 'Yoghurt rasa Vanila.',
+    description: 'Yoghurt rasa Vanila.',
   },
-  pisang: {
-    name: 'Pisang Ambon Smooth',
-    brandColor: '#E8D354',
-    darkBg: '#332D10',
-    tagline: 'Kentalnya nikmat dengan keharuman pisang ambon.',
-    description: 'Yogurt lembut stirred premium dengan sensasi dan wangi pisang ambon alami. 100% gula asli tanpa pemanis buatan.',
-    prices: { 250: 25000, 1000: 75000 },
-    ingredients: ['Yogurt kental (86,3%)', 'Gula pasir murni', 'Perisa pisang ambon alami', 'Topping Jelly / Nata de Coco'],
-    nutrition: { calories: '125kcal', protein: '8g', fat: '3.2g', sugar: '13g' },
-    svgGradient: (<linearGradient id="detail-grad-pisang" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#fcf6ce" /><stop offset="50%" stopColor="#E8D354" /><stop offset="100%" stopColor="#a3922c" /></linearGradient>)
-  }
+};
+
+// Retained for catalog invariant test compliance (catalog-validation.test.ts)
+const FLAVOR_IMAGES: Record<string, string> = {
+  plain: '/images/plain.png',
+  stroberi: '/images/stroberi.png',
+  mangga: '/images/mangga.png',
+  melon: '/images/melon.png',
+  anggur: '/images/anggur.png',
+  leci: '/images/leci.png',
+  vanila: '/images/vanila.png',
+};
+
+// Official confirmed 250/500ml artwork from owner
+const OFFICIAL_PRODUCT_ARTWORK: Record<string, string> = {
+  plain: '/images/products/plain-250-500.png',
+  stroberi: '/images/products/stroberi-250-500.png',
+  mangga: '/images/products/mangga-250-500.png',
+  melon: '/images/products/melon-250-500.png',
+  anggur: '/images/products/anggur-250-500.png',
+  leci: '/images/products/leci-250-500.png',
+  vanila: '/images/products/vanila-250-500.png',
 };
 
 type FlavorKey = keyof typeof FLAVORS;
+export type ProductSize = 250 | 500 | 1000;
+
+// Standard catalog preview pricing for display fallback when ERP is offline (Phase 1.7C.2: 16k / 30k / 55k)
+const PREVIEW_PRICES: Record<ProductSize, number> = {
+  250: 16000,
+  500: 30000,
+  1000: 55000,
+};
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
-  const flavorKey = (id in FLAVORS ? id : 'plain') as FlavorKey;
-  const flavor = FLAVORS[flavorKey];
 
-  const [selectedSize, setSelectedSize] = useState<250 | 1000>(250);
+  const requestedSlug = id.trim().toLowerCase();
+  const presentation = getProductPresentation(requestedSlug);
+  const isKnownFlavor = requestedSlug in FLAVORS;
+
+  const visualFlavorKey = (isKnownFlavor ? requestedSlug : 'plain') as FlavorKey;
+  const fallbackFlavor = FLAVORS[visualFlavorKey];
+
+  const [selectedSize, setSelectedSize] = useState<ProductSize>(250);
   const [quantity, setQuantity] = useState<number>(1);
-  const addItem = useCartStore((state) => state.addItem);
+  const [catalogLoading, setCatalogLoading] = useState<boolean>(true);
+  const [catalogLoaded, setCatalogLoaded] = useState<boolean>(false);
+  const [catalogOnline, setCatalogOnline] = useState<boolean>(false);
+  const [erpProduct, setErpProduct] = useState<PublicCatalogProduct | null>(null);
+  const [demoNoticeVisible, setDemoNoticeVisible] = useState<boolean>(false);
+  const [added, setAdded] = useState<boolean>(false);
 
-  const activePrice = flavor.prices[selectedSize];
+  const addItem = useCartStore((state) => state.addItem);
+  const items = useCartStore((state) => state.items);
+  const openCart = useCartStore((state) => state.openCart);
+  const shouldReduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalog() {
+      try {
+        const res = await fetch('/api/catalog');
+        if (!res.ok) {
+          if (isMounted) {
+            setCatalogLoading(false);
+            setCatalogLoaded(true);
+            setCatalogOnline(false);
+          }
+          return;
+        }
+        const data: PublicCatalogData = await res.json();
+        if (isMounted) {
+          const matched = data.products?.find(
+            (p: PublicCatalogProduct) => p.slug.toLowerCase() === requestedSlug
+          );
+          setErpProduct(matched || null);
+          setCatalogOnline(true);
+          setCatalogLoading(false);
+          setCatalogLoaded(true);
+        }
+      } catch {
+        if (isMounted) {
+          setCatalogLoading(false);
+          setCatalogLoaded(true);
+          setCatalogOnline(false);
+        }
+      }
+    }
+    loadCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, [requestedSlug]);
+
+  // Dynamic ERP Authority:
+  // Legitimate ERP products must never 404 simply because they lack hardcoded presentation entry.
+  // Unknown / nonexistent slug must 404 whenever catalog is online and product does not exist in ERP.
+  if (catalogLoaded) {
+    if (catalogOnline) {
+      if (!erpProduct) {
+        notFound();
+      }
+    } else {
+      if (!isKnownFlavor) {
+        notFound();
+      }
+    }
+  }
+
+  // Authoritative names and content from ERP
+  const displayName = erpProduct?.name || fallbackFlavor.name;
+  const displayTagline = erpProduct?.description || fallbackFlavor.tagline;
+  const brandColor = presentation.brandColor;
+  const darkBg = presentation.darkBg;
+  const imageSrc =
+    presentation.artwork ||
+    (isKnownFlavor ? (OFFICIAL_PRODUCT_ARTWORK[requestedSlug] || FLAVOR_IMAGES[requestedSlug]) : undefined);
+
+  // Authoritative variant matching from ERP via exact net content parsing (250ml, 500ml, 1000ml)
+  const variant250 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const ml = parseNetContentMl(v.net_content?.quantity, v.net_content?.uom);
+    return ml === 250;
+  });
+
+  const variant500 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const ml = parseNetContentMl(v.net_content?.quantity, v.net_content?.uom);
+    return ml === 500;
+  });
+
+  const variant1000 = erpProduct?.variants.find((v: PublicCatalogVariant) => {
+    const ml = parseNetContentMl(v.net_content?.quantity, v.net_content?.uom);
+    return ml === 1000;
+  });
+
+  const isErpOnline = Boolean(erpProduct);
+
+  const has250Variant = isErpOnline ? Boolean(variant250) : false;
+  const has500Variant = isErpOnline ? Boolean(variant500) : false;
+  const has1000Variant = isErpOnline ? Boolean(variant1000) : false;
+
+  const price250 = variant250?.price.amount ?? PREVIEW_PRICES[250];
+  const price500 = variant500?.price.amount ?? PREVIEW_PRICES[500];
+  const price1000 = variant1000?.price.amount ?? PREVIEW_PRICES[1000];
+
+  const currentVariant =
+    selectedSize === 250 ? variant250 : selectedSize === 500 ? variant500 : variant1000;
+  const hasCurrentVariant =
+    selectedSize === 250 ? has250Variant : selectedSize === 500 ? has500Variant : has1000Variant;
+  const currentPrice =
+    selectedSize === 250 ? price250 : selectedSize === 500 ? price500 : price1000;
+
+  // Visual scale mapping (250 = 0.90, 500 = 1.00, 1000 = 1.00 neutral)
+  const currentScale = selectedSize === 250 ? 0.90 : 1.00;
 
   const handleAddToCart = () => {
+    if (!isErpOnline || !currentVariant) {
+      // Preview mode / ERP offline:
+      // STRICT REQUIREMENT: Preview products MUST NOT enter transactional checkout cart.
+      setDemoNoticeVisible(true);
+      return;
+    }
+
+    // Authoritative ERP Checkout Flow with real UUID variant_id
     addItem({
-      id: `${flavorKey}-${selectedSize}`,
-      name: `Callme Yoghurt ${flavor.name}`,
+      variant_id: currentVariant.variant_id,
+      sku: currentVariant.sku,
+      name: currentVariant.name,
       volume_ml: selectedSize,
       quantity: quantity,
-      price: activePrice
+      display_price: currentVariant.price.amount,
     });
-    alert(`${flavor.name} (${selectedSize}ml) telah ditambahkan ke pesanan!`);
-    router.push('/checkout');
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1400);
+    openCart();
   };
 
-  const increaseQty = () => setQuantity(prev => prev + 1);
-  const decreaseQty = () => setQuantity(prev => (prev > 1 ? prev - 1 : 1));
+  const increaseQty = () => setQuantity((prev) => prev + 1);
+  const decreaseQty = () => setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
 
   return (
-    <div className="bg-[#f2f0eb] text-black/87 tracking-[-0.01em] min-h-screen font-sans antialiased overflow-x-hidden">
+    <div className="bg-[#f7f5f0] text-[#1c1917] tracking-[-0.01em] min-h-screen font-sans antialiased">
+      {/* Top Navigation Bar */}
+      <nav className="sticky top-0 w-full z-50 bg-[#f7f5f0]/95 backdrop-blur-md border-b border-black/5 h-16 flex items-center shadow-sm">
+        <div className="flex justify-between items-center px-4 sm:px-6 w-full max-w-7xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-black/60 hover:text-[#00754A] transition-colors"
+            >
+              <ArrowLeft size={16} />
+              <span>Kembali ke Menu</span>
+            </Link>
+          </div>
 
-      <nav className="fixed top-0 w-full z-50 bg-[#f2f0eb]/90 backdrop-blur-md shadow-sm h-20 flex items-center border-b border-black/5">
-        <div className="flex justify-between items-center px-6 w-full max-w-7xl mx-auto">
-          <Link href="/" className="font-extrabold text-xl text-[#00754A] tracking-tight">
+          <Link href="/" className="font-extrabold text-lg text-[#00754A] tracking-tight">
             Callme Yoghurt
           </Link>
-          <div className="hidden md:flex gap-8">
-            <Link className="font-medium text-black/58 hover:text-[#00754A] transition-colors" href="/">Katalog</Link>
-            <Link className="font-medium text-black/58 hover:text-[#00754A] transition-colors" href="/#kisah">Kisah Kami</Link>
-          </div>
-          <Link href="/checkout">
-            <button className="px-6 py-2.5 bg-[#00754A] text-white rounded-[50px] font-semibold text-sm hover:scale-95 transition-transform duration-200">
-              Keranjang
-            </button>
-          </Link>
+
+          <button
+            type="button"
+            onClick={openCart}
+            aria-label="Buka Keranjang Belanja"
+            className="flex items-center gap-2 px-4 py-2 bg-[#00754A] text-white rounded-full font-semibold text-xs hover:bg-[#006241] active:scale-95 transition-all shadow-sm cursor-pointer"
+          >
+            <ShoppingBag size={14} />
+            <span>Keranjang</span>
+            {items.length > 0 && (
+              <span className="bg-[#A1C349] text-[#1E3932] text-[10px] font-black rounded-full px-1.5 py-0.2 min-w-[16px] text-center">
+                {items.reduce((acc, i) => acc + i.quantity, 0)}
+              </span>
+            )}
+          </button>
         </div>
       </nav>
 
-      <main className="pt-20">
-        <header className="py-16 md:py-20 transition-colors duration-300" style={{ backgroundColor: flavor.darkBg }}>
-          <div className="max-w-7xl mx-auto px-6">
-            <nav className="mb-6">
-              <ol className="flex list-none p-0 text-white/70 font-semibold text-xs gap-2 tracking-wider uppercase">
-                <li><Link className="hover:text-white transition-colors" href="/">Menu</Link></li>
-                <li>/</li>
-                <li className="text-white font-bold">{flavorKey}</li>
-              </ol>
-            </nav>
-            <span className="text-white/60 font-bold tracking-widest text-xs uppercase mb-2 block">Kentalnya Nikmat</span>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-[-0.02em]">{flavor.name}</h1>
-            <p className="text-white/80 text-lg md:text-xl max-w-2xl leading-relaxed">{flavor.tagline}</p>
-          </div>
-        </header>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        {/* Breadcrumbs */}
+        <nav className="mb-6 flex items-center gap-2 text-xs font-medium text-black/50">
+          <Link href="/" className="hover:text-[#00754A] transition-colors">
+            Menu
+          </Link>
+          <span>/</span>
+          <span className="text-black/80 font-bold capitalize">{requestedSlug}</span>
+        </nav>
 
-        <section className="max-w-7xl mx-auto px-6 -mt-10 pb-24 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-            <div className="lg:col-span-5 bg-white rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] overflow-hidden p-8 flex flex-col items-center justify-center border border-black/5 min-h-[500px] relative">
-              <div className="absolute top-6 left-6 flex flex-col gap-2">
-                <span className="text-white font-bold text-xs px-4 py-1.5 rounded-full shadow-sm tracking-wide" style={{ backgroundColor: flavor.brandColor }}>
-                  Premium Varian
+        {/* E-Commerce Product Hero Grid (Desktop: Left Image 350-400px, Right Info) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+          {/* LEFT COLUMN: Product Image Container */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }}
+            className="lg:col-span-5 flex flex-col items-center"
+          >
+            {/* Square Container: Desktop 350-400px (max-w-[380px]), Mobile 250-300px (max-w-[280px]) */}
+            <div className="w-full max-w-[280px] sm:max-w-[340px] lg:max-w-[380px] aspect-square mx-auto bg-white rounded-2xl shadow-sm border border-black/5 p-4 sm:p-6 relative flex items-center justify-center overflow-hidden">
+              {/* Flavor Tag */}
+              <div className="absolute top-3.5 left-3.5 z-10">
+                <span
+                  className="text-white font-bold text-[11px] px-3 py-1 rounded-full shadow-sm tracking-wide block"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  Varian Resmi
                 </span>
-                <span className="bg-[#1E3932] text-white font-bold text-[10px] px-3 py-1 rounded-full shadow-sm tracking-wider uppercase">
-                  Homemade Quality
+              </div>
+
+              {/* Cold Chain Badge */}
+              <div className="absolute top-3.5 right-3.5 z-10">
+                <span className="bg-[#1E3932] text-white font-bold text-[10px] px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
+                  <Snowflake size={11} className="text-emerald-300" />
+                  <span>0–5°C</span>
                 </span>
               </div>
-              <div className="relative w-full aspect-[4/5] bg-gray-50 rounded-2xl flex flex-col items-center justify-center p-8 transition-transform duration-500 hover:scale-[1.02]">
-                <svg viewBox="0 0 100 120" className={`drop-shadow-2xl transition-all duration-500 ${selectedSize === 1000 ? 'w-64 h-64' : 'w-48 h-48'}`} fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    {flavor.svgGradient}
-                    <linearGradient id="detail-bottle-glass" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
-                      <stop offset="100%" stopColor="#e4e2e0" stopOpacity="0.4" />
-                    </linearGradient>
-                  </defs>
-                  <rect x="42" y="10" width="16" height="8" rx="3" fill="#1E3932" />
-                  <path d="M44 18H56V28H44V18Z" fill="#e4e2e0" />
-                  <path d="M30 36C30 31 34 28 40 28H60C66 28 70 31 70 36V102C70 107 66 110 60 110H40C34 110 30 107 30 102V36Z" fill="url(#detail-bottle-glass)" stroke={flavor.brandColor} strokeWidth="2" />
-                  <path d="M32 44C32 44 38 41 50 41C62 41 68 44 68 44V100C68 104 65 107 58 107H42C35 107 32 104 32 100V44Z" fill={`url(#detail-grad-${flavorKey})`} opacity="0.9" />
-                  <rect x="36" y="52" width="28" height="36" rx="4" fill="#ffffff" />
-                  <text x="50" y="66" fontSize="5" fontWeight="900" fill="#1E3932" textAnchor="middle">CALLME</text>
-                  <text x="50" y="73" fontSize="4.5" fontWeight="700" style={{ fill: flavor.brandColor }} textAnchor="middle">{flavorKey.toUpperCase()}</text>
-                  <text x="50" y="80" fontSize="3.5" fill="rgba(0,0,0,0.58)" textAnchor="middle">{selectedSize} ml</text>
-                </svg>
-              </div>
-            </div>
 
-            <div className="lg:col-span-7 flex flex-col gap-6">
-              <div className="bg-white p-6 md:p-8 rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] space-y-5">
-                <h3 className="font-bold text-sm uppercase tracking-wider text-black/58">Pilih Ukuran</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => setSelectedSize(250)} className="flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all active:scale-[0.98]" style={{ borderColor: selectedSize === 250 ? flavor.brandColor : '#e5e7eb', backgroundColor: selectedSize === 250 ? `${flavor.brandColor}08` : 'transparent' }}>
-                    <CupSoda size={40} color={selectedSize === 250 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
-                    <span className="font-bold text-base text-black/87">250 ml</span>
-                    <span className="font-semibold text-sm text-black/58">Rp {flavor.prices[250].toLocaleString('id-ID')}</span>
-                  </button>
-                  <button onClick={() => setSelectedSize(1000)} className="flex flex-col items-center gap-3 p-5 rounded-[12px] border-2 transition-all active:scale-[0.98]" style={{ borderColor: selectedSize === 1000 ? flavor.brandColor : '#e5e7eb', backgroundColor: selectedSize === 1000 ? `${flavor.brandColor}08` : 'transparent' }}>
-                    <Milk size={40} color={selectedSize === 1000 ? flavor.brandColor : '#9ca3af'} strokeWidth={1.5} />
-                    <span className="font-bold text-base text-black/87">1 Liter</span>
-                    <span className="font-semibold text-sm text-black/58">Rp {flavor.prices[1000].toLocaleString('id-ID')}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 md:p-8 rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 border border-gray-200 rounded-[50px] px-2 py-2">
-                    <button onClick={decreaseQty} className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 active:scale-90 transition-transform">
-                      <Minus size={18} className="text-black/87" />
-                    </button>
-                    <span className="font-bold text-lg w-6 text-center text-black/87">{quantity}</span>
-                    <button onClick={increaseQty} className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 active:scale-90 transition-transform">
-                      <Plus size={18} className="text-black/87" />
-                    </button>
-                  </div>
-                  <div className="text-right">
-                    <span className="block text-sm text-black/58 font-medium mb-1">Total Harga</span>
-                    <span className="text-3xl font-extrabold" style={{ color: flavor.brandColor }}>
-                      Rp {((activePrice * quantity) / 1000).toFixed(0)}k
+              {/* Product Visual Area: Neutral 1L State or 250/500ml Bottle Artwork */}
+              {selectedSize === 1000 ? (
+                <div className="relative w-full h-full flex flex-col items-center justify-center text-center p-6">
+                  <div
+                    className="w-24 h-36 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-3 mb-3 backdrop-blur-xs"
+                    style={{ borderColor: `${brandColor}80`, backgroundColor: `${brandColor}12` }}
+                  >
+                    <span className="font-black text-2xl tracking-tight" style={{ color: brandColor }}>
+                      1L
+                    </span>
+                    <span className="text-[10px] text-black/60 font-medium uppercase tracking-wider mt-1">
+                      Kemasan 1 Liter
                     </span>
                   </div>
+                  <span className="bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium px-3 py-1 rounded-full shadow-xs">
+                    Foto resmi 1L segera hadir
+                  </span>
                 </div>
-                <button onClick={handleAddToCart} className="w-full text-white py-4 rounded-[50px] font-bold text-base transition-transform active:scale-95 flex items-center justify-center gap-3 hover:opacity-90 shadow-lg" style={{ backgroundColor: flavor.brandColor }}>
-                  <ShoppingCart size={20} /> Tambahkan ke Pesanan
+              ) : (
+                <motion.div
+                  animate={{ scale: currentScale }}
+                  transition={
+                    shouldReduceMotion
+                      ? { duration: 0 }
+                      : { duration: MOTION_TOKENS.duration.normal, ease: MOTION_TOKENS.ease.out }
+                  }
+                  className="relative w-full h-full flex items-center justify-center"
+                >
+                  {imageSrc ? (
+                    <Image
+                      src={imageSrc}
+                      alt={displayName}
+                      fill
+                      sizes="(max-width: 640px) 280px, (max-width: 1024px) 340px, 380px"
+                      className="object-contain p-2 drop-shadow-md"
+                      priority
+                    />
+                  ) : (
+                    <div className="w-28 h-40 rounded-2xl bg-black/5 border border-black/10 flex flex-col items-center justify-center text-black/50 p-2">
+                      <span className="font-extrabold text-3xl tracking-tight">{displayName.slice(0, 2).toUpperCase()}</span>
+                      <span className="text-xs font-semibold mt-1">{selectedSize} ml</span>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+
+            {/* Quality Badges below image */}
+            <div className="w-full max-w-[380px] mt-4 flex items-center justify-between px-2 text-[11px] text-black/60 font-medium">
+              <span className="flex items-center gap-1">
+                <Snowflake size={13} className="text-[#00754A]" />
+                <span>0–5°C Rantai Dingin</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <ShieldCheck size={13} className="text-[#00754A]" />
+                <span>Standar CPPOB</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <Award size={13} className="text-[#00754A]" />
+                <span>HAKI IDM000981336</span>
+              </span>
+            </div>
+          </motion.div>
+
+          {/* RIGHT COLUMN: Product Information & Purchase Hierarchy */}
+          <motion.div
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.normal, delay: 0.05 }}
+            className="lg:col-span-7 flex flex-col space-y-6"
+          >
+            {/* 1. Header & Title */}
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-[#00754A] block mb-1.5">
+                Katalog Resmi Callme Yoghurt
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-[#1c1917] tracking-tight mb-2">
+                {displayName}
+              </h1>
+              <p className="text-sm sm:text-base text-black/70 leading-relaxed font-normal">
+                {displayTagline}
+              </p>
+            </div>
+
+            {/* 2. Price Section */}
+            <div className="border-y border-black/5 py-4 flex items-baseline justify-between">
+              <div>
+                <span className="text-xs font-semibold text-black/50 block">Harga Satuan</span>
+                <motion.span
+                  key={selectedSize}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: shouldReduceMotion ? 0.01 : MOTION_TOKENS.duration.fast }}
+                  className="text-3xl font-extrabold text-[#00754A] tracking-tight block"
+                >
+                  Rp {currentPrice.toLocaleString('id-ID')}
+                </motion.span>
+              </div>
+              <span className="text-xs text-black/40 font-medium text-right">
+                Ukuran: <strong>{selectedSize === 1000 ? '1 Liter' : `${selectedSize} ml`}</strong>
+              </span>
+            </div>
+
+            {/* 3. ERP Status Notice (Catalog Preview Mode vs Live ERP) */}
+            {!isErpOnline && !catalogLoading && (
+              <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3.5 flex items-start gap-3">
+                <Info size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900 leading-relaxed">
+                  <strong>Mode Pratinjau Katalog</strong> — Menampilkan perkiraan harga resmi (250ml: Rp 16.000, 500ml: Rp 30.000, 1L: Rp 55.000). Transaksi checkout hanya dapat diproses saat koneksi ERP aktif.
+                </div>
+              </div>
+            )}
+
+            {/* 4. Variant Size Selector (250 ml, 500 ml, 1 Liter) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-black/70">
+                  Pilih Ukuran
+                </label>
+                <span className="text-[11px] text-black/40">
+                  {selectedSize === 250
+                    ? 'Kemasan Praktis Sekali Minum'
+                    : selectedSize === 500
+                      ? 'Ukuran Pas Sehari-hari'
+                      : 'Kemasan Keluarga Hemat'}
+                </span>
+              </div>
+
+              {/* 3-Column Variant Grid */}
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-w-lg">
+                {/* 250 ml Variant Button */}
+                <button
+                  type="button"
+                  disabled={catalogLoading || (isErpOnline && !has250Variant)}
+                  onClick={() => setSelectedSize(250)}
+                  className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                    selectedSize === 250
+                      ? 'border-2 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  } ${isErpOnline && !has250Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  style={{
+                    borderColor:
+                      selectedSize === 250 ? brandColor : undefined,
+                    backgroundColor:
+                      selectedSize === 250 ? `${brandColor}0d` : undefined,
+                  }}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-sm text-[#1c1917]">250 ml</span>
+                    {selectedSize === 250 && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: brandColor }}
+                      />
+                    )}
+                  </div>
+                  <div className="font-semibold text-xs mt-1 text-black/70">
+                    Rp {price250.toLocaleString('id-ID')}
+                  </div>
+                  <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
+                    <Check size={11} />
+                    <span>{isErpOnline && !has250Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
+                  </div>
+                </button>
+
+                {/* 500 ml Variant Button */}
+                <button
+                  type="button"
+                  disabled={catalogLoading || (isErpOnline && !has500Variant)}
+                  onClick={() => setSelectedSize(500)}
+                  className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                    selectedSize === 500
+                      ? 'border-2 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  } ${isErpOnline && !has500Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  style={{
+                    borderColor:
+                      selectedSize === 500 ? brandColor : undefined,
+                    backgroundColor:
+                      selectedSize === 500 ? `${brandColor}0d` : undefined,
+                  }}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-sm text-[#1c1917]">500 ml</span>
+                    {selectedSize === 500 && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: brandColor }}
+                      />
+                    )}
+                  </div>
+                  <div className="font-semibold text-xs mt-1 text-black/70">
+                    Rp {price500.toLocaleString('id-ID')}
+                  </div>
+                  <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
+                    <Check size={11} />
+                    <span>{isErpOnline && !has500Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
+                  </div>
+                </button>
+
+                {/* 1 Liter Variant Button */}
+                <button
+                  type="button"
+                  disabled={catalogLoading || (isErpOnline && !has1000Variant)}
+                  onClick={() => setSelectedSize(1000)}
+                  className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                    selectedSize === 1000
+                      ? 'border-2 shadow-sm'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  } ${isErpOnline && !has1000Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  style={{
+                    borderColor:
+                      selectedSize === 1000 ? brandColor : undefined,
+                    backgroundColor:
+                      selectedSize === 1000 ? `${brandColor}0d` : undefined,
+                  }}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-sm text-[#1c1917]">1 Liter</span>
+                    {selectedSize === 1000 && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: brandColor }}
+                      />
+                    )}
+                  </div>
+                  <div className="font-semibold text-xs mt-1 text-black/70">
+                    Rp {price1000.toLocaleString('id-ID')}
+                  </div>
+                  <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
+                    <Check size={11} />
+                    <span>{isErpOnline && !has1000Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
+                  </div>
                 </button>
               </div>
-
-              <div className="bg-white rounded-[16px] shadow-[0_0_0.5px_rgba(0,0,0,0.14),_0_1px_1px_rgba(0,0,0,0.24)] overflow-hidden">
-                <div className="grid grid-cols-1 md:grid-cols-2">
-                  <div className="p-6 md:p-8 border-b md:border-b-0 md:border-r border-gray-100">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-[#00754A] mb-5">Komposisi</h4>
-                    <ul className="space-y-4">
-                      {flavor.ingredients.map((ing, idx) => (
-                        <li key={idx} className="text-sm font-medium text-black/70 flex items-start gap-3">
-                          <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: flavor.brandColor }}></span>{ing}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="p-6 md:p-8">
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-[#00754A] mb-5">Informasi Nilai Gizi</h4>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-3">
-                        <span className="text-black/70 font-medium">Kalori</span><span className="font-bold text-black/87">{flavor.nutrition.calories}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-3">
-                        <span className="text-black/70 font-medium">Protein</span><span className="font-bold text-black/87">{flavor.nutrition.protein}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm border-b border-gray-100 pb-3">
-                        <span className="text-black/70 font-medium">Lemak</span><span className="font-bold text-black/87">{flavor.nutrition.fat}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-black/70 font-medium">Gula</span><span className="font-bold text-black/87">{flavor.nutrition.sugar}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-[#f2f0eb] border border-[#e5e7eb] p-6 rounded-[16px] flex items-start gap-4 mt-2">
-                <div className="mt-1">
-                  <Snowflake size={24} className="text-[#00754A]" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-black/87 mb-2">Instruksi Penyimpanan</h4>
-                  <ul className="text-sm text-black/70 list-disc list-inside space-y-1.5">
-                    <li>Hanya tahan <strong>3 hari</strong> di suhu ruang.</li>
-                    <li>Tahan <strong>2 bulan</strong> di dalam kulkas (suhu {'<'} 5°C).</li>
-                    <li>Segera masukkan ke kulkas begitu pesanan diterima.</li>
-                  </ul>
-                </div>
-              </div>
-
             </div>
-          </div>
-        </section>
 
-        <section className="bg-[#1E3932] text-white py-20 mt-10">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div className="flex flex-col items-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-2">
-                  <Leaf size={32} className="text-white" />
-                </div>
-                <h3 className="text-xl font-bold tracking-tight">100% Organik</h3>
-                <p className="text-base text-white/70 leading-relaxed max-w-xs">Susu sapi organik segar yang diproses secara higienis setiap harinya.</p>
+            {/* 5. Cold Chain Logistics Fulfillment Info */}
+            <div className="p-3 bg-white rounded-xl border border-black/5 space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#00754A]">
+                <Snowflake size={14} className="text-[#00754A]" />
+                <span>Distribusi Rantai Dingin (0–5°C) — Jakarta Hub</span>
               </div>
-              <div className="flex flex-col items-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-2">
-                  <Heart size={32} className="text-white" />
-                </div>
-                <h3 className="text-xl font-bold tracking-tight">Tanpa Pengawet</h3>
-                <p className="text-base text-white/70 leading-relaxed max-w-xs">Menjamin kesegaran probiotik hidup tanpa bahan kimia buatan.</p>
-              </div>
-              <div className="flex flex-col items-center text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-2">
-                  <ThumbsUp size={32} className="text-white" />
-                </div>
-                <h3 className="text-xl font-bold tracking-tight">Rasa Premium</h3>
-                <p className="text-base text-white/70 leading-relaxed max-w-xs">Ekstrak buah murni memberikan sensasi rasa mewah sekelas kafe.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-      </main>
-
-      <footer className="bg-[#1E3932] text-white">
-        <div className="max-w-7xl mx-auto px-6 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-8">
-            <div className="md:col-span-4 lg:col-span-5 space-y-4">
-              <span className="text-2xl font-extrabold text-white block tracking-tight">Callme Yoghurt Cipayung</span>
-              <p className="text-sm text-white/70 leading-relaxed mb-2">
-                Bambu Kuning Residence Blok A No.3A RT.11/RW 01,<br />Bambu Apus, Cipayung, Jakarta Timur, 13890.
+              <p className="text-[11px] text-black/50 flex items-center gap-1.5">
+                <Clock size={12} className="text-black/40" />
+                <span>
+                  Pengiriman dingin terjaga dengan coolpack khusus untuk menjamin kesegaran rasa.
+                </span>
               </p>
-              <div className="text-sm font-bold text-white mt-4 space-y-1">
-                <p>WA: 081316353365</p>
-                <p>Email: yoghurtcallme@gmail.com</p>
-              </div>
             </div>
 
-            <div className="md:col-span-8 lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8">
-              <div className="flex flex-col gap-4">
-                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Socials</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Instagram</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Facebook</a>
+            {/* 6. Quantity Stepper & Add to Cart Purchase Action */}
+            <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 border border-gray-200 rounded-full px-2 py-1.5">
+                  <button
+                    type="button"
+                    onClick={decreaseQty}
+                    aria-label="Kurangi jumlah"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 active:scale-90 transition-transform cursor-pointer"
+                  >
+                    <Minus size={14} className="text-black/70" />
+                  </button>
+                  <span className="font-bold text-base w-6 text-center text-[#1c1917]">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={increaseQty}
+                    aria-label="Tambah jumlah"
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 hover:bg-gray-100 active:scale-90 transition-transform cursor-pointer"
+                  >
+                    <Plus size={14} className="text-black/70" />
+                  </button>
+                </div>
+
+                <div className="text-right">
+                  <span className="block text-[11px] text-black/50 font-medium">Estimasi Subtotal</span>
+                  <span className="font-extrabold text-xl text-[#00754A] tracking-tight">
+                    Rp {(currentPrice * quantity).toLocaleString('id-ID')}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col gap-4">
-                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Legal</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Privacy Policy</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Terms of Service</a>
-              </div>
-              <div className="flex flex-col gap-4">
-                <span className="font-bold text-white uppercase text-xs tracking-widest opacity-60">Help</span>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">Contact Us</a>
-                <a className="text-sm font-medium text-white/80 hover:text-white transition-colors" href="#">FAQ</a>
+
+              {demoNoticeVisible && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3 rounded-xl flex items-center gap-2">
+                  <Info size={14} className="text-amber-700 flex-shrink-0" />
+                  <span>Katalog saat ini dalam mode pratinjau. Hubungkan backend ERP untuk transaksi live.</span>
+                </div>
+              )}
+
+              <motion.button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={!hasCurrentVariant || catalogLoading}
+                whileHover={shouldReduceMotion || !hasCurrentVariant ? undefined : { scale: 1.01 }}
+                whileTap={shouldReduceMotion || !hasCurrentVariant ? undefined : { scale: 0.98 }}
+                className={`w-full text-white py-3.5 rounded-full font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-md ${
+                  !hasCurrentVariant || catalogLoading
+                    ? 'opacity-50 cursor-not-allowed bg-gray-400'
+                    : added
+                      ? 'bg-[#1E3932] cursor-pointer'
+                      : 'hover:opacity-95 cursor-pointer'
+                }`}
+                style={{
+                  backgroundColor:
+                    !hasCurrentVariant || catalogLoading
+                      ? undefined
+                      : added
+                        ? '#1E3932'
+                        : brandColor,
+                }}
+              >
+                {added ? (
+                  <>
+                    <Check size={18} className="text-[#A1C349]" />
+                    <span>Berhasil Ditambahkan!</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart size={18} />
+                    <span>
+                      {catalogLoading
+                        ? 'Memeriksa Katalog...'
+                        : hasCurrentVariant
+                          ? 'Tambahkan ke Pesanan'
+                          : 'Varian Tidak Aktif'}
+                    </span>
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* BOTTOM SECTION: Ingredients, Nutrition Facts & Cold Chain Storage */}
+        <div className="mt-12 sm:mt-16 pt-10 border-t border-black/10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Ingredients */}
+            <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#00754A] flex items-center gap-2">
+                <Leaf size={14} />
+                <span>Informasi Komposisi</span>
+              </h3>
+              <p className="text-xs text-black/70 leading-relaxed">
+                Informasi komposisi mengikuti label produk resmi.
+              </p>
+            </div>
+
+            {/* Nutrition Facts */}
+            <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#00754A] flex items-center gap-2">
+                <Info size={14} />
+                <span>Informasi Nilai Gizi</span>
+              </h3>
+              <p className="text-xs text-black/70 leading-relaxed">
+                Informasi gizi akan diperbarui berdasarkan label produk resmi.
+              </p>
+            </div>
+
+            {/* Cold Chain Storage Instructions (Mandatory SOP 01) */}
+            <div className="bg-[#f0f5f2] p-6 rounded-2xl border border-[#00754A]/20 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#00754A] flex items-center gap-2">
+                <Snowflake size={14} />
+                <span>Penyimpanan Rantai Dingin</span>
+              </h3>
+              <div className="space-y-2 text-xs text-black/75 leading-relaxed">
+                <p>
+                  <strong>Suhu Optimal:</strong> Simpan segera di kulkas pada suhu{' '}
+                  <strong className="text-[#00754A]">0–5°C</strong>.
+                </p>
+                <p>
+                  <strong>Ketahanan Produk:</strong> Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima.
+                </p>
+                <p>
+                  <strong>Peringatan Mutu:</strong> Jangan dibekukan di dalam freezer atau dibiarkan di
+                  suhu ruang lebih dari 4 jam untuk menjaga kualitas kesegaran yoghurt.
+                </p>
               </div>
             </div>
           </div>
         </div>
-        <div className="border-t border-white/10 bg-black/20">
-          <div className="max-w-7xl mx-auto px-6 py-6 text-center md:text-left text-xs font-medium text-white/40">
-            <p>© 2026 Callme Yoghurt. All rights reserved.</p>
+      </main>
+
+      {/* Floating Checkout Cart Button */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <motion.button
+          type="button"
+          onClick={openCart}
+          whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
+          whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
+          aria-label="Buka Keranjang Belanja"
+          className="relative flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-lg cursor-pointer transition-colors"
+        >
+          <ShoppingBag size={22} />
+          {items.length > 0 && (
+            <motion.span
+              key={items.length}
+              initial={shouldReduceMotion ? undefined : { scale: 1.3 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: MOTION_TOKENS.duration.fast }}
+              className="absolute -top-1 -right-1 bg-brand-strawberry text-white text-[11px] font-black rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-xs"
+            >
+              {items.reduce((acc, i) => acc + i.quantity, 0)}
+            </motion.span>
+          )}
+        </motion.button>
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-20 border-t border-black/5 bg-white py-8 text-center text-xs text-black/40">
+        <div className="max-w-7xl mx-auto px-4">
+          <p>© 2026 Callme Yoghurt Cipayung. Seluruh hak cipta dilindungi.</p>
+          <div className="mt-2 flex justify-center gap-4 text-black/60 font-medium">
+            <span>Bambu Apus, Cipayung, Jakarta Timur</span>
+            <span>•</span>
+            <span>Cold Chain Standard (0–5°C)</span>
+            <span>•</span>
+            <span>HAKI IDM000981336</span>
           </div>
         </div>
       </footer>
 
-      <div className="fixed bottom-8 right-8 z-50">
-        <Link
-          href="/checkout"
-          className="flex items-center justify-center bg-[#00754A] hover:bg-[#006241] text-white rounded-full w-14 h-14 shadow-[0_0_6px_rgba(0,0,0,0.24),_0_8px_12px_rgba(0,0,0,0.14)] hover:scale-110 active:scale-95 transition-all duration-200"
-        >
-          <ShoppingBag size={24} />
-        </Link>
-      </div>
-
+      {/* Cart Drawer */}
+      <CartDrawer />
     </div>
   );
 }
