@@ -142,6 +142,59 @@ export default function Home() {
     };
   }, [shouldReduceMotion]);
 
+  // Direction-locked gesture management on carousel to prevent vertical scroll interference
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    if (!carousel) return;
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let initialScrollLeft = 0;
+    let isHorizontalGesture = false;
+    let isVerticalGesture = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      initialScrollLeft = carousel.scrollLeft;
+      isHorizontalGesture = false;
+      isVerticalGesture = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffX = Math.abs(currentX - touchStartX);
+      const diffY = Math.abs(currentY - touchStartY);
+
+      if (!isHorizontalGesture && !isVerticalGesture) {
+        const threshold = 10;
+        if (diffX > threshold || diffY > threshold) {
+          if (diffY >= diffX) {
+            isVerticalGesture = true;
+          } else {
+            isHorizontalGesture = true;
+          }
+        }
+      }
+
+      // If vertical gesture is detected, hold carousel scrollLeft to initial position
+      if (isVerticalGesture) {
+        carousel.scrollLeft = initialScrollLeft;
+      }
+    };
+
+    carousel.addEventListener("touchstart", handleTouchStart, { passive: true });
+    carousel.addEventListener("touchmove", handleTouchMove, { passive: true });
+
+    return () => {
+      carousel.removeEventListener("touchstart", handleTouchStart);
+      carousel.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
   // Carousel Arrow Controls with smooth non-hijacked scroll
   const handleScrollCarousel = (direction: "left" | "right") => {
     if (!carouselRef.current) return;
@@ -376,7 +429,7 @@ export default function Home() {
                 Varian Rasa Pilihan.
               </h2>
               <p className="text-sm text-[#5C6F68] mt-2 max-w-lg">
-                Tersedia dalam ukuran 250ml, 500ml, dan 1 Liter. Data katalog dan harga tersinkronisasi langsung dari ERP.
+                Tersedia dalam ukuran 250ml, 500ml, dan 1 Liter. Pilih varian untuk melihat detail produk.
               </p>
             </div>
 
@@ -409,7 +462,7 @@ export default function Home() {
           <div
             id="catalog-carousel"
             ref={carouselRef}
-            className="flex overflow-x-auto scroll-smooth snap-x snap-mandatory gap-6 pb-6 pt-2 px-6 lg:px-20 no-scrollbar"
+            className="flex overflow-x-auto scroll-smooth snap-x snap-proximity overscroll-x-contain gap-6 pb-6 pt-2 px-6 lg:px-20 no-scrollbar"
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {catalogData && catalogData.products.length > 0

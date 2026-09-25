@@ -1,6 +1,133 @@
 import { test, expect } from "@playwright/test";
 
+const MOCK_CATALOG = {
+  products: [
+    {
+      slug: "plain",
+      name: "Plain",
+      description: "Yoghurt rasa Plain.",
+      variants: [
+        {
+          variant_id: "01940a00-0001-7000-8000-000000000001",
+          sku: "CY-PLAIN-250",
+          name: "Plain 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+        {
+          variant_id: "01940a00-0001-7000-8000-000000000002",
+          sku: "CY-PLAIN-500",
+          name: "Plain 500ml",
+          net_content: { quantity: "500.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 30000 },
+        },
+        {
+          variant_id: "01940a00-0001-7000-8000-000000000003",
+          sku: "CY-PLAIN-1000",
+          name: "Plain 1000ml",
+          net_content: { quantity: "1.000000", uom: "L" },
+          price: { currency: "IDR", amount: 55000 },
+        },
+      ],
+    },
+    {
+      slug: "stroberi",
+      name: "Stroberi",
+      description: "Yoghurt rasa Stroberi.",
+      variants: [
+        {
+          variant_id: "01940a00-0002-7000-8000-000000000001",
+          sku: "CY-STROBERI-250",
+          name: "Stroberi 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+    {
+      slug: "mangga",
+      name: "Mangga",
+      description: "Yoghurt rasa Mangga.",
+      variants: [
+        {
+          variant_id: "01940a00-0003-7000-8000-000000000001",
+          sku: "CY-MANGGA-250",
+          name: "Mangga 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+    {
+      slug: "melon",
+      name: "Melon",
+      description: "Yoghurt rasa Melon.",
+      variants: [
+        {
+          variant_id: "01940a00-0004-7000-8000-000000000001",
+          sku: "CY-MELON-250",
+          name: "Melon 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+    {
+      slug: "anggur",
+      name: "Anggur",
+      description: "Yoghurt rasa Anggur.",
+      variants: [
+        {
+          variant_id: "01940a00-0005-7000-8000-000000000001",
+          sku: "CY-ANGGUR-250",
+          name: "Anggur 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+    {
+      slug: "leci",
+      name: "Leci",
+      description: "Yoghurt rasa Leci.",
+      variants: [
+        {
+          variant_id: "01940a00-0006-7000-8000-000000000001",
+          sku: "CY-LECI-250",
+          name: "Leci 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+    {
+      slug: "vanila",
+      name: "Vanila",
+      description: "Yoghurt rasa Vanila.",
+      variants: [
+        {
+          variant_id: "01940a00-0007-7000-8000-000000000001",
+          sku: "CY-VANILA-250",
+          name: "Vanila 250ml",
+          net_content: { quantity: "250.000000", uom: "ML" },
+          price: { currency: "IDR", amount: 16000 },
+        },
+      ],
+    },
+  ],
+};
+
 test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Tests", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/catalog", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_CATALOG),
+      });
+    });
+  });
+
   test("1. Homepage hero, sections, and catalog carousel render and operate with motion", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/Callme Yoghurt/i);
@@ -39,99 +166,82 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     expect(finalScroll).toBeLessThan(afterScroll);
   });
 
-  test("2. Catalog card size selection smoothly switches variants without reloading image", async ({ page }) => {
+  test("2. Catalog card is presentational only with single 'Lihat Detail' CTA (No price, no size buttons, no cart)", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Locate the Plain card
     const firstCard = page.locator("#catalog-carousel article").filter({ hasText: /Plain/i }).first();
     await expect(firstCard).toBeVisible();
 
-    // Find size buttons: 250 ml, 500 ml, 1 Liter
-    const btn250 = firstCard.getByRole("button", { name: "250 ml", exact: true });
-    const btn500 = firstCard.getByRole("button", { name: "500 ml", exact: true });
-    const btn1L = firstCard.getByRole("button", { name: "1 Liter", exact: true });
+    // 1. Verify card contains product name and 'Lihat Detail' CTA
+    await expect(firstCard.getByRole("heading", { name: "Plain" })).toBeVisible();
+    const ctaLink = firstCard.getByRole("link", { name: "Lihat Detail" });
+    await expect(ctaLink).toBeVisible();
 
-    await expect(btn250).toBeVisible();
-    await expect(btn500).toBeVisible();
-    await expect(btn1L).toBeVisible();
+    // 2. Verify card DOES NOT contain size selector buttons or headings
+    await expect(firstCard.getByText("Pilihan Ukuran")).toHaveCount(0);
+    await expect(firstCard.getByRole("button", { name: "250 ml" })).toHaveCount(0);
+    await expect(firstCard.getByRole("button", { name: "500 ml" })).toHaveCount(0);
+    await expect(firstCard.getByRole("button", { name: "1 Liter" })).toHaveCount(0);
 
-    // Switch to 500 ml -> price should be Rp 30.000
-    await btn500.click();
-    await page.waitForTimeout(200);
-    await expect(firstCard.getByText(/30\.000/).first()).toBeVisible();
+    // 3. Verify card DOES NOT contain price
+    await expect(firstCard.getByText("Harga")).toHaveCount(0);
+    await expect(firstCard.getByText(/Rp\s*15\.000/i)).toHaveCount(0);
+    await expect(firstCard.getByText(/Rp\s*16\.000/i)).toHaveCount(0);
+    await expect(firstCard.getByText(/Rp\s*30\.000/i)).toHaveCount(0);
+    await expect(firstCard.getByText(/Rp\s*55\.000/i)).toHaveCount(0);
 
-    // Switch to 1 Liter -> price should be Rp 55.000
-    await btn1L.click();
-    await page.waitForTimeout(200);
-    await expect(firstCard.getByText(/55\.000/).first()).toBeVisible();
+    // 4. Verify card DOES NOT contain Add to Cart or Preview buttons
+    await expect(firstCard.getByRole("button", { name: /\+ Keranjang/i })).toHaveCount(0);
+    await expect(firstCard.getByText("Pratinjau")).toHaveCount(0);
 
-    // Add to cart from card (if ERP online and enabled)
-    const addBtn = firstCard.getByRole("button", { name: /Tambah .* ke keranjang|\+ Keranjang/i });
-    if (await addBtn.isEnabled()) {
-      await addBtn.click();
-
-      // Cart drawer should open automatically
-      const drawer = page.getByRole("dialog");
-      await expect(drawer).toBeVisible();
-      await expect(drawer.getByText("Keranjang Belanja")).toBeVisible();
-
-      // Press Escape to close cart drawer
-      await page.keyboard.press("Escape");
-      await page.waitForTimeout(300);
-      await expect(drawer).not.toBeVisible();
-    }
+    // 5. Clicking Lihat Detail navigates to /product/plain
+    await ctaLink.click();
+    await expect(page).toHaveURL(/.*\/product\/plain/);
+    await expect(page.locator("h1")).toHaveText("Plain");
   });
 
-  test("3. Product detail page toggles sizes and handles add-to-cart feedback", async ({ page }) => {
+  test("3. Product detail page is variant authority: 250ml (16k), 500ml (30k), 1L (55k), no 15k", async ({ page }) => {
     await page.goto("/product/plain");
     await expect(page.locator("h1")).toHaveText("Plain");
 
-    // Check 500 ml size toggle
+    // 1. All three variant buttons must be visible
+    const btn250 = page.getByRole("button", { name: /250 ml/i }).first();
     const btn500 = page.getByRole("button", { name: /500 ml/i }).first();
-    if (await btn500.isVisible()) {
-      await btn500.click();
-      await page.waitForTimeout(200);
-      await expect(page.getByText(/30\.000/).first()).toBeVisible();
-    }
-
-    // Check 1 Liter size toggle
     const btn1000 = page.getByRole("button", { name: /1 Liter/i }).first();
-    if (await btn1000.isVisible()) {
-      await btn1000.click();
-      await page.waitForTimeout(200);
-      await expect(page.getByText(/55\.000/).first()).toBeVisible();
-    }
 
-    // Add to cart
-    const addBtn = page.getByRole("button", { name: /Tambahkan ke Pesanan/i });
-    if (await addBtn.isEnabled()) {
-      await addBtn.click();
+    await expect(btn250).toBeVisible();
+    await expect(btn500).toBeVisible();
+    await expect(btn1000).toBeVisible();
 
-      // Cart drawer opens
-      const drawer = page.getByRole("dialog");
-      await expect(drawer).toBeVisible();
+    // 2. Default 250ml must show Rp 16.000, and NEVER stale Rp 15.000
+    await expect(page.getByText(/16\.000/).first()).toBeVisible();
+    await expect(page.getByText(/15\.000/)).toHaveCount(0);
 
-      // Verify quantity increment works
-      const plusBtn = drawer.getByRole("button", { name: "Tambah kuantitas" }).first();
-      if (await plusBtn.isVisible()) {
-        await plusBtn.click();
-        await page.waitForTimeout(200);
-      }
+    // 3. Select 500 ml -> price updates to Rp 30.000
+    await btn500.click();
+    await page.waitForTimeout(200);
+    await expect(page.getByText(/30\.000/).first()).toBeVisible();
 
-      // Close button
-      const closeBtn = drawer.getByRole("button", { name: /Tutup Keranjang/i });
-      await closeBtn.click();
-      await page.waitForTimeout(300);
-      await expect(drawer).not.toBeVisible();
-    }
+    // 4. Select 1 Liter -> price updates to Rp 55.000 and shows neutral placeholder
+    await btn1000.click();
+    await page.waitForTimeout(200);
+    await expect(page.getByText(/55\.000/).first()).toBeVisible();
+    await expect(page.getByText("Foto resmi 1L segera hadir")).toBeVisible();
+
+    // 5. Select 250 ml again -> returns to Rp 16.000
+    await btn250.click();
+    await page.waitForTimeout(200);
+    await expect(page.getByText(/16\.000/).first()).toBeVisible();
+    await expect(page.getByText(/15\.000/)).toHaveCount(0);
   });
 
   test("4. Prefers-reduced-motion is respected without breaking functional UI", async ({ page }) => {
     // Emulate reduced motion
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // 1. Verify reduced-motion media query evaluates to active in the browser
     const prefersReduced = await page.evaluate(
@@ -147,26 +257,41 @@ test.describe("Phase 1.7C.1 & 1.7C.2 — Motion & Data Integrity End-to-End Test
     );
     expect(parseFloat(transitionDuration)).toBeLessThanOrEqual(0.05);
 
-    // 3. Size switching works instantly
-    const btn500 = testArticle.getByRole("button", { name: "500 ml", exact: true });
-    await btn500.click();
-    await expect(testArticle.getByText(/30\.000/).first()).toBeVisible();
-
-    // 4. Cart still opens and operates with reduced motion if available
-    const addBtn = testArticle.getByRole("button", { name: /Tambah .* ke keranjang|\+ Keranjang/i });
-    if (await addBtn.isEnabled()) {
-      await addBtn.click();
-      const drawer = page.getByRole("dialog");
-      await expect(drawer).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(drawer).not.toBeVisible();
-    }
-
-    // 5. Route navigation still functions seamlessly
-    const detailLink = testArticle.getByRole("link", { name: "Detail" });
+    // 3. Route navigation still functions seamlessly via Lihat Detail
+    const detailLink = testArticle.getByRole("link", { name: "Lihat Detail" });
     await detailLink.click();
     await expect(page).toHaveURL(/.*product\/plain/);
     await expect(page.locator("h1")).toHaveText("Plain");
+  });
+
+  test("6. Vertical scroll gesture does not horizontally shift catalog carousel", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+
+    const carousel = page.locator("#catalog-carousel");
+    await carousel.scrollIntoViewIfNeeded();
+
+    // Reset initial scrollLeft
+    await carousel.evaluate((el) => {
+      el.scrollTo({ left: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(200);
+
+    const initialScrollLeft = await carousel.evaluate((el) => el.scrollLeft);
+    const initialPageScrollY = await page.evaluate(() => window.scrollY);
+
+    // Perform pure vertical wheel scroll (deltaY = 300, deltaX = 0)
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(400);
+
+    const afterScrollLeft = await carousel.evaluate((el) => el.scrollLeft);
+    const afterPageScrollY = await page.evaluate(() => window.scrollY);
+
+    // Verify page scrollY moved vertically
+    expect(afterPageScrollY).toBeGreaterThanOrEqual(initialPageScrollY);
+
+    // Critical Invariant: Carousel scrollLeft must NOT have changed horizontally
+    expect(Math.abs(afterScrollLeft - initialScrollLeft)).toBeLessThanOrEqual(2);
   });
 
   test("5. Checkout page inputs remain stable without animation interference", async ({ page }) => {

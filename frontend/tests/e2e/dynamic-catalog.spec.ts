@@ -93,12 +93,14 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
     const blueberryCard = carousel.locator("article").filter({ hasText: "Blueberry" });
     await expect(blueberryCard).toBeVisible();
 
-    // C. Generic fallback visual renders safely (initials 'BL', size badge, price)
+    // C. Generic fallback visual renders safely (initials 'BL', Cold Chain badge), NO price on card
     await expect(blueberryCard.getByText("BL", { exact: true })).toBeVisible();
-    await expect(blueberryCard.getByText("Rp 18.000")).toBeVisible();
+    await expect(blueberryCard.getByText("0–5°C Cold Chain")).toBeVisible();
+    await expect(blueberryCard.getByText(/Rp/i)).toHaveCount(0);
 
-    // D. Clicking Detail navigates to /product/blueberry
-    const detailLink = blueberryCard.getByRole("link", { name: "Detail" });
+    // D. Clicking Lihat Detail navigates to /product/blueberry
+    const detailLink = blueberryCard.getByRole("link", { name: "Lihat Detail" });
+    await expect(detailLink).toBeVisible();
     await detailLink.click();
     await expect(page).toHaveURL(/.*\/product\/blueberry/);
 

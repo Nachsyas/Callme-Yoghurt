@@ -103,4 +103,29 @@ describe("Catalog Product & Flavor Invariants (Phase 1.6)", () => {
       "Asset pisang.png must NEVER exist"
     );
   });
+
+  it("proves CatalogCard is simplified to presentational/navigational only (Phase 1.7C.8 Section V)", () => {
+    const cardPath = path.resolve(process.cwd(), "src/components/catalog/CatalogCard.tsx");
+    const content = fs.readFileSync(cardPath, "utf-8");
+
+    // Required presentational and navigational elements
+    assert.ok(content.includes("<Image"), "CatalogCard must render product image");
+    assert.ok(content.includes("displayName"), "CatalogCard must render flavor/product name");
+    assert.ok(content.includes("Lihat Detail"), "CatalogCard must contain 'Lihat Detail' CTA");
+    assert.ok(content.includes("/product/"), "CatalogCard CTA must link to /product/<slug>");
+
+    // Strictly forbidden card-level transactional controls
+    assert.equal(content.includes("Pilihan Ukuran"), false, "CatalogCard must NOT contain 'Pilihan Ukuran'");
+    assert.equal(content.includes("selectedSize"), false, "CatalogCard must NOT contain 'selectedSize' state");
+    assert.equal(content.includes("PREVIEW_PRICES"), false, "CatalogCard must NOT contain 'PREVIEW_PRICES'");
+    assert.equal(content.includes("Harga"), false, "CatalogCard must NOT contain 'Harga'");
+    assert.equal(content.includes("16000") || content.includes("16.000"), false, "CatalogCard must NOT contain 16k price");
+    assert.equal(content.includes("30000") || content.includes("30.000"), false, "CatalogCard must NOT contain 30k price");
+    assert.equal(content.includes("55000") || content.includes("55.000"), false, "CatalogCard must NOT contain 55k price");
+    assert.equal(content.includes("15000") || content.includes("15.000"), false, "CatalogCard must NOT contain 15k price");
+    assert.equal(content.includes("+ Keranjang"), false, "CatalogCard must NOT contain '+ Keranjang'");
+    assert.equal(content.includes("Pratinjau"), false, "CatalogCard must NOT contain 'Pratinjau'");
+    assert.equal(content.includes("useCartStore"), false, "CatalogCard must NOT import or use useCartStore");
+  });
 });
+
