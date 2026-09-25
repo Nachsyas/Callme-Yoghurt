@@ -83,7 +83,7 @@ export function CatalogCard({
   const displaySlug = erpProduct?.slug || flavor.slug;
   const displaySub = erpProduct?.description || flavor.sub;
 
-  const isAvailable = isErpOnline ? Boolean(currentVariant) : false;
+  const hasVariant = isErpOnline ? Boolean(currentVariant) : false;
   const currentPrice = currentVariant?.price.amount ?? PREVIEW_PRICES[selectedSize];
   const currentScale = SIZE_SCALES[selectedSize];
 
@@ -253,12 +253,12 @@ export function CatalogCard({
             <motion.button
               type="button"
               onClick={handleAddToCart}
-              disabled={!isAvailable || catalogLoading}
-              whileHover={shouldReduceMotion || !isAvailable ? undefined : { scale: 1.02 }}
-              whileTap={shouldReduceMotion || !isAvailable ? undefined : { scale: 0.96 }}
+              disabled={!hasVariant || catalogLoading}
+              whileHover={shouldReduceMotion || !hasVariant ? undefined : { scale: 1.02 }}
+              whileTap={shouldReduceMotion || !hasVariant ? undefined : { scale: 0.96 }}
               aria-label={`Tambah ${displayName} ke keranjang`}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs min-w-[108px] justify-center ${
-                !isAvailable || catalogLoading
+                !hasVariant || catalogLoading
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : added
                     ? "bg-[#1E3932] text-white cursor-pointer"

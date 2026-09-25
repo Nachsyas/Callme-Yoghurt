@@ -158,4 +158,84 @@ class OfficialCatalogSeederTest extends TestCase
         $this->assertSame(21, ProductVariant::count(), 'Variants must not be duplicated on reseed.');
         $this->assertSame(21, ProductVariantPrice::count(), 'Prices must not be duplicated on reseed.');
     }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun preserves Admin product name changes.
+     */
+    public function test_seeder_rerun_preserves_admin_product_name_change(): void
+    {
+        $this->seed(OfficialCatalogSeeder::class);
+
+        $plain = Product::where('slug', 'plain')->firstOrFail();
+        $plain->update(['name' => 'Plain Special Reserve']);
+
+        $this->seed(OfficialCatalogSeeder::class);
+
+        $plainRefreshed = Product::where('slug', 'plain')->firstOrFail();
+        $this->assertSame('Plain Special Reserve', $plainRefreshed->name);
+    }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun does NOT recreate old baseline slug when Admin changes slug.
+     */
+    public function test_seeder_rerun_does_not_recreate_old_slug_when_admin_renames_slug(): void
+    {
+        $this->seed(OfficialCatalogSeeder::class);
+
+        $plain = Product::where('slug', 'plain')->firstOrFail();
+        $plain->update(['slug' => 'plain-original']);
+
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // Assert plain-original is preserved
+        $this->assertTrue(Product::where('slug', 'plain-original')->exists());
+
+        // Assert old slug 'plain' was NOT recreated
+        $this->assertFalse(Product::where('slug', 'plain')->exists(), 'Seeder must NOT recreate baseline slug if renamed.');
+        $this->assertSame(7, Product::count());
+    }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun does NOT recreate old baseline SKU when Admin changes variant SKU.
+     */
+    public function test_seeder_rerun_does_not_recreate_old_sku_when_admin_renames_sku(): void
+    {
+        $this->seed(OfficialCatalogSeeder::class);
+
+        $variant = ProductVariant::where('sku', 'CY-PLAIN-250')->firstOrFail();
+        $variant->update(['sku' => 'CY-PLAIN-250-NEW']);
+
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // Assert renamed SKU is preserved
+        $this->assertTrue(ProductVariant::where('sku', 'CY-PLAIN-250-NEW')->exists());
+
+        // Assert old SKU CY-PLAIN-250 was NOT recreated
+        $this->assertFalse(ProductVariant::where('sku', 'CY-PLAIN-250')->exists(), 'Seeder must NOT recreate baseline SKU if renamed.');
+        $this->assertSame(21, ProductVariant::count());
+    }
+
+    /**
+     * Test: OfficialCatalogSeeder rerun preserves future products created by Admin.
+     */
+    public function test_seeder_rerun_preserves_future_product_created_by_admin(): void
+    {
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // Admin adds future product
+        Product::create([
+            'name' => 'Blueberry',
+            'slug' => 'blueberry',
+            'description' => 'Yoghurt rasa Blueberry.',
+            'active' => true,
+        ]);
+
+        $this->assertSame(8, Product::count());
+
+        $this->seed(OfficialCatalogSeeder::class);
+
+        // Assert Blueberry still exists and count remains 8
+        $this->assertSame(8, Product::count());
+        $this->assertTrue(Product::where('slug', 'blueberry')->exists());
+    }
 }

@@ -211,4 +211,39 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
     await expect(page.getByRole("heading", { name: "Produk tidak ditemukan" })).toBeVisible();
     await expect(page.getByText("Varian yoghurt yang Anda cari tidak tersedia")).toBeVisible();
   });
+
+  test("AA: Valid active variant without public stock field renders without false stock claims", async ({ page }) => {
+    // Navigate to product detail page with active catalog (no public stock field)
+    await page.goto("/product/blueberry");
+    await page.waitForLoadState("networkidle");
+
+    // 1. Product and description render
+    await expect(page.locator("h1")).toHaveText("Blueberry");
+    await expect(page.getByText("Yoghurt rasa Blueberry.")).toBeVisible();
+
+    // 2. Price renders accurately
+    await expect(page.getByText("Rp 18.000").first()).toBeVisible();
+
+    // 3. Size selectors render and work
+    const btn250 = page.getByRole("button", { name: /250 ml/i }).first();
+    const btn500 = page.getByRole("button", { name: /500 ml/i }).first();
+    await expect(btn250).toBeVisible();
+    await expect(btn500).toBeVisible();
+
+    // Size selector switches price
+    await btn500.click();
+    await expect(page.getByText("Rp 32.000").first()).toBeVisible();
+
+    // 4. UI does NOT claim "Stok Siap Kirim"
+    await expect(page.getByText(/Stok Siap Kirim/i)).toHaveCount(0);
+
+    // 5. UI does NOT infer unconditional "Tersedia" from variant existence
+    // It should display neutral "Varian aktif" instead
+    await expect(page.getByText("Varian aktif").first()).toBeVisible();
+    await expect(page.getByText(/^Tersedia$/i)).toHaveCount(0);
+
+    // 6. Cold chain logistics indicator renders neutral logistics distribution copy
+    await expect(page.getByText(/Distribusi Rantai Dingin \(0–5°C\) — Jakarta Hub/i)).toBeVisible();
+  });
 });
+

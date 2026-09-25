@@ -163,8 +163,8 @@ class AdminCatalogController extends Controller
         $adminUserId = (string) $request->header('X-Admin-User-Id');
 
         $amount = $request->input('amount');
-        if (!is_numeric($amount)) {
-            return response()->json(['error' => 'Price amount is required and must be an integer.'], 422);
+        if (!is_numeric($amount) || (int) $amount <= 0 || (string) (int) $amount !== (string) $amount) {
+            return response()->json(['error' => 'Price amount is required and must be an integer greater than zero.'], 422);
         }
 
         try {

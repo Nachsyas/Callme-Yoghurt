@@ -278,20 +278,24 @@ export default function CheckoutPage() {
                 </AnimatePresence>
               </div>
               <div className="border-t border-gray-100 mt-6 pt-6 space-y-3">
-                <div className="flex justify-between items-end pt-2">
-                  <div>
-                    <span className="font-bold text-black/87 block">Estimasi Total</span>
-                    <span className="text-[11px] text-black/40 block mt-0.5">Total akhir diverifikasi oleh sistem saat pesanan dibuat.</span>
+                <div className="flex items-end justify-between gap-4 pt-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-black/87 block text-sm sm:text-base">Estimasi Total</span>
+                    <span className="text-[11px] text-black/40 block mt-0.5 leading-snug">
+                      Total akhir diverifikasi oleh sistem saat pesanan dibuat.
+                    </span>
                   </div>
-                  <motion.span
-                    key={getEstimatedTotal()}
-                    initial={{ opacity: 0, y: 3 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: MOTION_TOKENS.duration.fast }}
-                    className="text-2xl font-black text-[#00754A]"
-                  >
-                    Rp {getEstimatedTotal().toLocaleString('id-ID')}
-                  </motion.span>
+                  <div className="flex items-baseline justify-end gap-1 whitespace-nowrap flex-nowrap text-right shrink-0">
+                    <motion.span
+                      key={getEstimatedTotal()}
+                      initial={{ opacity: 0, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: MOTION_TOKENS.duration.fast }}
+                      className="text-2xl font-black text-[#00754A] whitespace-nowrap inline-block"
+                    >
+                      Rp {getEstimatedTotal().toLocaleString('id-ID')}
+                    </motion.span>
+                  </div>
                 </div>
               </div>
               <motion.button

@@ -268,14 +268,12 @@ export default function AdminCatalogPage() {
   // Variant Actions
   const handleOpenAddVariant = (prod: CatalogProduct) => {
     setTargetProductForVariant(prod);
-    const defaultUom = uoms.find((u) => u.code === "ML")?.id || uoms[0]?.id || "";
-    const defaultItem = inventoryItems[0]?.id || "";
     setVariantForm({
       sku: `CY-${prod.slug.toUpperCase()}-`,
       variant_name: `${prod.name} `,
-      inventory_item_id: defaultItem,
+      inventory_item_id: "",
       net_content_quantity: "",
-      net_content_uom_id: defaultUom,
+      net_content_uom_id: "",
       price: "",
       active: true,
     });
@@ -304,13 +302,21 @@ export default function AdminCatalogPage() {
     setErrorMsg(null);
 
     if (variantModalMode === "CREATE") {
+      if (!variantForm.inventory_item_id || variantForm.inventory_item_id.trim() === "") {
+        setErrorMsg("Item inventaris wajib dipilih untuk varian baru");
+        return;
+      }
+      if (!variantForm.net_content_uom_id || variantForm.net_content_uom_id.trim() === "") {
+        setErrorMsg("Satuan (UOM) wajib dipilih untuk varian baru");
+        return;
+      }
       if (!variantForm.price || variantForm.price.trim() === "") {
         setErrorMsg("Harga awal wajib diisi untuk varian baru");
         return;
       }
       const priceNum = parseInt(variantForm.price, 10);
-      if (isNaN(priceNum) || priceNum < 0) {
-        setErrorMsg("Harga awal harus berupa angka bulat positif");
+      if (isNaN(priceNum) || priceNum <= 0 || !Number.isInteger(Number(variantForm.price)) || variantForm.price.includes(".")) {
+        setErrorMsg("Harga awal harus berupa angka bulat positif lebih dari 0");
         return;
       }
       if (!variantForm.net_content_quantity || variantForm.net_content_quantity.trim() === "") {
@@ -407,8 +413,8 @@ export default function AdminCatalogPage() {
     setErrorMsg(null);
 
     const intPrice = parseInt(priceInput, 10);
-    if (isNaN(intPrice) || intPrice < 0) {
-      setErrorMsg("Harga harus berupa nominal angka bulat positif");
+    if (isNaN(intPrice) || intPrice <= 0 || !Number.isInteger(Number(priceInput)) || priceInput.includes(".")) {
+      setErrorMsg("Harga harus berupa nominal angka bulat positif lebih dari 0");
       return;
     }
 
@@ -1173,7 +1179,7 @@ export default function AdminCatalogPage() {
                       <input
                         type="number"
                         required
-                        min={0}
+                        min={1}
                         step={1}
                         placeholder="Masukkan nominal harga"
                         value={variantForm.price}
@@ -1277,7 +1283,7 @@ export default function AdminCatalogPage() {
                     <input
                       type="number"
                       required
-                      min={0}
+                      min={1}
                       step={1}
                       value={priceInput}
                       onChange={(e) => setPriceInput(e.target.value)}

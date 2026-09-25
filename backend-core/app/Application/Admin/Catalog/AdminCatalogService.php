@@ -266,11 +266,11 @@ class AdminCatalogService
             ]);
 
             // Optional initial price
-            if (isset($data['price']) && is_numeric($data['price'])) {
-                $amount = (int) $data['price'];
-                if ($amount < 0) {
-                    throw new InvalidArgumentException('Price cannot be negative.');
+            if (isset($data['price'])) {
+                if (!is_numeric($data['price']) || (int) $data['price'] <= 0 || (string) (int) $data['price'] !== (string) $data['price']) {
+                    throw new InvalidArgumentException('Price amount must be an integer greater than zero.');
                 }
+                $amount = (int) $data['price'];
                 ProductVariantPrice::create([
                     'product_variant_id' => $variant->id,
                     'currency' => 'IDR',
@@ -406,8 +406,8 @@ class AdminCatalogService
         ?string $ip = null,
         ?string $userAgent = null
     ): ProductVariantPrice {
-        if ($amount < 0) {
-            throw new InvalidArgumentException('Price amount must be greater than or equal to zero.');
+        if ($amount <= 0) {
+            throw new InvalidArgumentException('Price amount must be greater than zero.');
         }
 
         return DB::transaction(function () use ($variantId, $amount, $adminUserId, $ip, $userAgent) {

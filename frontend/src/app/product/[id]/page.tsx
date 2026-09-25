@@ -229,9 +229,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   const isErpOnline = Boolean(erpProduct);
 
-  const is250Available = isErpOnline ? Boolean(variant250) : false;
-  const is500Available = isErpOnline ? Boolean(variant500) : false;
-  const is1000Available = isErpOnline ? Boolean(variant1000) : false;
+  const has250Variant = isErpOnline ? Boolean(variant250) : false;
+  const has500Variant = isErpOnline ? Boolean(variant500) : false;
+  const has1000Variant = isErpOnline ? Boolean(variant1000) : false;
 
   const price250 = variant250?.price.amount ?? PREVIEW_PRICES[250];
   const price500 = variant500?.price.amount ?? PREVIEW_PRICES[500];
@@ -239,8 +239,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
   const currentVariant =
     selectedSize === 250 ? variant250 : selectedSize === 500 ? variant500 : variant1000;
-  const isCurrentAvailable =
-    selectedSize === 250 ? is250Available : selectedSize === 500 ? is500Available : is1000Available;
+  const hasCurrentVariant =
+    selectedSize === 250 ? has250Variant : selectedSize === 500 ? has500Variant : has1000Variant;
   const currentPrice =
     selectedSize === 250 ? price250 : selectedSize === 500 ? price500 : price1000;
 
@@ -480,13 +480,13 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 {/* 250 ml Variant Button */}
                 <button
                   type="button"
-                  disabled={catalogLoading || (isErpOnline && !is250Available)}
+                  disabled={catalogLoading || (isErpOnline && !has250Variant)}
                   onClick={() => setSelectedSize(250)}
                   className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
                     selectedSize === 250
                       ? 'border-2 shadow-sm'
                       : 'border-gray-200 hover:border-gray-300 bg-white'
-                  } ${isErpOnline && !is250Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  } ${isErpOnline && !has250Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
                       selectedSize === 250 ? brandColor : undefined,
@@ -508,20 +508,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
                     <Check size={11} />
-                    <span>{isErpOnline && !is250Available ? 'Kosong' : 'Tersedia'}</span>
+                    <span>{isErpOnline && !has250Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
                   </div>
                 </button>
 
                 {/* 500 ml Variant Button */}
                 <button
                   type="button"
-                  disabled={catalogLoading || (isErpOnline && !is500Available)}
+                  disabled={catalogLoading || (isErpOnline && !has500Variant)}
                   onClick={() => setSelectedSize(500)}
                   className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
                     selectedSize === 500
                       ? 'border-2 shadow-sm'
                       : 'border-gray-200 hover:border-gray-300 bg-white'
-                  } ${isErpOnline && !is500Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  } ${isErpOnline && !has500Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
                       selectedSize === 500 ? brandColor : undefined,
@@ -543,20 +543,20 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
                     <Check size={11} />
-                    <span>{isErpOnline && !is500Available ? 'Kosong' : 'Tersedia'}</span>
+                    <span>{isErpOnline && !has500Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
                   </div>
                 </button>
 
                 {/* 1 Liter Variant Button */}
                 <button
                   type="button"
-                  disabled={catalogLoading || (isErpOnline && !is1000Available)}
+                  disabled={catalogLoading || (isErpOnline && !has1000Variant)}
                   onClick={() => setSelectedSize(1000)}
                   className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
                     selectedSize === 1000
                       ? 'border-2 shadow-sm'
                       : 'border-gray-200 hover:border-gray-300 bg-white'
-                  } ${isErpOnline && !is1000Available ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
+                  } ${isErpOnline && !has1000Variant ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer active:scale-[0.99]'}`}
                   style={{
                     borderColor:
                       selectedSize === 1000 ? brandColor : undefined,
@@ -578,17 +578,17 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   <div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-emerald-700">
                     <Check size={11} />
-                    <span>{isErpOnline && !is1000Available ? 'Kosong' : 'Tersedia'}</span>
+                    <span>{isErpOnline && !has1000Variant ? 'Tidak aktif' : 'Varian aktif'}</span>
                   </div>
                 </button>
               </div>
             </div>
 
-            {/* 5. Availability Status & Cold Chain Logistics Indicator */}
+            {/* 5. Cold Chain Logistics Fulfillment Info */}
             <div className="p-3 bg-white rounded-xl border border-black/5 space-y-1.5">
-              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Stok Siap Kirim — Jakarta Central Cold Chain Hub (WH-MAIN)</span>
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#00754A]">
+                <Snowflake size={14} className="text-[#00754A]" />
+                <span>Distribusi Rantai Dingin (0–5°C) — Jakarta Hub</span>
               </div>
               <p className="text-[11px] text-black/50 flex items-center gap-1.5">
                 <Clock size={12} className="text-black/40" />
@@ -641,11 +641,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <motion.button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={!isCurrentAvailable || catalogLoading}
-                whileHover={shouldReduceMotion || !isCurrentAvailable ? undefined : { scale: 1.01 }}
-                whileTap={shouldReduceMotion || !isCurrentAvailable ? undefined : { scale: 0.98 }}
+                disabled={!hasCurrentVariant || catalogLoading}
+                whileHover={shouldReduceMotion || !hasCurrentVariant ? undefined : { scale: 1.01 }}
+                whileTap={shouldReduceMotion || !hasCurrentVariant ? undefined : { scale: 0.98 }}
                 className={`w-full text-white py-3.5 rounded-full font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-md ${
-                  !isCurrentAvailable || catalogLoading
+                  !hasCurrentVariant || catalogLoading
                     ? 'opacity-50 cursor-not-allowed bg-gray-400'
                     : added
                       ? 'bg-[#1E3932] cursor-pointer'
@@ -653,7 +653,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 }`}
                 style={{
                   backgroundColor:
-                    !isCurrentAvailable || catalogLoading
+                    !hasCurrentVariant || catalogLoading
                       ? undefined
                       : added
                         ? '#1E3932'
@@ -671,9 +671,9 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     <span>
                       {catalogLoading
                         ? 'Memeriksa Katalog...'
-                        : isCurrentAvailable
+                        : hasCurrentVariant
                           ? 'Tambahkan ke Pesanan'
-                          : 'Varian Belum Tersedia'}
+                          : 'Varian Tidak Aktif'}
                     </span>
                   </>
                 )}

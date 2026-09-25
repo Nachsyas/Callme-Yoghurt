@@ -337,4 +337,50 @@ class AdminCatalogManagementTest extends TestCase
         ])->getJson('/api/internal/admin/catalog/products');
         $res4->assertStatus(403);
     }
+
+    public function test_price_change_rejects_zero_negative_and_decimal_amount(): void
+    {
+        $product = Product::create([
+            'name' => 'Price Test',
+            'slug' => 'price-test',
+            'description' => 'Test',
+            'active' => true,
+        ]);
+
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'inventory_item_id' => $this->inventoryItem->id,
+            'sku' => 'CY-PRICE-TEST',
+            'variant_name' => 'Price Test Variant',
+            'active' => true,
+        ]);
+
+        // Zero price rejected (422)
+        $resZero = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/internal/admin/catalog/variants/' . $variant->id . '/price', [
+                'amount' => 0,
+            ]);
+        $resZero->assertStatus(422);
+
+        // Negative price rejected (422)
+        $resNeg = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/internal/admin/catalog/variants/' . $variant->id . '/price', [
+                'amount' => -1000,
+            ]);
+        $resNeg->assertStatus(422);
+
+        // Decimal price rejected (422)
+        $resDec = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/internal/admin/catalog/variants/' . $variant->id . '/price', [
+                'amount' => 15000.5,
+            ]);
+        $resDec->assertStatus(422);
+
+        // Empty price rejected (422)
+        $resEmpty = $this->withHeaders($this->authHeaders())
+            ->postJson('/api/internal/admin/catalog/variants/' . $variant->id . '/price', [
+                'amount' => '',
+            ]);
+        $resEmpty->assertStatus(422);
+    }
 }

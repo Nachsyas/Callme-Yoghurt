@@ -41,7 +41,14 @@ class OfficialCatalogSeeder extends Seeder
             ]
         );
 
-        // 3. The 7 Official Flavors (Current Master Business Data)
+        // 3. Bootstrap Guard: If catalog products already exist, baseline has already been initialized.
+        // OfficialCatalogSeeder is a bootstrap mechanism, NOT a perpetual sync mechanism.
+        // It must NEVER reconstruct baseline or override Admin operational changes (slug renames, SKU changes, deactivations, price changes).
+        if (Product::exists()) {
+            return;
+        }
+
+        // 4. The 7 Official Flavors (Current Master Business Data)
         $officialFlavors = [
             [
                 'slug' => 'plain',

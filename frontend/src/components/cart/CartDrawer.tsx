@@ -174,7 +174,7 @@ export function CartDrawer() {
                     <span className="text-xs font-medium text-[#5C6F68] block">Estimasi Subtotal</span>
                     <span className="text-[10px] text-[#8A9590]">Standar Cold Chain &lt; 5°C</span>
                   </div>
-                  <span className="text-xl font-black text-[#00754A] tracking-tight">
+                  <span className="text-xl font-black text-[#00754A] tracking-tight whitespace-nowrap shrink-0">
                     Rp {total.toLocaleString("id-ID")}
                   </span>
                 </div>
