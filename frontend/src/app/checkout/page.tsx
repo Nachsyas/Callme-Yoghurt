@@ -2,7 +2,7 @@
 
 import { useCartStore, toTransactionProjection, type CartItem } from '@/store/cartStore';
 import { executeCheckoutSubmission, type CheckoutPayload, type DeliveryMethod, type PublicCommittedOrderData } from '@/lib/checkout-client';
-import { calculateWeightFromItems, type ShippingQuote, type BiteshipArea } from '@/lib/shipping';
+import { type ShippingQuote, type BiteshipArea } from '@/lib/shipping';
 import { buildOrderSummary, saveOrderSummary } from '@/lib/order';
 import { isUuid } from '@/lib/catalog';
 import { AlertCircle, ArrowLeft, CheckCircle2, Clock, MapPin, Phone, QrCode, Search, ShieldCheck, ShoppingBag, Store, Truck, User } from 'lucide-react';
@@ -158,10 +158,8 @@ export default function CheckoutPage() {
           province: formData.province.trim() || 'DKI Jakarta',
           district: formData.district.trim() || 'Cipayung',
           items: items.map((i) => ({
-            name: i.name,
+            variant_id: i.variant_id,
             quantity: i.quantity,
-            value: i.display_price,
-            weight_grams: i.volume_ml ? i.volume_ml : undefined,
           })),
         }),
       });
@@ -192,7 +190,6 @@ export default function CheckoutPage() {
     }
   };
 
-  const cartWeight = calculateWeightFromItems(items);
   const subtotal = getEstimatedTotal();
   const shippingFee = selectedQuote ? selectedQuote.price : 0;
   const serviceFee =
@@ -303,6 +300,7 @@ export default function CheckoutPage() {
       },
       items: toTransactionProjection(items),
       delivery_method: backendDeliveryMethod,
+      shipping_quote_id: selectedQuote.quote_id,
       shipping_quote: {
         quote_id: selectedQuote.quote_id,
         provider: selectedQuote.provider,
@@ -856,12 +854,20 @@ export default function CheckoutPage() {
               </div>
             </form>
 
-            {/* Cold Chain Logistics Security Banner */}
-            <div className="bg-[#E8F5E9] border border-[#2E7D32]/25 p-4 rounded-xl flex items-start gap-3 text-[#1B5E20]">
-              <ShieldCheck size={22} className="text-[#2E7D32] flex-shrink-0 mt-0.5" />
-              <p className="text-xs leading-relaxed font-medium">
-                Pesanan dikemas dengan standar <strong>Cold Chain Logistics (0–5°C)</strong> dengan icepack khusus untuk memastikan mutu probiotik tetap terjaga hingga sampai di tangan Anda.
-              </p>
+            {/* Cold Chain Logistics SOP Alert Banner */}
+            <div className="bg-[#FFF8E1] border border-[#FFA000]/30 p-4 rounded-xl flex items-start gap-3 text-[#E65100]">
+              <AlertCircle size={22} className="text-[#FF8F00] flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-xs font-bold leading-tight">
+                  Pemberitahuan Penyimpanan (SOP Callme Yoghurt):
+                </p>
+                <p className="text-xs leading-relaxed font-medium">
+                  Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima (Suhu &lt; 5°C).
+                </p>
+                <p className="text-[11px] text-[#BF360C]/80">
+                  Penanganan pengiriman mengikuti SOP produk dairy Callme Yoghurt.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -871,7 +877,7 @@ export default function CheckoutPage() {
               <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <h2 className="font-extrabold text-base sm:text-lg text-[#1c1917]">Ringkasan Pesanan</h2>
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#E8F5E9] text-[#2E7D32]">
-                  {items.reduce((acc, i) => acc + i.quantity, 0)} item ({cartWeight} kg)
+                  {items.reduce((acc, i) => acc + i.quantity, 0)} item
                 </span>
               </div>
 
@@ -955,13 +961,13 @@ export default function CheckoutPage() {
                 {/* Penanganan Rantai Dingin Reassurance */}
                 <div className="flex items-baseline justify-between pt-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-black/60 font-medium">Penanganan Rantai Dingin</span>
+                    <span className="text-xs text-black/60 font-medium">SOP Pengiriman Dairy</span>
                     <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#E8F5E9] text-[#2E7D32]">
-                      0–5°C
+                      SOP 01
                     </span>
                   </div>
                   <span className="text-xs font-semibold text-[#2E7D32]">
-                    Termasuk (Icepack)
+                    Sesuai Standar Mutu
                   </span>
                 </div>
 
@@ -969,7 +975,7 @@ export default function CheckoutPage() {
                 <div className="border-t border-gray-100 pt-3 flex items-baseline justify-between">
                   <div>
                     <span className="font-extrabold text-base text-[#1c1917] block">Total Pembayaran</span>
-                    <span className="text-[10px] text-black/40 block">Termasuk kurir & icepack cold chain</span>
+                    <span className="text-[10px] text-black/40 block">Termasuk ongkir kurir & biaya layanan</span>
                   </div>
                   <motion.span
                     key={totalPayment}

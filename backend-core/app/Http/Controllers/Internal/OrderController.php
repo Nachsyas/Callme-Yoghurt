@@ -10,6 +10,9 @@ use App\Domain\Inventory\Exceptions\InsufficientInventoryException;
 use App\Domain\Pricing\Exceptions\InactiveVariantException;
 use App\Domain\Pricing\Exceptions\VariantPriceUnavailableException;
 use App\Domain\Sales\Exceptions\IdempotencyConflictException;
+use App\Domain\Shipping\Exceptions\ExpiredShippingQuoteException;
+use App\Domain\Shipping\Exceptions\InvalidShippingQuoteException;
+use App\Domain\Shipping\Exceptions\UnconfiguredServiceFeeException;
 use App\Http\Requests\Internal\CreateOrderRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
@@ -98,6 +101,33 @@ class OrderController extends Controller
 
             return response()->json([
                 'error' => 'Active retail price is unavailable for requested variant',
+            ], 422);
+        } catch (ExpiredShippingQuoteException $e) {
+            Log::warning('Checkout validation failed: quote expired', [
+                'request_id' => $requestId,
+                'error_category' => 'quote_expired',
+            ]);
+
+            return response()->json([
+                'error' => 'Shipping quote has expired. Please recalculate shipping.',
+            ], 422);
+        } catch (InvalidShippingQuoteException $e) {
+            Log::warning('Checkout validation failed: quote invalid', [
+                'request_id' => $requestId,
+                'error_category' => 'quote_invalid',
+            ]);
+
+            return response()->json([
+                'error' => 'Shipping quote does not match current cart or destination.',
+            ], 422);
+        } catch (UnconfiguredServiceFeeException $e) {
+            Log::error('Checkout blocked: owner fee value unconfigured', [
+                'request_id' => $requestId,
+                'error_category' => 'unconfigured_fee',
+            ]);
+
+            return response()->json([
+                'error' => 'BLOCKED — OWNER FEE VALUE REQUIRED',
             ], 422);
         } catch (Throwable $e) {
             // Check for unconfigured secret key fail-closed

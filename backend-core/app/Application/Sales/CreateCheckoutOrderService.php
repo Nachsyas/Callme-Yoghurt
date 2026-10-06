@@ -21,6 +21,10 @@ use App\Domain\Sales\Exceptions\IdempotencyConflictException;
 use App\Domain\Sales\Models\CheckoutIdempotencyKey;
 use App\Domain\Sales\Models\Order;
 use App\Domain\Sales\Models\OrderLine;
+use App\Domain\Shipping\Exceptions\ExpiredShippingQuoteException;
+use App\Domain\Shipping\Exceptions\InvalidShippingQuoteException;
+use App\Domain\Shipping\Exceptions\UnconfiguredServiceFeeException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -222,7 +226,53 @@ class CreateCheckoutOrderService
                 ];
             }
 
-            // Step E: Create Order with encrypted shipping snapshot
+            // Step E: Resolve Shipping Quote and Authoritative Financial Breakdown
+            $subtotalAmount = $totalAmount;
+            $shippingFee = 0;
+            $serviceFee = 0;
+            $shippingQuoteId = null;
+            $shippingCourier = null;
+            $shippingService = null;
+
+            if (!empty($canonicalPayload['shipping_quote_id'])) {
+                $shippingQuoteId = $canonicalPayload['shipping_quote_id'];
+                $quoteRecord = Cache::get("shipping_quote:{$shippingQuoteId}");
+
+                if ($quoteRecord === null) {
+                    throw new ExpiredShippingQuoteException(
+                        'Kutipan ongkos kirim telah kedaluwarsa atau tidak ditemukan. Silakan hitung ulang ongkir.'
+                    );
+                }
+
+                // Verify cart fingerprint matches canonical items
+                $currentCartFingerprint = hash('sha256', json_encode($canonicalPayload['items'], JSON_THROW_ON_ERROR));
+                if (!hash_equals($quoteRecord['cart_fingerprint'], $currentCartFingerprint)) {
+                    throw new InvalidShippingQuoteException(
+                        'Kutipan ongkos kirim tidak sesuai dengan item keranjang belanja.'
+                    );
+                }
+
+                // Authoritative service fee check (Requirement 12)
+                $configuredServiceFee = config('shipping.service_fee_idr');
+                if ($configuredServiceFee === null) {
+                    throw new UnconfiguredServiceFeeException(
+                        'BLOCKED — OWNER FEE VALUE REQUIRED'
+                    );
+                }
+
+                $shippingFee = (int) $quoteRecord['quoted_amount'];
+                $serviceFee = (int) $configuredServiceFee;
+                $shippingCourier = (string) $quoteRecord['courier_code'];
+                $shippingService = (string) $quoteRecord['service_code'];
+
+                // Calculate authoritative grand total: subtotal + shipping_fee + service_fee
+                if (PHP_INT_MAX - $shippingFee < $totalAmount || PHP_INT_MAX - $serviceFee < ($totalAmount + $shippingFee)) {
+                    throw new RuntimeException('Integer arithmetic overflow in payable grand total calculation.');
+                }
+                $totalAmount = $totalAmount + $shippingFee + $serviceFee;
+            }
+
+            // Step E2: Create Order with encrypted shipping snapshot and breakdown
             $order = Order::create([
                 'order_number' => Order::generateOrderNumber(),
                 'customer_id' => $customer->id,
@@ -231,6 +281,12 @@ class CreateCheckoutOrderService
                 'shipping_address' => $canonicalCustomer['address'],
                 'delivery_method' => DeliveryMethod::from($canonicalPayload['delivery_method']),
                 'status' => OrderStatus::CONFIRMED,
+                'subtotal_amount' => $subtotalAmount,
+                'shipping_fee' => $shippingFee,
+                'service_fee' => $serviceFee,
+                'shipping_quote_id' => $shippingQuoteId,
+                'shipping_courier' => $shippingCourier,
+                'shipping_service' => $shippingService,
                 'total_amount' => $totalAmount,
             ]);
 
@@ -303,6 +359,9 @@ class CreateCheckoutOrderService
             'delivery_method' => strtolower(trim((string) ($data['delivery_method'] ?? ''))),
             'items' => $canonicalItems,
         ];
+        if (!empty($data['shipping_quote_id'])) {
+            $canonical['shipping_quote_id'] = strtolower(trim((string) $data['shipping_quote_id']));
+        }
         ksort($canonical);
 
         return $canonical;

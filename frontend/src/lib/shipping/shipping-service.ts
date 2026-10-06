@@ -38,10 +38,9 @@ export function resolveAuthoritativePackageWeightGrams(
 }
 
 /**
- * LEGACY / AUDIT FINDING:
- * Fabricated approximation previously used in Phase 1.7C.13.
- * Kept strictly for backward-compatible display fallback where explicit weight is missing.
- * Must NOT be treated as production truth for actual courier rate commitment.
+ * STRICTLY TEST/DEMO FIXTURE ONLY (Phase 1.7C.19B):
+ * Fabricated approximation. MUST NOT participate in production Biteship requests
+ * or transaction authority calculations.
  */
 export function calculateWeightFromItems(
   items: Array<{ volume_ml?: number; quantity: number }>

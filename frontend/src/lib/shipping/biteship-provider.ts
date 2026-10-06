@@ -60,50 +60,43 @@ export class BiteshipShippingProvider implements ShippingProvider {
       };
     }
 
-    // Determine package weight in grams
+    // Determine package weight in grams (Zero fabrication - fail closed if unmeasured)
     let totalWeightGrams = 0;
-    if (input.weight_grams && input.weight_grams > 0) {
-      totalWeightGrams = Math.round(input.weight_grams);
-    } else if (input.items && input.items.length > 0) {
+    const rateItems: BiteshipRateItemPayload[] = [];
+
+    if (input.items && input.items.length > 0) {
       for (const item of input.items) {
-        if (item.weight_grams && item.weight_grams > 0) {
-          totalWeightGrams += item.weight_grams * (item.quantity || 1);
+        if (!item.weight_grams || item.weight_grams <= 0) {
+          return {
+            success: false,
+            quotes: [],
+            error: 'Ongkir belum dapat dihitung: Berat pengiriman definitif belum ditentukan untuk produk.',
+          };
         }
+        totalWeightGrams += Math.round(item.weight_grams * (item.quantity || 1));
+        rateItems.push({
+          name: item.name || 'Callme Yoghurt',
+          description: item.description || 'Callme Yoghurt',
+          value: item.value || 35000,
+          quantity: item.quantity || 1,
+          weight: Math.round(item.weight_grams),
+        });
       }
-    }
-
-    // If total weight is still 0, check legacy input.weight (kg)
-    if (totalWeightGrams === 0 && input.weight && input.weight > 0) {
-      totalWeightGrams = Math.round(input.weight * 1000);
-    }
-
-    // If still zero, we must require authoritative weight rather than guessing
-    if (totalWeightGrams <= 0) {
+    } else if (input.weight_grams && input.weight_grams > 0) {
+      totalWeightGrams = Math.round(input.weight_grams);
+      rateItems.push({
+        name: 'Paket Callme Yoghurt',
+        value: 35000,
+        quantity: 1,
+        weight: totalWeightGrams,
+      });
+    } else {
       return {
         success: false,
         quotes: [],
         error: 'Ongkir belum dapat dihitung: Berat pengiriman definitif belum ditentukan untuk produk.',
       };
     }
-
-    // Prepare items payload for Biteship
-    const rateItems: BiteshipRateItemPayload[] =
-      input.items && input.items.length > 0
-        ? input.items.map((i) => ({
-            name: i.name,
-            description: i.description || 'Callme Yoghurt',
-            value: i.value || 35000,
-            quantity: i.quantity || 1,
-            weight: i.weight_grams || Math.round(totalWeightGrams / (input.items?.length || 1)),
-          }))
-        : [
-            {
-              name: 'Paket Callme Yoghurt (Cold Chain)',
-              value: 50000,
-              quantity: 1,
-              weight: totalWeightGrams,
-            },
-          ];
 
     // Determine target couriers to query
     // Instant/Same Day: grab, gojek, anteraja, paxel

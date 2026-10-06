@@ -32,10 +32,14 @@ Route::prefix('admin')->group(function () {
 use App\Http\Controllers\Internal\Admin\AdminCatalogController;
 use App\Http\Controllers\Internal\Admin\AdminInventoryController;
 
+use App\Http\Controllers\Internal\ShippingQuoteController;
+
 Route::middleware('service.auth')->prefix('internal')->group(function () {
     Route::get('/health', [HealthController::class, 'internalHealth']);
     Route::get('/catalog/products', [CatalogController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
+    Route::post('/shipping/quotes', [ShippingQuoteController::class, 'quotes']);
+    Route::get('/shipping/fee-config', [ShippingQuoteController::class, 'feeConfig']);
 
     /*
     |--------------------------------------------------------------------------

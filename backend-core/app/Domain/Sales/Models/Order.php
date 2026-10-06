@@ -27,6 +27,12 @@ class Order extends Model
         'shipping_address',
         'delivery_method',
         'status',
+        'subtotal_amount',
+        'shipping_fee',
+        'service_fee',
+        'shipping_quote_id',
+        'shipping_courier',
+        'shipping_service',
         'total_amount',
     ];
 
@@ -52,6 +58,9 @@ class Order extends Model
             'shipping_address' => 'encrypted',
             'delivery_method' => DeliveryMethod::class,
             'status' => OrderStatus::class,
+            'subtotal_amount' => 'integer',
+            'shipping_fee' => 'integer',
+            'service_fee' => 'integer',
             'total_amount' => 'integer',
         ];
     }

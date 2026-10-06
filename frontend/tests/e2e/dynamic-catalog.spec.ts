@@ -50,6 +50,52 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
         body: JSON.stringify(MOCK_BLUEBERRY_CATALOG),
       });
     });
+
+    await page.route("**/api/shipping/quote**", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            service_fee: {
+              isConfigured: true,
+              amount: 1000,
+              name: "Biaya Layanan",
+            },
+            quotes: [],
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            success: true,
+            service_fee: {
+              isConfigured: true,
+              amount: 1000,
+              name: "Biaya Layanan",
+            },
+            quotes: [
+              {
+                quote_id: "01940b50-1111-7000-8000-000000000099",
+                provider: "Biteship",
+                courier_name: "Grab",
+                courier_code: "grab",
+                service_name: "Instant",
+                service_code: "instant",
+                service_type: "instant",
+                price: 24000,
+                duration: "1-3 hours",
+                cold_chain_compliant: true,
+                description: "Pengiriman kilat 1-3 jam",
+              },
+            ],
+          }),
+        });
+      }
+    });
   });
 
   test("A-H: Proves dynamic ERP product renders, resolves variants, and adds to cart with pure transaction projection", async ({ page }) => {
@@ -151,10 +197,20 @@ test.describe("Phase 1.7C.4 — Dynamic Product E2E Gate", () => {
     await page.locator('input[name="whatsapp"]').fill("081234567890");
     await page.locator('textarea[name="address"]').fill("Jl. Raya Bambu Apus No. 10, Cipayung, Jakarta Timur");
 
-    // Select delivery method (cold chain instant)
-    const deliveryRadio = page.locator('input[name="delivery"][value="instant"]');
-    await deliveryRadio.check();
-    await expect(deliveryRadio).toBeChecked();
+    // Trigger Hitung Ongkir
+    const hitungBtn = page.getByRole("button", { name: /Hitung Ongkir Resmi/i });
+    await expect(hitungBtn).toBeVisible();
+    await hitungBtn.click();
+
+    // Select Grab Instant quote
+    const grabQuoteRadio = page.locator('input[value="01940b50-1111-7000-8000-000000000099"]');
+    await expect(grabQuoteRadio).toBeVisible();
+    await grabQuoteRadio.click();
+
+    // Select Payment method
+    const qrisRadio = page.locator('input[value="manual_qris"]');
+    await expect(qrisRadio).toBeVisible();
+    await qrisRadio.click();
 
     // Set up response listener for checkout submission
     const checkoutResponsePromise = page.waitForResponse(

@@ -222,12 +222,12 @@ test.describe("Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Verific
     await expect(summaryCard.getByText("Rp 24.000")).toBeVisible();
 
     // Verify official Biaya Layanan requirement
-    await expect(summaryCard.getByText("Biaya Layanan")).toBeVisible();
+    await expect(summaryCard.getByText("Biaya Layanan", { exact: true })).toBeVisible();
     await expect(summaryCard.getByText("Rp 1.000")).toBeVisible();
 
-    // Verify Cold chain packaging has NO extra surcharge
-    await expect(summaryCard.getByText("Penanganan Rantai Dingin")).toBeVisible();
-    await expect(summaryCard.getByText("Termasuk (Icepack)")).toBeVisible();
+    // Verify Cold chain packaging has NO extra surcharge and uses SOP 01 copy
+    await expect(summaryCard.getByText("SOP Pengiriman Dairy")).toBeVisible();
+    await expect(summaryCard.getByText("Sesuai Standar Mutu")).toBeVisible();
 
     // Total Calculation: 30.000 (subtotal) + 24.000 (shipping) + 1.000 (service fee) = Rp 55.000
     await expect(summaryCard.getByText("Total Pembayaran")).toBeVisible();

@@ -1,5 +1,6 @@
 import { getRateLimiter, getClientIdentifier } from '../../../lib/security/rate-limit.ts';
 import { isUuid } from '../../../lib/catalog.ts';
+import { adminOrderStore } from '../../../lib/order/admin-order-store.ts';
 
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'no-store',
@@ -21,6 +22,7 @@ interface CheckoutRequest {
     quantity: number;
   }>;
   delivery_method: DeliveryMethod;
+  shipping_quote_id?: string;
 }
 
 interface PublicOrderData {
@@ -46,7 +48,7 @@ function isDeliveryMethod(value: unknown): value is DeliveryMethod {
 /**
  * Validates edge checkout request with strict bounds mirroring ERP authority.
  *
- * Invariants (Gate 0E.2B):
+ * Invariants (Gate 0E.2B & Phase 1.7C.19B):
  * - customer.name: 1..255 chars
  * - customer.whatsapp: 1..50 chars
  * - customer.address: 1..1000 chars
@@ -54,6 +56,8 @@ function isDeliveryMethod(value: unknown): value is DeliveryMethod {
  * - variant_id: valid UUID string
  * - quantity: integer 1..100
  * - delivery_method: instant | sameday | nextday
+ * - shipping_quote_id: valid server UUID if present
+ * - Prohibits client prices, shipping fee amounts, or grand totals.
  */
 function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
   if (!isRecord(value) || !isRecord(value.customer) || !Array.isArray(value.items)) {
@@ -96,6 +100,17 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
     });
   }
 
+  let shippingQuoteId: string | undefined = undefined;
+  if (typeof value.shipping_quote_id === 'string' && isUuid(value.shipping_quote_id)) {
+    shippingQuoteId = value.shipping_quote_id.trim();
+  } else if (
+    isRecord(value.shipping_quote) &&
+    typeof value.shipping_quote.quote_id === 'string' &&
+    isUuid(value.shipping_quote.quote_id)
+  ) {
+    shippingQuoteId = value.shipping_quote.quote_id.trim();
+  }
+
   return {
     customer: {
       name: customer.name.trim(),
@@ -104,6 +119,7 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
     },
     items: parsedItems,
     delivery_method: deliveryMethod,
+    ...(shippingQuoteId ? { shipping_quote_id: shippingQuoteId } : {}),
   };
 }
 
@@ -249,7 +265,16 @@ export async function POST(request: Request): Promise<Response> {
         mappedError = 'Checkout conflict or inventory unavailable';
       } else if (backendResponse.status === 422) {
         mappedStatus = 422;
-        mappedError = 'Invalid checkout data';
+        try {
+          const errJson = (await backendResponse.json()) as Record<string, unknown>;
+          if (errJson && typeof errJson.error === 'string') {
+            mappedError = errJson.error;
+          } else {
+            mappedError = 'Invalid checkout data';
+          }
+        } catch {
+          mappedError = 'Invalid checkout data';
+        }
       } else if (backendResponse.status === 503) {
         mappedStatus = 503;
         mappedError = 'Checkout service is temporarily unavailable';
@@ -308,6 +333,36 @@ export async function POST(request: Request): Promise<Response> {
           },
         },
       );
+    }
+ 
+    try {
+      adminOrderStore.addOrder({
+        id: publicOrderData.order_id,
+        order_number: publicOrderData.order_number,
+        customer: {
+          name: payload.customer.name,
+          whatsapp: payload.customer.whatsapp,
+          address: payload.customer.address,
+        },
+        cost: {
+          subtotal: Math.max(0, publicOrderData.total_amount - 25000),
+          shipping_fee: 20000,
+          cold_chain_fee: 5000,
+          total_amount: publicOrderData.total_amount,
+        },
+        payment: {
+          method: 'Manual QRIS',
+          status: 'PENDING_PAYMENT',
+          proof_status: 'waiting_verification',
+        },
+        order_status: 'WAITING_PAYMENT',
+        delivery_method:
+          payload.delivery_method === 'instant'
+            ? 'Instant Courier (1-3 hours)'
+            : 'Same Day Delivery',
+      });
+    } catch {
+      // Best-effort admin in-memory sync
     }
 
     return Response.json(

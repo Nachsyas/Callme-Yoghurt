@@ -19,6 +19,7 @@ export interface CheckoutPayload {
   customer: CheckoutCustomerInput;
   items: CheckoutItemInput[];
   delivery_method: DeliveryMethod;
+  shipping_quote_id?: string;
   shipping_quote?: {
     quote_id: string;
     provider: string;
@@ -100,12 +101,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Builds a deterministic canonical representation of the checkout request.
  *
- * Invariants (Gate 0E.2B):
+ * Invariants (Gate 0E.2B & Phase 1.7C.19B):
  * - Normalizes Indonesian phone using standard normalizeIndonesianPhone (e.g. 0812 -> 62812).
  * - Trims customer name and address.
  * - Sorts items deterministically by variant_id ASC.
- * - Uses fixed, predictable object structure.
- * - Contains NO price or client-injected amounts.
+ * - Includes normalized shipping_quote_id for transaction semantics differentiation.
+ * - Contains NO price, shipping amount, or client-injected fee values.
  */
 export function buildCanonicalCheckoutPayload(payload: CheckoutPayload) {
   const sortedItems = [...payload.items]
@@ -115,7 +116,7 @@ export function buildCanonicalCheckoutPayload(payload: CheckoutPayload) {
     }))
     .sort((a, b) => (a.variant_id < b.variant_id ? -1 : a.variant_id > b.variant_id ? 1 : 0));
 
-  return {
+  const canonical: Record<string, unknown> = {
     customer: {
       address: payload.customer.address.trim(),
       name: payload.customer.name.trim(),
@@ -124,6 +125,13 @@ export function buildCanonicalCheckoutPayload(payload: CheckoutPayload) {
     delivery_method: payload.delivery_method,
     items: sortedItems,
   };
+
+  const rawQuoteId = payload.shipping_quote_id || payload.shipping_quote?.quote_id;
+  if (rawQuoteId && typeof rawQuoteId === 'string' && rawQuoteId.trim().length > 0) {
+    canonical.shipping_quote_id = rawQuoteId.trim().toLowerCase();
+  }
+
+  return canonical;
 }
 
 /**

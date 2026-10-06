@@ -23,6 +23,7 @@ class ProductVariant extends Model
         'variant_name',
         'net_content_quantity',
         'net_content_uom_id',
+        'shipping_weight_grams',
         'active',
     ];
 
@@ -30,6 +31,7 @@ class ProductVariant extends Model
     {
         return [
             'net_content_quantity' => 'decimal:6',
+            'shipping_weight_grams' => 'integer',
             'active' => 'boolean',
         ];
     }

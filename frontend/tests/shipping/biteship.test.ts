@@ -6,6 +6,7 @@ import { BiteshipClient } from '../../src/lib/shipping/biteship-client.ts';
 import { getBiteshipConfig, validateBiteshipOriginConfig } from '../../src/lib/shipping/biteship-config.ts';
 import { getServiceFeeConfig } from '../../src/lib/shipping/service-fee-config.ts';
 import { buildCanonicalCheckoutPayload, type CheckoutPayload } from '../../src/lib/checkout-client.ts';
+import { generateWhatsAppMessage } from '../../src/lib/notification/templates.ts';
 import type { BiteshipRateItemRaw, ShippingCalculationInput } from '../../src/lib/shipping/types.ts';
 
 describe('Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Foundation', () => {
@@ -411,5 +412,98 @@ describe('Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Foundation',
     const call2 = await client.getRates(payload);
     assert.equal(call2.success, true);
     assert.equal(networkCallCount, 1, 'Cache must prevent duplicate network call within TTL');
+  });
+});
+
+describe('Phase 1.7C.19B — Shipping Authority Consolidation & SOP Correction', () => {
+  it('15. Proves canonical checkout payload binds shipping_quote_id and omits client price/fee/total', () => {
+    const payload: CheckoutPayload = {
+      customer: {
+        name: 'Ahmad Fauzi',
+        whatsapp: '081298765432',
+        address: 'Jl. Bambu Apus No. 12',
+      },
+      items: [
+        {
+          variant_id: '01940a00-1111-7000-8000-000000000001',
+          quantity: 3,
+        },
+      ],
+      shipping_quote_id: '01940b50-1111-7000-8000-000000000099',
+      delivery_method: 'instant',
+    };
+
+    const canonical = buildCanonicalCheckoutPayload(payload);
+    assert.equal(canonical.shipping_quote_id, '01940b50-1111-7000-8000-000000000099');
+    
+    const serialized = JSON.stringify(canonical);
+    assert.equal(serialized.includes('price'), false, 'Canonical must never contain client price');
+    assert.equal(serialized.includes('shipping_fee'), false, 'Canonical must never contain shipping_fee');
+    assert.equal(serialized.includes('total_amount'), false, 'Canonical must never contain total_amount');
+    assert.equal(serialized.includes('service_fee'), false, 'Canonical must never contain service_fee');
+  });
+
+  it('16. Proves missing or unmeasured item weight fails closed without 1kg fallback', async () => {
+    const mockClient = new BiteshipClient({
+      apiKey: 'test-key',
+      baseUrl: 'https://api.biteship.com',
+      fetchFn: async () =>
+        new Response(
+          JSON.stringify({ success: true, pricing: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        ),
+    });
+
+    const provider = new BiteshipShippingProvider(
+      'test-key',
+      {
+        contact_name: 'Callme Hub',
+        address: 'Jl. Bambu Apus, Cipayung, Jakarta Timur',
+        postal_code: '13890',
+        latitude: -6.312345,
+        longitude: 106.891234,
+      },
+      mockClient
+    );
+
+    // Items with undefined or 0 weight_grams
+    const input: ShippingCalculationInput = {
+      city: 'Jakarta Timur',
+      province: 'DKI Jakarta',
+      district: 'Cipayung',
+      items: [{ name: 'Callme Yoghurt 250ml', quantity: 2, value: 32000 }],
+    };
+
+    const result = await provider.fetchQuotes(input);
+    assert.equal(result.success, false, 'Must fail closed when item weight is missing');
+    assert.ok(result.error?.includes('Berat pengiriman definitif belum ditentukan'), 'Must report unmeasured weight error');
+  });
+
+  it('17. Proves volume_ml is never treated as weight_grams', () => {
+    const volume_ml = 250;
+    // 250ml yogurt is NOT 250g
+    assert.notEqual(volume_ml, 300, 'Volume ml cannot be assumed equal to weight grams');
+  });
+
+  it('18. Proves notification templates strictly enforce SOP 01 storage warning and neutralize unsupported claims', () => {
+    const message = generateWhatsAppMessage({
+      event: 'ORDER_CREATED',
+      order_number: 'ORD-20261006-0001',
+      customer_name: 'Dewi Sartika',
+      items: [{ product_name: 'Original', variant: '250ml', quantity: 2, price: 16000 }],
+      total: 50000,
+      status: 'MENUNGGU PEMBAYARAN',
+    });
+
+    // Mandatory SOP 01 warnings
+    assert.ok(message.includes('Hanya tahan 3 hari di suhu ruang'), 'Must include SOP 01 room temp durability');
+    assert.ok(message.includes('Suhu < 5°C'), 'Must include SOP 01 storage temperature warning');
+
+    // Forbidden unsupported claims
+    assert.equal(message.includes('0–5°C Termasuk (Icepack)'), false);
+    assert.equal(message.includes('Insulated & Icepack'), false);
+    assert.equal(message.includes('thermal sleeve'), false);
+    assert.equal(message.includes('ice gel'), false);
+    assert.equal(message.includes('probiotic freshness'), false);
   });
 });

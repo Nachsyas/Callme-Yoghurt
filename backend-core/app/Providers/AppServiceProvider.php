@@ -33,6 +33,10 @@ class AppServiceProvider extends ServiceProvider
                 diskName: "object",
             );
         });
+
+        $this->app->singleton(\App\Domain\Shipping\Contracts\ShippingRateProviderInterface::class, function () {
+            return new \App\Infrastructure\Shipping\BiteshipRateProvider();
+        });
     }
 
     /**

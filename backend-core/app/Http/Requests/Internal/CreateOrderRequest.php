@@ -37,6 +37,7 @@ class CreateOrderRequest extends FormRequest
             'items.*.variant_id' => ['required', 'uuid'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
             'delivery_method' => ['required', 'string', Rule::in(DeliveryMethod::values())],
+            'shipping_quote_id' => ['nullable', 'uuid'],
         ];
     }
 
@@ -61,7 +62,7 @@ class CreateOrderRequest extends FormRequest
             $rawPayload = $this->all();
 
             // 2. Strict allowed root keys check
-            $allowedRootKeys = ['customer', 'items', 'delivery_method'];
+            $allowedRootKeys = ['customer', 'items', 'delivery_method', 'shipping_quote_id'];
             $extraRootKeys = array_diff(array_keys($rawPayload), $allowedRootKeys);
             if (!empty($extraRootKeys)) {
                 $validator->errors()->add(

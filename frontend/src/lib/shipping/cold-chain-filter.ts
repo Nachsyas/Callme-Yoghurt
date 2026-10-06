@@ -197,7 +197,7 @@ export function filterColdChainQuotes(
       price: Math.round(rate.price),
       duration: rate.duration || (category === 'instant' ? '1-3 hours' : category === 'sameday' ? 'Same day' : '1 day'),
       cold_chain_compliant: true,
-      description: rate.description || 'Pengiriman dingin sesuai SOP 01 (Insulated & Icepack)',
+      description: rate.description || 'Penanganan pengiriman mengikuti SOP produk dairy Callme Yoghurt.',
     });
   }
 

@@ -9,6 +9,7 @@ export interface CartItem {
 
   // presentation only
   display_price: number;
+  image_url?: string;
 }
 
 export interface CartStore {
