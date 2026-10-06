@@ -81,6 +81,11 @@ test.describe("Browser Checkout Production Flow (Gate 0E.2C)", () => {
     await expect(addToCartButton).toBeVisible();
     await addToCartButton.click();
 
+    const checkoutLink = page.getByRole("link", { name: /Lanjut ke Checkout/i });
+    if (await checkoutLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await checkoutLink.click();
+    }
+
     await page.waitForURL("**/checkout");
     await expect(page.getByText("Ringkasan Pesanan")).toBeVisible();
     await expect(page.getByText("Plain Pure Original 250ml")).toBeVisible();
@@ -139,6 +144,11 @@ test.describe("Browser Checkout Production Flow (Gate 0E.2C)", () => {
     const addToCartButton = page.getByRole("button", { name: /Tambahkan ke Pesanan/i });
     await addToCartButton.click();
 
+    const checkoutLink = page.getByRole("link", { name: /Lanjut ke Checkout/i });
+    if (await checkoutLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await checkoutLink.click();
+    }
+
     await page.waitForURL("**/checkout");
     await page.locator("input[name=\"name\"]").fill("Budi Santoso");
     await page.locator("input[name=\"whatsapp\"]").fill("08123456789");
@@ -187,6 +197,11 @@ test.describe("Browser Checkout Production Flow (Gate 0E.2C)", () => {
 
     await page.goto("/product/plain");
     await page.getByRole("button", { name: /Tambahkan ke Pesanan/i }).click();
+
+    const checkoutLink = page.getByRole("link", { name: /Lanjut ke Checkout/i });
+    if (await checkoutLink.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await checkoutLink.click();
+    }
 
     await page.waitForURL("**/checkout");
     await page.locator("input[name=\"name\"]").fill("Budi Santoso");

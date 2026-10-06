@@ -1,5 +1,6 @@
 import { normalizeIndonesianPhone } from './security/pii-masking.ts';
 import { isUuid } from './catalog.ts';
+import { defaultPaymentService, type PaymentService, type PaymentStatus, type PaymentProviderType } from './payment/index.ts';
 
 export type DeliveryMethod = 'instant' | 'sameday' | 'nextday';
 
@@ -18,6 +19,20 @@ export interface CheckoutPayload {
   customer: CheckoutCustomerInput;
   items: CheckoutItemInput[];
   delivery_method: DeliveryMethod;
+  shipping_quote?: {
+    quote_id: string;
+    provider: string;
+    courier_code: string;
+    service_code: string;
+    destination_postal_code?: string;
+    destination_area_id?: string;
+    quoted_price: number;
+    timestamp: number;
+  };
+  service_fee?: {
+    name: string;
+    amount: number;
+  };
 }
 
 export interface StoredAttemptRecord {
@@ -26,12 +41,25 @@ export interface StoredAttemptRecord {
   idempotency_key: string;
 }
 
+export interface StoredPaymentData {
+  payment_id: string;
+  provider: PaymentProviderType;
+  status: PaymentStatus;
+  amount: number;
+  account_name?: string;
+  qr_code_url?: string;
+  qr_string?: string;
+  instructions: string[];
+  expires_at?: string;
+}
+
 export interface PublicCommittedOrderData {
   order_id: string;
   order_number: string;
   status: 'CONFIRMED';
   total_amount: number;
   request_id: string;
+  payment?: StoredPaymentData;
 }
 
 export interface StoredConfirmationRecord {
@@ -42,6 +70,7 @@ export interface StoredConfirmationRecord {
   total_amount: number;
   request_id: string;
   recorded_at: number;
+  payment?: StoredPaymentData;
 }
 
 export interface KeyValueStorage {
@@ -203,6 +232,7 @@ export function saveOrderConfirmation(
     total_amount: data.total_amount,
     request_id: data.request_id,
     recorded_at: Date.now(),
+    ...(data.payment ? { payment: data.payment } : {}),
   };
 
   try {
@@ -269,6 +299,21 @@ export function getValidOrderConfirmation(
       return null;
     }
 
+    let paymentData: StoredPaymentData | undefined = undefined;
+    if (isRecord(record.payment)) {
+      paymentData = {
+        payment_id: String(record.payment.payment_id || ''),
+        provider: (record.payment.provider as StoredPaymentData['provider']) || 'manual_qris',
+        status: (record.payment.status as StoredPaymentData['status']) || 'PENDING_PAYMENT',
+        amount: typeof record.payment.amount === 'number' ? record.payment.amount : record.total_amount,
+        account_name: typeof record.payment.account_name === 'string' ? record.payment.account_name : undefined,
+        qr_code_url: typeof record.payment.qr_code_url === 'string' ? record.payment.qr_code_url : undefined,
+        qr_string: typeof record.payment.qr_string === 'string' ? record.payment.qr_string : undefined,
+        instructions: Array.isArray(record.payment.instructions) ? record.payment.instructions.map(String) : [],
+        expires_at: typeof record.payment.expires_at === 'string' ? record.payment.expires_at : undefined,
+      };
+    }
+
     return {
       version: 1,
       order_id: (record.order_id as string).trim(),
@@ -277,6 +322,7 @@ export function getValidOrderConfirmation(
       total_amount: record.total_amount as number,
       request_id: (record.request_id as string).trim(),
       recorded_at: record.recorded_at as number,
+      ...(paymentData ? { payment: paymentData } : {}),
     };
   } catch {
     return null;
@@ -340,10 +386,12 @@ export async function executeCheckoutSubmission(
   options?: {
     storage?: KeyValueStorage;
     fetchFn?: typeof fetch;
+    paymentService?: PaymentService;
   },
 ): Promise<CheckoutSubmissionResult> {
   const storage = options?.storage;
   const fetchImpl = options?.fetchFn || fetch;
+  const paymentSvc = options?.paymentService || defaultPaymentService;
 
   // Zero-Trust verification: items must strictly contain valid UUIDs, never preview-* or fabricated IDs
   if (!Array.isArray(payload.items) || payload.items.length === 0) {
@@ -439,6 +487,31 @@ export async function executeCheckoutSubmission(
       error: 'Konfirmasi pesanan dari server tidak memenuhi standar validasi.',
       statusCode: 502,
     };
+  }
+
+  // Create payment transaction state via payment service (Phase 1.7C.14)
+  try {
+    const paymentResult = await paymentSvc.createPayment({
+      orderId: committedData.order_id,
+      orderNumber: committedData.order_number,
+      amount: committedData.total_amount,
+      customer: payload.customer,
+      deliveryMethod: payload.delivery_method,
+    });
+
+    committedData.payment = {
+      payment_id: paymentResult.paymentId,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      amount: paymentResult.amount,
+      account_name: paymentResult.accountName,
+      qr_code_url: paymentResult.qrCodeUrl,
+      qr_string: paymentResult.qrString,
+      instructions: paymentResult.instructions,
+      expires_at: paymentResult.expiresAt,
+    };
+  } catch (err) {
+    console.warn('Payment transaction initialization notice:', err);
   }
 
   const saved = saveOrderConfirmation(committedData, storage);

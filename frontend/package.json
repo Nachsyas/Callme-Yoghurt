@@ -10,6 +10,7 @@
     "test:security": "node --test --experimental-strip-types tests/security/*.test.ts",
     "test:catalog": "node --test --experimental-strip-types tests/catalog/*.test.ts",
     "test:admin": "node --test --experimental-strip-types tests/admin/*.test.ts",
+    "test:shipping": "node --test --experimental-strip-types tests/shipping/*.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

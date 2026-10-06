@@ -11,7 +11,7 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3001",
     headless: true,
   },
   projects: [
@@ -29,8 +29,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "ADMIN_SESSION_SECRET=dev_insecure_admin_session_secret_32chars_min npx next start -p 3000",
-    url: "http://127.0.0.1:3000",
+    command: "ADMIN_SESSION_SECRET=dev_insecure_admin_session_secret_32chars_min npx next start -p 3001",
+    url: "http://127.0.0.1:3001",
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
   },
