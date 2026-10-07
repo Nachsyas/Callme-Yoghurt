@@ -36,6 +36,12 @@ describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regr
         whatsapp: '081234567890',
         address: 'Jl. Merdeka No. 10, Jakarta Pusat',
       },
+      destination: {
+        postal_code: '10110',
+        city: 'Jakarta Pusat',
+        province: 'DKI Jakarta',
+        district: 'Gambir',
+      },
       items: [
         {
           variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
@@ -43,6 +49,7 @@ describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regr
         },
       ],
       delivery_method: 'instant',
+      shipping_quote_id: '018f6c38-8c50-711e-b8d4-53a8be77e499',
     };
   }
 
@@ -262,6 +269,12 @@ describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regr
         role: 'SUPERADMIN',
         tier: 'VIP_FREE',
       },
+      destination: {
+        postal_code: '10110',
+        city: 'Jakarta Pusat',
+        province: 'DKI Jakarta',
+        district: 'Gambir',
+      },
       items: [
         {
           variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a',
@@ -275,6 +288,7 @@ describe('Checkout Route Security Baseline (Gate 0B, Gate 0E.1 & Gate 0E.2B Regr
         },
       ],
       delivery_method: 'instant',
+      shipping_quote_id: '018f6c38-8c50-711e-b8d4-53a8be77e499',
       total_price: 1,
       currency: 'USD',
       discount_code: 'FREE100',

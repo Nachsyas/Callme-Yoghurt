@@ -221,23 +221,36 @@ describe('Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Foundation',
     assert.ok(grabQuote.quote_id.startsWith('biteship_grab_instant_'));
   });
 
-  // 5. Slow / noncompliant courier filtered
+  // 5. Slow / noncompliant courier filtered & strict shipping matrix enforced
   it('5. Proves slow or noncompliant services (> 1 day, cargo, economy) are strictly rejected by Cold Chain policy', () => {
-    const quotes = filterColdChainQuotes(MOCK_RAW_RATES, {
+    // Jakarta: Instant & Same Day only (Task 16)
+    const quotesJakarta = filterColdChainQuotes(MOCK_RAW_RATES, {
       province: 'DKI Jakarta',
       city: 'Jakarta Timur',
       isJakarta: true,
     });
 
-    const regulerQuote = quotes.find((q) => q.service_code === 'reg');
-    const cargoQuote = quotes.find((q) => q.service_code === 'cargo');
-    const ecoQuote = quotes.find((q) => q.service_code === 'eco');
+    const regulerQuote = quotesJakarta.find((q) => q.service_code === 'reg');
+    const cargoQuote = quotesJakarta.find((q) => q.service_code === 'cargo');
+    const ecoQuote = quotesJakarta.find((q) => q.service_code === 'eco');
 
     assert.equal(regulerQuote, undefined, 'Reguler (2-3 days) must be filtered out');
     assert.equal(cargoQuote, undefined, 'Cargo (3-5 days) must be filtered out');
     assert.equal(ecoQuote, undefined, 'Economy (3-6 days) must be filtered out');
-    assert.equal(quotes.length, 3, 'Only Instant, Same Day, and 1-day YES must remain');
-    assert.ok(quotes.every((q) => q.cold_chain_compliant));
+    assert.equal(quotesJakarta.length, 2, 'Only Instant and Same Day must remain in Jakarta');
+    assert.ok(quotesJakarta.every((q) => q.cold_chain_compliant));
+
+    // Outside Jakarta: Next Day only (Task 16)
+    const quotesOutside = filterColdChainQuotes(MOCK_RAW_RATES, {
+      province: 'Jawa Barat',
+      city: 'Bandung',
+      isJakarta: false,
+    });
+    assert.equal(quotesOutside.length, 1, 'Only Next Day must remain outside Jakarta');
+    assert.equal(quotesOutside[0].service_type, 'nextday');
+    assert.equal(quotesOutside[0].courier_code, 'jne');
+    assert.equal(quotesOutside[0].service_code, 'yes');
+    assert.ok(quotesOutside.every((q) => q.cold_chain_compliant));
   });
 
   // 6. Biaya Layanan is server-controlled
@@ -296,6 +309,12 @@ describe('Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Foundation',
         whatsapp: '08123456789',
         address: 'Jl. Merdeka No. 10, Jakarta Timur',
       },
+      destination: {
+        postal_code: '13890',
+        city: 'Jakarta Timur',
+        province: 'DKI Jakarta',
+        district: 'Cipayung',
+      },
       items: [
         {
           variant_id: '01940a00-1111-7000-8000-000000000001',
@@ -303,6 +322,7 @@ describe('Phase 1.7C.19A — Biteship Rates Hardening & Service Fee Foundation',
         },
       ],
       delivery_method: 'instant',
+      shipping_quote_id: '01940b50-1111-7000-8000-000000000099',
     };
 
     const canonical = buildCanonicalCheckoutPayload(clientPayload);
@@ -422,6 +442,12 @@ describe('Phase 1.7C.19B — Shipping Authority Consolidation & SOP Correction',
         name: 'Ahmad Fauzi',
         whatsapp: '081298765432',
         address: 'Jl. Bambu Apus No. 12',
+      },
+      destination: {
+        postal_code: '13890',
+        city: 'Jakarta Timur',
+        province: 'DKI Jakarta',
+        district: 'Cipayung',
       },
       items: [
         {

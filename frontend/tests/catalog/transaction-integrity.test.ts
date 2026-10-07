@@ -97,6 +97,9 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         whatsapp: "08123456789",
         address: "Jl. Bambu Apus No. 10",
       },
+      destination: {
+        postal_code: "13890",
+      },
       items: [
         {
           variant_id: "prod-plain-250", // Fabricated ID!
@@ -104,6 +107,7 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         },
       ],
       delivery_method: "instant",
+      shipping_quote_id: "quote-fake-1",
     };
 
     const result = await executeCheckoutSubmission(fakePayload);
@@ -116,6 +120,9 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         whatsapp: "08123456789",
         address: "Jl. Bambu Apus No. 10",
       },
+      destination: {
+        postal_code: "13890",
+      },
       items: [
         {
           variant_id: "preview-stroberi-500", // Preview ID!
@@ -123,6 +130,7 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         },
       ],
       delivery_method: "instant",
+      shipping_quote_id: "quote-preview-1",
     };
 
     const previewResult = await executeCheckoutSubmission(previewPayload);
@@ -138,6 +146,9 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         whatsapp: "081399887766",
         address: "Bambu Kuning Residence",
       },
+      destination: {
+        postal_code: "13890",
+      },
       items: [
         {
           variant_id: "01940a00-1111-7000-8000-000000000001",
@@ -145,6 +156,7 @@ describe("Phase 1.7C.2 — Storefront Data & Transaction Integrity", () => {
         },
       ],
       delivery_method: "sameday",
+      shipping_quote_id: "quote-valid-1",
     };
 
     const canonical = buildCanonicalCheckoutPayload(payload);

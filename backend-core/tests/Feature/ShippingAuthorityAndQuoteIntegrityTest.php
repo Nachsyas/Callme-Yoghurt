@@ -19,10 +19,15 @@ use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Pricing\Models\ProductVariantPrice;
 use App\Domain\Sales\Models\Order;
 use App\Domain\Shipping\Contracts\ShippingRateProviderInterface;
+use App\Domain\Shipping\Exceptions\OriginConfigurationException;
 use App\Domain\Shipping\Services\ColdChainPolicyService;
+use App\Domain\Shipping\Services\DestinationNormalizationService;
+use App\Infrastructure\Shipping\BiteshipRateProvider;
+use App\Infrastructure\Shipping\ShippingQuoteCacheStore;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -266,6 +271,11 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'whatsapp' => '081234567890',
                     'address' => 'Jl. TB Simatupang No. 1',
                 ],
+                'destination' => [
+                    'postal_code' => '13890',
+                    'city' => 'Jakarta Timur',
+                    'province' => 'DKI Jakarta',
+                ],
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
                 ],
@@ -284,7 +294,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
     {
         $quoteId = (string) Str::uuid();
         // Quote expired (never in cache or TTL elapsed)
-        Cache::forget("shipping_quote:{$quoteId}");
+        ShippingQuoteCacheStore::getStore()->forget("shipping_quote:{$quoteId}");
 
         $response = $this->withHeader('Authorization', "Bearer {$this->serviceToken}")
             ->withHeader('Idempotency-Key', (string) Str::uuid())
@@ -293,6 +303,11 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'name' => 'Customer B',
                     'whatsapp' => '081234567891',
                     'address' => 'Jl. Cipayung Raya No. 2',
+                ],
+                'destination' => [
+                    'postal_code' => '13890',
+                    'city' => 'Jakarta Timur',
+                    'province' => 'DKI Jakarta',
                 ],
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
@@ -311,11 +326,21 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
     public function test_quote_for_different_cart_rejected(): void
     {
         $quoteId = (string) Str::uuid();
-        $fakeCartFingerprint = hash('sha256', json_encode([['variant_id' => 'different-variant', 'quantity' => 5]]));
+        $fakeCartFingerprint = hash('sha256', json_encode([[
+            'quantity' => 5,
+            'variant_id' => 'different-variant',
+        ]], JSON_THROW_ON_ERROR));
 
-        Cache::put("shipping_quote:{$quoteId}", [
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
             'quote_id' => $quoteId,
             'cart_fingerprint' => $fakeCartFingerprint,
+            'destination_fingerprint' => DestinationNormalizationService::computeFingerprint($dest),
             'courier_code' => 'grab',
             'service_code' => 'instant',
             'quoted_amount' => 15000,
@@ -330,6 +355,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'whatsapp' => '081234567892',
                     'address' => 'Jl. Bambu Wulung',
                 ],
+                'destination' => $dest,
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
                 ],
@@ -338,7 +364,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
             ]);
 
         $response->assertStatus(422);
-        $this->assertStringContainsString('Shipping quote does not match', $response->json('error'));
+        $this->assertStringContainsString('Shipping quote does not match current cart items', $response->json('error'));
     }
 
     /**
@@ -348,15 +374,36 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
     {
         config(['shipping.service_fee_idr' => null]); // Owner has not configured service fee
 
-        $quoteId = (string) Str::uuid();
-        $cartFingerprint = hash('sha256', json_encode([[
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+        $destFingerprint = DestinationNormalizationService::computeFingerprint($dest);
+
+        $cartRow = [
             'quantity' => 1,
             'variant_id' => strtolower($this->variantMeasured->id),
-        ]]));
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
 
-        Cache::put("shipping_quote:{$quoteId}", [
+        $pRow = [
+            'quantity' => 1,
+            'subtotal' => 30000,
+            'unit_price' => 30000,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($pRow);
+        $priceFingerprint = hash('sha256', json_encode([$pRow], JSON_THROW_ON_ERROR));
+
+        $quoteId = (string) Str::uuid();
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
             'quote_id' => $quoteId,
             'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => $destFingerprint,
+            'price_fingerprint' => $priceFingerprint,
+            'product_subtotal' => 30000,
             'courier_code' => 'grab',
             'service_code' => 'instant',
             'quoted_amount' => 20000,
@@ -371,6 +418,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'whatsapp' => '081234567893',
                     'address' => 'Jl. Bina Marga No. 10',
                 ],
+                'destination' => $dest,
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
                 ],
@@ -387,6 +435,12 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
      */
     public function test_client_cannot_forge_fees_and_laravel_computes_grand_total(): void
     {
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+
         // 1. Client trying to pass shipping_fee or service_fee is rejected by request validation
         $forbiddenResponse = $this->withHeader('Authorization', "Bearer {$this->serviceToken}")
             ->withHeader('Idempotency-Key', (string) Str::uuid())
@@ -396,6 +450,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'whatsapp' => '081234567894',
                     'address' => 'Jl. Ceger No. 4',
                 ],
+                'destination' => $dest,
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
                 ],
@@ -410,14 +465,30 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
         // 2. Legitimate quote checkout computes authoritative grand total:
         // subtotal (30.000) + shipping (25.000) + service fee (1.000) = 56.000
         $quoteId = (string) Str::uuid();
-        $cartFingerprint = hash('sha256', json_encode([[
+        $destFingerprint = DestinationNormalizationService::computeFingerprint($dest);
+
+        $cartRow = [
             'quantity' => 1,
             'variant_id' => strtolower($this->variantMeasured->id),
-        ]]));
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
 
-        Cache::put("shipping_quote:{$quoteId}", [
+        $pRow = [
+            'quantity' => 1,
+            'subtotal' => 30000,
+            'unit_price' => 30000,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($pRow);
+        $priceFingerprint = hash('sha256', json_encode([$pRow], JSON_THROW_ON_ERROR));
+
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
             'quote_id' => $quoteId,
             'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => $destFingerprint,
+            'price_fingerprint' => $priceFingerprint,
+            'product_subtotal' => 30000,
             'courier_code' => 'grab',
             'service_code' => 'instant',
             'quoted_amount' => 25000,
@@ -432,6 +503,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                     'whatsapp' => '081234567894',
                     'address' => 'Jl. Ceger No. 4',
                 ],
+                'destination' => $dest,
                 'items' => [
                     ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
                 ],
@@ -460,15 +532,36 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
      */
     public function test_checkout_idempotency_includes_shipping_quote_id(): void
     {
-        $quoteId1 = (string) Str::uuid();
-        $cartFingerprint = hash('sha256', json_encode([[
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+        $destFingerprint = DestinationNormalizationService::computeFingerprint($dest);
+
+        $cartRow = [
             'quantity' => 1,
             'variant_id' => strtolower($this->variantMeasured->id),
-        ]]));
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
 
-        Cache::put("shipping_quote:{$quoteId1}", [
+        $pRow = [
+            'quantity' => 1,
+            'subtotal' => 30000,
+            'unit_price' => 30000,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($pRow);
+        $priceFingerprint = hash('sha256', json_encode([$pRow], JSON_THROW_ON_ERROR));
+
+        $quoteId1 = (string) Str::uuid();
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId1}", [
             'quote_id' => $quoteId1,
             'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => $destFingerprint,
+            'price_fingerprint' => $priceFingerprint,
+            'product_subtotal' => 30000,
             'courier_code' => 'grab',
             'service_code' => 'instant',
             'quoted_amount' => 20000,
@@ -482,6 +575,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                 'whatsapp' => '081234567895',
                 'address' => 'Jl. Hankam Raya',
             ],
+            'destination' => $dest,
             'items' => [
                 ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
             ],
@@ -554,14 +648,14 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
     }
 
     /**
-     * Requirement 13 & 18: Blocks couriers taking > 3 days and neutralizes unsupported packaging claims
+     * Requirement 13, 16 & 18: Enforces strict Cold Chain matrix and neutralizes unsupported packaging claims
      */
     public function test_blocks_couriers_exceeding_three_days_and_neutralizes_claims(): void
     {
         $policy = new ColdChainPolicyService();
 
         $rates = [
-            // Compliant: Instant
+            // Compliant Jakarta: Instant
             [
                 'courier_code' => 'grab',
                 'courier_service_code' => 'instant',
@@ -571,7 +665,7 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                 'shipment_duration_unit' => 'hours',
                 'price' => 20000,
             ],
-            // Compliant: 1-2 days (<= 3 days)
+            // Regular service: Blocked in Jakarta (instant/sameday only)
             [
                 'courier_code' => 'jne',
                 'courier_service_code' => 'reg',
@@ -591,23 +685,308 @@ class ShippingAuthorityAndQuoteIntegrityTest extends TestCase
                 'shipment_duration_unit' => 'days',
                 'price' => 9000,
             ],
+            // Nextday service: Compliant outside Jakarta
+            [
+                'courier_code' => 'sicepat',
+                'courier_service_code' => 'best',
+                'service_type' => 'next_day',
+                'duration' => '1 day',
+                'shipment_duration_range' => '1',
+                'shipment_duration_unit' => 'days',
+                'price' => 18000,
+            ],
         ];
 
-        $filtered = $policy->filterRates($rates, ['city' => 'Jakarta Timur', 'province' => 'DKI Jakarta']);
+        // 1. Jakarta: Instant allowed, reg/cargo/next_day blocked
+        $filteredJakarta = $policy->filterRates($rates, ['city' => 'Jakarta Timur', 'province' => 'DKI Jakarta']);
+        $this->assertCount(1, $filteredJakarta);
+        $this->assertEquals('instant', $filteredJakarta[0]['service_code']);
 
-        $this->assertCount(2, $filtered);
-        $serviceCodes = array_column($filtered, 'service_code');
-        $this->assertContains('instant', $serviceCodes);
-        $this->assertContains('reg', $serviceCodes);
-        $this->assertNotContains('cargo', $serviceCodes);
+        // 2. Outside Jakarta: Nextday allowed, instant/reg/cargo blocked
+        $filteredOutside = $policy->filterRates($rates, ['city' => 'Bandung', 'province' => 'Jawa Barat']);
+        $this->assertCount(1, $filteredOutside);
+        $this->assertEquals('best', $filteredOutside[0]['service_code']);
 
         // Prove description does NOT contain unsupported Icepack/Insulated claims
-        foreach ($filtered as $quote) {
+        foreach (array_merge($filteredJakarta, $filteredOutside) as $quote) {
             $this->assertStringNotContainsString('Icepack', $quote['description']);
             $this->assertStringNotContainsString('Insulated', $quote['description']);
             $this->assertStringNotContainsString('0–5°C', $quote['description']);
             $this->assertEquals(ColdChainPolicyService::SAFE_HANDLING_DESCRIPTION, $quote['description']);
             $this->assertEquals(ColdChainPolicyService::MANDATORY_STORAGE_WARNING, $quote['storage_warning']);
+        }
+    }
+
+    /**
+     * Requirement 12: Biteship Authorization header must NOT have Bearer prefix
+     */
+    public function test_biteship_authorization_header_does_not_contain_bearer_prefix(): void
+    {
+        Http::fake([
+            'https://api.biteship.com/v1/rates/couriers' => Http::response([
+                'success' => true,
+                'pricing' => [],
+            ], 200),
+        ]);
+
+        config([
+            'shipping.biteship.api_key' => 'biteship_test_secret_key_123',
+            'shipping.origin.postal_code' => '13890',
+            'shipping.origin.latitude' => -6.3056,
+            'shipping.origin.longitude' => 106.8924,
+            'shipping.origin.is_verified' => true,
+        ]);
+
+        $provider = new BiteshipRateProvider();
+        $provider->getRates(
+            ['postal_code' => '13890', 'latitude' => -6.3056, 'longitude' => 106.8924, 'is_verified' => true],
+            ['postal_code' => '10110', 'latitude' => -6.1754, 'longitude' => 106.8272],
+            [['name' => 'Item', 'value' => 30000, 'quantity' => 1, 'weight_grams' => 600]]
+        );
+
+        Http::assertSent(function ($request) {
+            $authHeader = $request->header('Authorization')[0] ?? '';
+            return $authHeader === 'biteship_test_secret_key_123'
+                && !str_starts_with($authHeader, 'Bearer ');
+        });
+    }
+
+    /**
+     * Requirement 13: Incomplete or unverified origin fails closed
+     */
+    public function test_incomplete_or_unverified_origin_fails_closed(): void
+    {
+        config([
+            'shipping.origin.postal_code' => null, // Missing verified origin postal code
+            'shipping.origin.is_verified' => false,
+        ]);
+
+        $this->expectException(\App\Domain\Shipping\Exceptions\ShippingProviderException::class);
+        $provider = new BiteshipRateProvider();
+        $provider->getRates([], [], []);
+    }
+
+    /**
+     * Requirement 4: Destination mismatch rejects checkout
+     */
+    public function test_checkout_rejects_quote_when_destination_fingerprint_mismatches(): void
+    {
+        $destQuote = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+        $destCheckout = [
+            'postal_code' => '10110', // Different destination!
+            'city' => 'Jakarta Pusat',
+            'province' => 'DKI Jakarta',
+        ];
+
+        $quoteId = (string) Str::uuid();
+        $cartRow = [
+            'quantity' => 1,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
+
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
+            'quote_id' => $quoteId,
+            'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => DestinationNormalizationService::computeFingerprint($destQuote),
+            'price_fingerprint' => 'test_price_hash',
+            'product_subtotal' => 30000,
+            'courier_code' => 'grab',
+            'service_code' => 'instant',
+            'quoted_amount' => 20000,
+            'service_fee_amount' => 1000,
+        ], 600);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->serviceToken}")
+            ->withHeader('Idempotency-Key', (string) Str::uuid())
+            ->postJson('/api/internal/orders', [
+                'customer' => [
+                    'name' => 'Customer Mismatch',
+                    'whatsapp' => '081234567899',
+                    'address' => 'Jl. Kebon Sirih',
+                ],
+                'destination' => $destCheckout,
+                'items' => [
+                    ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
+                ],
+                'delivery_method' => 'instant',
+                'shipping_quote_id' => $quoteId,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('Shipping quote does not match destination location', $response->json('error'));
+    }
+
+    /**
+     * Requirement 7: Price change rejects quote with QUOTE_REPRICE_REQUIRED
+     */
+    public function test_checkout_rejects_quote_when_variant_price_changes_reprice_required(): void
+    {
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+
+        $quoteId = (string) Str::uuid();
+        $cartRow = [
+            'quantity' => 1,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
+
+        // Quote was created with subtotal 25000 (different from current DB price 30000)
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
+            'quote_id' => $quoteId,
+            'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => DestinationNormalizationService::computeFingerprint($dest),
+            'price_fingerprint' => 'stale_fingerprint',
+            'product_subtotal' => 25000,
+            'courier_code' => 'grab',
+            'service_code' => 'instant',
+            'quoted_amount' => 20000,
+            'service_fee_amount' => 1000,
+        ], 600);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->serviceToken}")
+            ->withHeader('Idempotency-Key', (string) Str::uuid())
+            ->postJson('/api/internal/orders', [
+                'customer' => [
+                    'name' => 'Customer Reprice',
+                    'whatsapp' => '081234567898',
+                    'address' => 'Jl. Raya Bogor',
+                ],
+                'destination' => $dest,
+                'items' => [
+                    ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
+                ],
+                'delivery_method' => 'instant',
+                'shipping_quote_id' => $quoteId,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('QUOTE_REPRICE_REQUIRED', $response->json('error'));
+        $this->assertEquals('QUOTE_REPRICE_REQUIRED', $response->json('error_code'));
+    }
+
+    /**
+     * Requirement 8: Service fee change rejects quote with QUOTE_STALE_FEE
+     */
+    public function test_checkout_rejects_quote_when_service_fee_changes_stale_fee(): void
+    {
+        $dest = [
+            'postal_code' => '13890',
+            'city' => 'Jakarta Timur',
+            'province' => 'DKI Jakarta',
+        ];
+
+        $quoteId = (string) Str::uuid();
+        $cartRow = [
+            'quantity' => 1,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($cartRow);
+        $cartFingerprint = hash('sha256', json_encode([$cartRow], JSON_THROW_ON_ERROR));
+
+        $pRow = [
+            'quantity' => 1,
+            'subtotal' => 30000,
+            'unit_price' => 30000,
+            'variant_id' => strtolower($this->variantMeasured->id),
+        ];
+        ksort($pRow);
+        $priceFingerprint = hash('sha256', json_encode([$pRow], JSON_THROW_ON_ERROR));
+
+        // Quote was created with service fee 500, but config is 1000
+        ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
+            'quote_id' => $quoteId,
+            'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => DestinationNormalizationService::computeFingerprint($dest),
+            'price_fingerprint' => $priceFingerprint,
+            'product_subtotal' => 30000,
+            'courier_code' => 'grab',
+            'service_code' => 'instant',
+            'quoted_amount' => 20000,
+            'service_fee_amount' => 500, // Stale!
+        ], 600);
+
+        $response = $this->withHeader('Authorization', "Bearer {$this->serviceToken}")
+            ->withHeader('Idempotency-Key', (string) Str::uuid())
+            ->postJson('/api/internal/orders', [
+                'customer' => [
+                    'name' => 'Customer Fee Change',
+                    'whatsapp' => '081234567897',
+                    'address' => 'Jl. Raya Bogor No. 20',
+                ],
+                'destination' => $dest,
+                'items' => [
+                    ['variant_id' => $this->variantMeasured->id, 'quantity' => 1],
+                ],
+                'delivery_method' => 'instant',
+                'shipping_quote_id' => $quoteId,
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('QUOTE_STALE_FEE', $response->json('error'));
+        $this->assertEquals('QUOTE_STALE_FEE', $response->json('error_code'));
+    }
+
+    /**
+     * Requirement 17: Unparseable transit duration fails closed
+     */
+    public function test_unparseable_or_unknown_courier_transit_duration_fails_closed(): void
+    {
+        $policy = new ColdChainPolicyService();
+
+        $rates = [
+            [
+                'courier_code' => 'unknown',
+                'courier_service_code' => 'mystery',
+                'service_type' => 'instant',
+                'duration' => 'Uncertain transit schedule',
+                'shipment_duration_range' => '',
+                'shipment_duration_unit' => '',
+                'price' => 15000,
+            ],
+            [
+                'courier_code' => 'unknown2',
+                'courier_service_code' => 'tbd',
+                'service_type' => 'instant',
+                'duration' => '',
+                'shipment_duration_range' => '',
+                'shipment_duration_unit' => '',
+                'price' => 15000,
+            ],
+        ];
+
+        $filtered = $policy->filterRates($rates, ['city' => 'Jakarta Timur', 'province' => 'DKI Jakarta']);
+        $this->assertEmpty($filtered);
+    }
+
+    /**
+     * Requirement 15: Production environment requires redis store or fails closed
+     */
+    public function test_shipping_quote_cache_store_fails_closed_in_production_if_redis_unavailable(): void
+    {
+        $originalEnv = app()->environment();
+        // Simulate production environment
+        $this->app->detectEnvironment(fn() => 'production');
+        config(['shipping.cache_store' => 'file']); // Non-redis in production
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Production Redis quote store is unavailable. Failing closed.');
+
+        try {
+            ShippingQuoteCacheStore::getStore();
+        } finally {
+            $this->app->detectEnvironment(fn() => $originalEnv);
+            config(['shipping.cache_store' => null]);
         }
     }
 }

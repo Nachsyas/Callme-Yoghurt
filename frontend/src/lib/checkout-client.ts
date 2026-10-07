@@ -15,25 +15,22 @@ export interface CheckoutItemInput {
   quantity: number;
 }
 
+export interface CheckoutDestinationInput {
+  postal_code: string;
+  city?: string;
+  province?: string;
+  district?: string;
+  area_id?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface CheckoutPayload {
   customer: CheckoutCustomerInput;
+  destination: CheckoutDestinationInput;
   items: CheckoutItemInput[];
   delivery_method: DeliveryMethod;
-  shipping_quote_id?: string;
-  shipping_quote?: {
-    quote_id: string;
-    provider: string;
-    courier_code: string;
-    service_code: string;
-    destination_postal_code?: string;
-    destination_area_id?: string;
-    quoted_price: number;
-    timestamp: number;
-  };
-  service_fee?: {
-    name: string;
-    amount: number;
-  };
+  shipping_quote_id: string;
 }
 
 export interface StoredAttemptRecord {
@@ -101,10 +98,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * Builds a deterministic canonical representation of the checkout request.
  *
- * Invariants (Gate 0E.2B & Phase 1.7C.19B):
+ * Invariants (Gate 0E.2B, Phase 1.7C.19B & 1.7C.19C):
  * - Normalizes Indonesian phone using standard normalizeIndonesianPhone (e.g. 0812 -> 62812).
  * - Trims customer name and address.
  * - Sorts items deterministically by variant_id ASC.
+ * - Normalizes and binds destination with ksorted keys.
  * - Includes normalized shipping_quote_id for transaction semantics differentiation.
  * - Contains NO price, shipping amount, or client-injected fee values.
  */
@@ -112,9 +110,28 @@ export function buildCanonicalCheckoutPayload(payload: CheckoutPayload) {
   const sortedItems = [...payload.items]
     .map((item) => ({
       quantity: item.quantity,
-      variant_id: item.variant_id.trim(),
+      variant_id: item.variant_id.trim().toLowerCase(),
     }))
     .sort((a, b) => (a.variant_id < b.variant_id ? -1 : a.variant_id > b.variant_id ? 1 : 0));
+
+  const destination: Record<string, unknown> = {
+    postal_code: (payload.destination?.postal_code || '').trim(),
+  };
+  if (payload.destination?.city) destination.city = payload.destination.city.trim();
+  if (payload.destination?.province) destination.province = payload.destination.province.trim();
+  if (payload.destination?.district) destination.district = payload.destination.district.trim();
+  if (payload.destination?.area_id) destination.area_id = payload.destination.area_id.trim();
+  if (typeof payload.destination?.latitude === 'number' && Number.isFinite(payload.destination.latitude)) {
+    destination.latitude = payload.destination.latitude;
+  }
+  if (typeof payload.destination?.longitude === 'number' && Number.isFinite(payload.destination.longitude)) {
+    destination.longitude = payload.destination.longitude;
+  }
+
+  const sortedDestination: Record<string, unknown> = {};
+  for (const k of Object.keys(destination).sort()) {
+    sortedDestination[k] = destination[k];
+  }
 
   const canonical: Record<string, unknown> = {
     customer: {
@@ -123,13 +140,10 @@ export function buildCanonicalCheckoutPayload(payload: CheckoutPayload) {
       whatsapp: normalizeIndonesianPhone(payload.customer.whatsapp.trim()),
     },
     delivery_method: payload.delivery_method,
+    destination: sortedDestination,
     items: sortedItems,
+    shipping_quote_id: (payload.shipping_quote_id || '').trim().toLowerCase(),
   };
-
-  const rawQuoteId = payload.shipping_quote_id || payload.shipping_quote?.quote_id;
-  if (rawQuoteId && typeof rawQuoteId === 'string' && rawQuoteId.trim().length > 0) {
-    canonical.shipping_quote_id = rawQuoteId.trim().toLowerCase();
-  }
 
   return canonical;
 }
@@ -416,6 +430,27 @@ export async function executeCheckoutSubmission(
         error: 'Pesanan tidak dapat diproses: terdapat item dengan varian tidak valid atau dalam mode pratinjau. Silakan periksa kembali keranjang belanja Anda.',
       };
     }
+  }
+
+  if (
+    !payload.destination ||
+    typeof payload.destination.postal_code !== 'string' ||
+    payload.destination.postal_code.trim().length === 0
+  ) {
+    return {
+      success: false,
+      error: 'Kode pos atau alamat pengiriman tidak lengkap.',
+    };
+  }
+
+  if (
+    typeof payload.shipping_quote_id !== 'string' ||
+    !isUuid(payload.shipping_quote_id)
+  ) {
+    return {
+      success: false,
+      error: 'Opsi pengiriman belum dipilih atau tidak valid. Silakan hitung ongkir terlebih dahulu.',
+    };
   }
 
   let idempotencyKey: string;

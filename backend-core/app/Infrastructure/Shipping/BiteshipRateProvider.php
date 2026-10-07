@@ -41,9 +41,21 @@ class BiteshipRateProvider implements ShippingRateProviderInterface
         $baseUrl = rtrim((string) config('shipping.biteship.base_url', 'https://api.biteship.com'), '/');
         $timeout = (int) config('shipping.biteship.timeout_seconds', 8);
 
+        // Enforce owner-verified origin invariants (Section 13)
+        if (
+            empty($origin['postal_code']) ||
+            empty($origin['latitude']) ||
+            empty($origin['longitude']) ||
+            empty($origin['is_verified'])
+        ) {
+            throw new ShippingProviderException('Shipping origin configuration is incomplete or unverified. Rates request failed closed.');
+        }
+
         // Build sanitized Biteship request payload
         $payload = [
-            'origin_postal_code' => $origin['postal_code'] ?? 13890,
+            'origin_postal_code' => (int) $origin['postal_code'],
+            'origin_latitude' => (float) $origin['latitude'],
+            'origin_longitude' => (float) $origin['longitude'],
             'couriers' => self::ALLOWED_COURIERS,
             'items' => array_map(function (array $item) {
                 return [
@@ -54,11 +66,6 @@ class BiteshipRateProvider implements ShippingRateProviderInterface
                 ];
             }, $items),
         ];
-
-        if (!empty($origin['latitude']) && !empty($origin['longitude'])) {
-            $payload['origin_latitude'] = (float) $origin['latitude'];
-            $payload['origin_longitude'] = (float) $origin['longitude'];
-        }
 
         if (!empty($destination['postal_code'])) {
             $payload['destination_postal_code'] = (int) $destination['postal_code'];
@@ -72,8 +79,9 @@ class BiteshipRateProvider implements ShippingRateProviderInterface
         }
 
         try {
+            // Official Biteship API auth contract uses API key directly without Bearer prefix (Section 12)
             $response = Http::withHeaders([
-                'Authorization' => "Bearer {$apiKey}",
+                'Authorization' => $apiKey,
                 'Content-Type' => 'application/json',
             ])->timeout($timeout)->post("{$baseUrl}/v1/rates/couriers", $payload);
 

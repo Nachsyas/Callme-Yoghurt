@@ -1,6 +1,5 @@
 import { NextRequest } from 'next/server';
 import { isUuid } from '@/lib/catalog';
-import { getServiceFeeConfig } from '@/lib/shipping/service-fee-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +14,11 @@ const UPSTREAM_TIMEOUT_MS = 10000;
  * GET /api/shipping/quote
  * Returns server-authoritative service fee configuration ("Biaya Layanan")
  * from ERP for checkout display and initialization.
+ *
+ * Invariants (Phase 1.7C.19C Section 14):
+ * - ERP is the SOLE authority for service fee.
+ * - Zero fallback to hardcoded or Next.js synthetic config.
+ * - If ERP is unreachable or unconfigured, fails closed as BLOCKED.
  */
 export async function GET(): Promise<Response> {
   const erpBaseUrl = process.env.ERP_INTERNAL_URL;
@@ -37,22 +41,27 @@ export async function GET(): Promise<Response> {
               isConfigured: data.service_fee?.is_configured ?? false,
               amount: data.service_fee?.amount ?? null,
               name: data.service_fee?.name ?? 'Biaya Layanan',
-              status: data.service_fee?.status,
+              status: data.service_fee?.status ?? 'BLOCKED — OWNER FEE VALUE REQUIRED',
             },
           },
           { status: 200, headers: NO_CACHE_HEADERS }
         );
       }
     } catch {
-      // Fall through to local fallback config if ERP unreachable
+      // Fail closed
     }
   }
 
-  const fallbackFee = getServiceFeeConfig();
+  // Fails closed without inventing a local fee
   return Response.json(
     {
       success: true,
-      service_fee: fallbackFee,
+      service_fee: {
+        isConfigured: false,
+        amount: null,
+        name: 'Biaya Layanan',
+        status: 'BLOCKED — OWNER FEE VALUE REQUIRED',
+      },
     },
     { status: 200, headers: NO_CACHE_HEADERS }
   );
@@ -186,7 +195,13 @@ export async function POST(request: NextRequest): Promise<Response> {
           isConfigured: Boolean(serviceFeeObj.is_configured),
           amount: typeof serviceFeeObj.amount === 'number' ? serviceFeeObj.amount : null,
           name: (serviceFeeObj.name as string) || 'Biaya Layanan',
-        } : getServiceFeeConfig(),
+          status: (serviceFeeObj.status as string) || 'ACTIVE',
+        } : {
+          isConfigured: false,
+          amount: null,
+          name: 'Biaya Layanan',
+          status: 'BLOCKED — OWNER FEE VALUE REQUIRED',
+        },
         storage_warning: upstreamData.storage_warning,
       },
       { status: 200, headers: NO_CACHE_HEADERS }

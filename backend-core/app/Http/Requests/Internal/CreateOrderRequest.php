@@ -33,11 +33,19 @@ class CreateOrderRequest extends FormRequest
             'customer.name' => ['required', 'string', 'max:255'],
             'customer.whatsapp' => ['required', 'string', 'max:50'],
             'customer.address' => ['required', 'string', 'max:1000'],
+            'destination' => ['required', 'array'],
+            'destination.postal_code' => ['required', 'string', 'max:20'],
+            'destination.area_id' => ['nullable', 'string', 'max:100'],
+            'destination.province' => ['nullable', 'string', 'max:100'],
+            'destination.city' => ['nullable', 'string', 'max:100'],
+            'destination.district' => ['nullable', 'string', 'max:100'],
+            'destination.latitude' => ['nullable', 'numeric'],
+            'destination.longitude' => ['nullable', 'numeric'],
             'items' => ['required', 'array', 'min:1', 'max:50'],
             'items.*.variant_id' => ['required', 'uuid'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100'],
             'delivery_method' => ['required', 'string', Rule::in(DeliveryMethod::values())],
-            'shipping_quote_id' => ['nullable', 'uuid'],
+            'shipping_quote_id' => ['required', 'uuid'],
         ];
     }
 
@@ -61,8 +69,8 @@ class CreateOrderRequest extends FormRequest
 
             $rawPayload = $this->all();
 
-            // 2. Strict allowed root keys check
-            $allowedRootKeys = ['customer', 'items', 'delivery_method', 'shipping_quote_id'];
+            // 2. Strict allowed root keys check (Sections 2, 3, 4)
+            $allowedRootKeys = ['customer', 'destination', 'items', 'delivery_method', 'shipping_quote_id'];
             $extraRootKeys = array_diff(array_keys($rawPayload), $allowedRootKeys);
             if (!empty($extraRootKeys)) {
                 $validator->errors()->add(
@@ -91,6 +99,18 @@ class CreateOrderRequest extends FormRequest
                             'The customer whatsapp phone number is invalid.'
                         );
                     }
+                }
+            }
+
+            // 3b. Strict allowed destination keys check (Section 4)
+            if (isset($rawPayload['destination']) && is_array($rawPayload['destination'])) {
+                $allowedDestinationKeys = ['area_id', 'postal_code', 'province', 'city', 'district', 'latitude', 'longitude'];
+                $extraDestinationKeys = array_diff(array_keys($rawPayload['destination']), $allowedDestinationKeys);
+                if (!empty($extraDestinationKeys)) {
+                    $validator->errors()->add(
+                        'destination',
+                        'Unexpected fields in destination: ' . implode(', ', $extraDestinationKeys)
+                    );
                 }
             }
 
@@ -126,10 +146,12 @@ class CreateOrderRequest extends FormRequest
                 }
             }
 
-            // 5. Global rejection of prohibited authority fields
+            // 5. Global rejection of prohibited authority fields (Sections 3 & 21)
             $prohibitedFields = [
                 'price', 'unit_price', 'subtotal', 'total', 'total_amount',
                 'stock', 'warehouse', 'lot', 'discount', 'order_status',
+                'shipping_fee', 'service_fee', 'shipping_amount', 'quoted_price',
+                'weight', 'product_weight', 'shipping_weight', 'shipping_quote',
             ];
             $this->checkProhibitedFieldsRecursively($rawPayload, $prohibitedFields, $validator);
         });

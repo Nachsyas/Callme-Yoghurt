@@ -115,10 +115,16 @@ class OrderController extends Controller
             Log::warning('Checkout validation failed: quote invalid', [
                 'request_id' => $requestId,
                 'error_category' => 'quote_invalid',
+                'message' => $e->getMessage(),
             ]);
 
+            $message = $e->getMessage() !== '' ? $e->getMessage() : 'Shipping quote does not match current cart or destination.';
+
             return response()->json([
-                'error' => 'Shipping quote does not match current cart or destination.',
+                'error' => $message,
+                'error_code' => str_starts_with($message, 'QUOTE_REPRICE_REQUIRED')
+                    ? 'QUOTE_REPRICE_REQUIRED'
+                    : (str_starts_with($message, 'QUOTE_STALE_FEE') ? 'QUOTE_STALE_FEE' : 'INVALID_SHIPPING_QUOTE'),
             ], 422);
         } catch (UnconfiguredServiceFeeException $e) {
             Log::error('Checkout blocked: owner fee value unconfigured', [

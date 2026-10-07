@@ -28,9 +28,9 @@ return [
     */
     'origin' => [
         'area_name' => 'Bambu Apus, Cipayung, Jakarta Timur',
-        'postal_code' => env('SHIPPING_ORIGIN_POSTAL_CODE', '13890'),
-        'latitude' => env('SHIPPING_ORIGIN_LATITUDE') !== null ? (float) env('SHIPPING_ORIGIN_LATITUDE') : null,
-        'longitude' => env('SHIPPING_ORIGIN_LONGITUDE') !== null ? (float) env('SHIPPING_ORIGIN_LONGITUDE') : null,
+        'postal_code' => env('SHIPPING_ORIGIN_POSTAL_CODE'),
+        'latitude' => env('SHIPPING_ORIGIN_LATITUDE') !== null && env('SHIPPING_ORIGIN_LATITUDE') !== '' ? (float) env('SHIPPING_ORIGIN_LATITUDE') : null,
+        'longitude' => env('SHIPPING_ORIGIN_LONGITUDE') !== null && env('SHIPPING_ORIGIN_LONGITUDE') !== '' ? (float) env('SHIPPING_ORIGIN_LONGITUDE') : null,
         'is_verified' => filter_var(env('SHIPPING_ORIGIN_VERIFIED', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
@@ -50,7 +50,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Ephemeral Shipping Quote Cache TTL
+    | Ephemeral Shipping Quote Cache TTL & Store
     |--------------------------------------------------------------------------
     |
     | Duration (in seconds) that an opaque shipping quote ID remains valid.
@@ -60,4 +60,8 @@ return [
     */
     'quote_ttl_seconds' => (int) env('SHIPPING_QUOTE_TTL_SECONDS', 900),
 
+    /*
+    | Cache store for ephemeral quote storage. In production, Redis is strictly required.
+    */
+    'cache_store' => env('SHIPPING_CACHE_STORE'),
 ];

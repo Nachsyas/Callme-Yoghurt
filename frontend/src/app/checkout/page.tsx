@@ -141,6 +141,20 @@ export default function CheckoutPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Invalidate selected quote and available quotes when destination or cart changes
+  useEffect(() => {
+    setSelectedQuote(null);
+    setAvailableQuotes([]);
+    setHasCalculatedShipping(false);
+  }, [
+    formData.postalCode,
+    formData.city,
+    formData.province,
+    formData.district,
+    selectedArea,
+    items,
+  ]);
+
   const handleCalculateShipping = async () => {
     setShippingError(null);
     setIsCalculatingShipping(true);
@@ -190,13 +204,15 @@ export default function CheckoutPage() {
     }
   };
 
-  const subtotal = getEstimatedTotal();
-  const shippingFee = selectedQuote ? selectedQuote.price : 0;
+  // Authoritative financial breakdown directly from selected quote (or fallback before quote calculation)
+  const subtotal = selectedQuote?.product_subtotal ?? getEstimatedTotal();
+  const shippingFee = selectedQuote?.shipping_fee ?? (selectedQuote ? selectedQuote.price : 0);
   const serviceFee =
-    serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number'
+    selectedQuote?.service_fee ??
+    (serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number'
       ? serviceFeeConfig.amount
-      : 0;
-  const totalPayment = subtotal + shippingFee + serviceFee;
+      : 0);
+  const totalPayment = selectedQuote?.payable_total ?? (subtotal + shippingFee + serviceFee);
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,13 +275,13 @@ export default function CheckoutPage() {
     }
 
     // 6. Prevent negative shipping fee
-    if (selectedQuote.price < 0) {
+    if (shippingFee < 0) {
       setErrorMessage('Biaya pengiriman tidak valid!');
       return;
     }
 
     // 7. Prevent negative service fee
-    if (serviceFeeConfig.amount < 0) {
+    if (serviceFee < 0) {
       setErrorMessage('Biaya Layanan tidak valid!');
       return;
     }
@@ -290,7 +306,8 @@ export default function CheckoutPage() {
         ? 'sameday'
         : 'nextday';
 
-    const customerAddress = `[${selectedQuote.courier_name} ${selectedQuote.service_name}] ${consolidatedAddress}`;
+    // Requirement 5: Clean customer address without courier/service prefix
+    const customerAddress = consolidatedAddress;
 
     const payload: CheckoutPayload = {
       customer: {
@@ -298,23 +315,18 @@ export default function CheckoutPage() {
         whatsapp: formData.whatsapp.trim(),
         address: customerAddress,
       },
+      destination: {
+        postal_code: formData.postalCode.trim(),
+        city: formData.city.trim() || undefined,
+        province: formData.province.trim() || undefined,
+        district: formData.district.trim() || undefined,
+        area_id: selectedArea?.id || undefined,
+        latitude: selectedArea?.latitude || undefined,
+        longitude: selectedArea?.longitude || undefined,
+      },
       items: toTransactionProjection(items),
       delivery_method: backendDeliveryMethod,
       shipping_quote_id: selectedQuote.quote_id,
-      shipping_quote: {
-        quote_id: selectedQuote.quote_id,
-        provider: selectedQuote.provider,
-        courier_code: selectedQuote.courier_code,
-        service_code: selectedQuote.service_code,
-        destination_postal_code: formData.postalCode.trim(),
-        destination_area_id: selectedArea?.id,
-        quoted_price: selectedQuote.price,
-        timestamp: Date.now(),
-      },
-      service_fee: {
-        name: 'Biaya Layanan',
-        amount: serviceFeeConfig.amount,
-      },
     };
 
     const result = await executeCheckoutSubmission(payload);
@@ -340,7 +352,7 @@ export default function CheckoutPage() {
           price: i.display_price,
         })),
         subtotal,
-        shipping_fee: selectedQuote.price,
+        shipping_fee: shippingFee,
         cold_chain_fee: 0,
         total_amount: order.total_amount,
         payment_status: order.payment?.status || 'PENDING_PAYMENT',
@@ -943,7 +955,7 @@ export default function CheckoutPage() {
                   </span>
                   <span className="text-sm font-bold text-black/80">
                     {selectedQuote
-                      ? `Rp ${selectedQuote.price.toLocaleString('id-ID')}`
+                      ? `Rp ${shippingFee.toLocaleString('id-ID')}`
                       : 'Ongkir belum dapat dihitung'}
                   </span>
                 </div>
@@ -952,7 +964,9 @@ export default function CheckoutPage() {
                 <div className="flex items-baseline justify-between">
                   <span className="text-xs text-black/60 font-medium">Biaya Layanan</span>
                   <span className="text-sm font-bold text-black/80">
-                    {serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number'
+                    {serviceFee > 0
+                      ? `Rp ${serviceFee.toLocaleString('id-ID')}`
+                      : serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number'
                       ? `Rp ${serviceFeeConfig.amount.toLocaleString('id-ID')}`
                       : 'Konfigurasi belum ditentukan'}
                   </span>

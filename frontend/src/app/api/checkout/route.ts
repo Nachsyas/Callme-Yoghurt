@@ -1,6 +1,5 @@
 import { getRateLimiter, getClientIdentifier } from '../../../lib/security/rate-limit.ts';
 import { isUuid } from '../../../lib/catalog.ts';
-import { adminOrderStore } from '../../../lib/order/admin-order-store.ts';
 
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'no-store',
@@ -11,18 +10,29 @@ const UPSTREAM_TIMEOUT_MS = 10000;
 
 type DeliveryMethod = 'instant' | 'sameday' | 'nextday';
 
+interface CheckoutDestinationInput {
+  postal_code: string;
+  city?: string;
+  province?: string;
+  district?: string;
+  area_id?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 interface CheckoutRequest {
   customer: {
     name: string;
     whatsapp: string;
     address: string;
   };
+  destination: CheckoutDestinationInput;
   items: Array<{
     variant_id: string;
     quantity: number;
   }>;
   delivery_method: DeliveryMethod;
-  shipping_quote_id?: string;
+  shipping_quote_id: string;
 }
 
 interface PublicOrderData {
@@ -48,23 +58,29 @@ function isDeliveryMethod(value: unknown): value is DeliveryMethod {
 /**
  * Validates edge checkout request with strict bounds mirroring ERP authority.
  *
- * Invariants (Gate 0E.2B & Phase 1.7C.19B):
+ * Invariants (Gate 0E.2B, Phase 1.7C.19B & 1.7C.19C):
  * - customer.name: 1..255 chars
  * - customer.whatsapp: 1..50 chars
  * - customer.address: 1..1000 chars
+ * - destination: mandatory record with valid postal_code
  * - items: 1..50 items
  * - variant_id: valid UUID string
  * - quantity: integer 1..100
  * - delivery_method: instant | sameday | nextday
- * - shipping_quote_id: valid server UUID if present
+ * - shipping_quote_id: mandatory valid server UUID string
  * - Prohibits client prices, shipping fee amounts, or grand totals.
  */
 function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
-  if (!isRecord(value) || !isRecord(value.customer) || !Array.isArray(value.items)) {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.customer) ||
+    !isRecord(value.destination) ||
+    !Array.isArray(value.items)
+  ) {
     return null;
   }
 
-  const { customer, items, delivery_method: deliveryMethod } = value;
+  const { customer, destination, items, delivery_method: deliveryMethod } = value;
 
   if (
     !isNonEmptyString(customer.name) ||
@@ -73,12 +89,19 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
     customer.whatsapp.trim().length > 50 ||
     !isNonEmptyString(customer.address) ||
     customer.address.trim().length > 1000 ||
+    !isNonEmptyString(destination.postal_code) ||
+    destination.postal_code.trim().length > 20 ||
     !isDeliveryMethod(deliveryMethod) ||
     items.length < 1 ||
     items.length > 50
   ) {
     return null;
   }
+
+  if (typeof value.shipping_quote_id !== 'string' || !isUuid(value.shipping_quote_id)) {
+    return null;
+  }
+  const shippingQuoteId = value.shipping_quote_id.trim();
 
   const parsedItems: CheckoutRequest['items'] = [];
 
@@ -100,16 +123,19 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
     });
   }
 
-  let shippingQuoteId: string | undefined = undefined;
-  if (typeof value.shipping_quote_id === 'string' && isUuid(value.shipping_quote_id)) {
-    shippingQuoteId = value.shipping_quote_id.trim();
-  } else if (
-    isRecord(value.shipping_quote) &&
-    typeof value.shipping_quote.quote_id === 'string' &&
-    isUuid(value.shipping_quote.quote_id)
-  ) {
-    shippingQuoteId = value.shipping_quote.quote_id.trim();
-  }
+  const parsedDestination: CheckoutDestinationInput = {
+    postal_code: destination.postal_code.trim(),
+    ...(isNonEmptyString(destination.city) ? { city: destination.city.trim() } : {}),
+    ...(isNonEmptyString(destination.province) ? { province: destination.province.trim() } : {}),
+    ...(isNonEmptyString(destination.district) ? { district: destination.district.trim() } : {}),
+    ...(isNonEmptyString(destination.area_id) ? { area_id: destination.area_id.trim() } : {}),
+    ...(typeof destination.latitude === 'number' && Number.isFinite(destination.latitude)
+      ? { latitude: destination.latitude }
+      : {}),
+    ...(typeof destination.longitude === 'number' && Number.isFinite(destination.longitude)
+      ? { longitude: destination.longitude }
+      : {}),
+  };
 
   return {
     customer: {
@@ -117,9 +143,10 @@ function parseCheckoutRequest(value: unknown): CheckoutRequest | null {
       whatsapp: customer.whatsapp.trim(),
       address: customer.address.trim(),
     },
+    destination: parsedDestination,
     items: parsedItems,
     delivery_method: deliveryMethod,
-    ...(shippingQuoteId ? { shipping_quote_id: shippingQuoteId } : {}),
+    shipping_quote_id: shippingQuoteId,
   };
 }
 
@@ -335,36 +362,6 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
  
-    try {
-      adminOrderStore.addOrder({
-        id: publicOrderData.order_id,
-        order_number: publicOrderData.order_number,
-        customer: {
-          name: payload.customer.name,
-          whatsapp: payload.customer.whatsapp,
-          address: payload.customer.address,
-        },
-        cost: {
-          subtotal: Math.max(0, publicOrderData.total_amount - 25000),
-          shipping_fee: 20000,
-          cold_chain_fee: 5000,
-          total_amount: publicOrderData.total_amount,
-        },
-        payment: {
-          method: 'Manual QRIS',
-          status: 'PENDING_PAYMENT',
-          proof_status: 'waiting_verification',
-        },
-        order_status: 'WAITING_PAYMENT',
-        delivery_method:
-          payload.delivery_method === 'instant'
-            ? 'Instant Courier (1-3 hours)'
-            : 'Same Day Delivery',
-      });
-    } catch {
-      // Best-effort admin in-memory sync
-    }
-
     return Response.json(
       {
         success: true,

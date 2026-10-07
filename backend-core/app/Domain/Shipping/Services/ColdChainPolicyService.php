@@ -128,9 +128,13 @@ class ColdChainPolicyService
      */
     public function isWithinTransitLimit(array $rate): bool
     {
-        $duration = strtolower((string) ($rate['duration'] ?? ''));
-        $unit = strtolower((string) ($rate['shipment_duration_unit'] ?? ''));
+        $duration = strtolower(trim((string) ($rate['duration'] ?? '')));
+        $unit = strtolower(trim((string) ($rate['shipment_duration_unit'] ?? '')));
         $range = trim((string) ($rate['shipment_duration_range'] ?? ''));
+
+        if ($duration === '' && $range === '') {
+            return false;
+        }
 
         // Hours transit is always within limit (< 24 hours)
         if ($unit === 'hours' || str_contains($duration, 'hour') || str_contains($duration, 'jam')) {
@@ -141,22 +145,19 @@ class ColdChainPolicyService
             return true;
         }
 
-        // Parse numbers in range (e.g. "1-2", "2-3", "3-5", "4-6")
-        if (preg_match_all('/\d+/', $range !== '' ? $range : $duration, $matches)) {
+        // Parse numbers in range (e.g. "1-2", "2-3", "3-5", "4-6") or duration string
+        $subject = $range !== '' ? $range : $duration;
+        if (preg_match_all('/\d+/', $subject, $matches) && !empty($matches[0])) {
             $numbers = array_map('intval', $matches[0]);
             $maxDays = max($numbers);
-            if ($maxDays > self::MAX_TRANSIT_DAYS) {
+            if ($maxDays <= 0 || $maxDays > self::MAX_TRANSIT_DAYS) {
                 return false;
             }
             return true;
         }
 
-        // If unit is days and no numbers found or unclear, fail safe if it hints multi-day > 3
-        if (str_contains($duration, '4') || str_contains($duration, '5') || str_contains($duration, '6') || str_contains($duration, '7')) {
-            return false;
-        }
-
-        return true;
+        // Unparseable / ambiguous / unknown duration -> fail closed! (Section 17)
+        return false;
     }
 
     /**
@@ -245,19 +246,24 @@ class ColdChainPolicyService
                 continue;
             }
 
-            // 1. Duration check: product tahan 3 hari di suhu ruang. Kurir > 3 hari diblokir kaku.
+            // 1. Duration check: product tahan 3 hari di suhu ruang. Kurir > 3 hari atau unknown diblokir kaku.
             if (!$this->isWithinTransitLimit($rate)) {
                 continue;
             }
 
             $category = $this->categorizeService($rate);
 
-            // 2. Service type gating by destination:
-            // Jakarta: Instant, Same Day, Next Day, or fast Regular (<= 3 days)
-            // Outside Jakarta: Instant, Same Day, Next Day, or fast Regular (<= 3 days)
-            // Cargo/Economy (>3 days) already blocked by isWithinTransitLimit.
-            if ($category === 'other') {
-                continue;
+            // 2. Strict service policy gating by destination (Section 16):
+            // JAKARTA: Instant & Same Day only.
+            // OUTSIDE JAKARTA: Next Day only.
+            if ($isJakarta) {
+                if ($category !== 'instant' && $category !== 'sameday') {
+                    continue;
+                }
+            } else {
+                if ($category !== 'nextday') {
+                    continue;
+                }
             }
 
             $compliantQuotes[] = [
@@ -277,8 +283,8 @@ class ColdChainPolicyService
             ];
         }
 
-        // Priority sort: instant -> sameday -> nextday -> regular, then by price ASC
-        $priority = ['instant' => 1, 'sameday' => 2, 'nextday' => 3, 'regular' => 4];
+        // Priority sort: instant -> sameday -> nextday, then by price ASC
+        $priority = ['instant' => 1, 'sameday' => 2, 'nextday' => 3];
         usort($compliantQuotes, function ($a, $b) use ($priority) {
             $prioA = $priority[$a['service_type']] ?? 99;
             $prioB = $priority[$b['service_type']] ?? 99;

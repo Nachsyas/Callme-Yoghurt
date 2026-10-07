@@ -20,6 +20,7 @@ import type { BiteshipRateItemRaw, ShippingQuote, ShippingServiceCategory } from
 export interface DestinationContext {
   province?: string;
   city?: string;
+  postal_code?: string;
   isJakarta?: boolean;
 }
 
@@ -30,16 +31,31 @@ export function isJakartaLocation(context: DestinationContext): boolean {
   if (context.isJakarta !== undefined) return context.isJakarta;
   const prov = (context.province || '').toLowerCase();
   const city = (context.city || '').toLowerCase();
-  return (
-    prov.includes('jakarta') ||
-    prov.includes('dki') ||
+  const postalCode = (context.postal_code || '').trim();
+
+  if (prov.includes('jakarta') || prov.includes('dki')) {
+    return true;
+  }
+
+  if (
     city.includes('jakarta') ||
     city.includes('jaktim') ||
     city.includes('jaksel') ||
     city.includes('jakpus') ||
     city.includes('jakbar') ||
     city.includes('jakut')
-  );
+  ) {
+    return true;
+  }
+
+  if (postalCode.length === 5) {
+    const prefix = postalCode.slice(0, 2);
+    if (['10', '11', '12', '13', '14'].includes(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -93,13 +109,17 @@ export function categorizeBiteshipService(rate: BiteshipRateItemRaw): ShippingSe
 }
 
 /**
- * Validates if the duration represents 1 day or faster.
- * Blocks any service with multi-day transit (> 1 day / 2-5 days).
+ * Validates if the duration represents within 3 days room-temperature transit limit.
+ * Blocks any service with multi-day transit > 3 days or unknown/unparseable transit duration.
  */
 export function isWithinColdChainDuration(rate: BiteshipRateItemRaw): boolean {
-  const duration = (rate.duration || '').toLowerCase();
-  const unit = (rate.shipment_duration_unit || '').toLowerCase();
+  const duration = (rate.duration || '').toLowerCase().trim();
+  const unit = (rate.shipment_duration_unit || '').toLowerCase().trim();
   const range = (rate.shipment_duration_range || '').trim();
+
+  if (duration === '' && range === '') {
+    return false;
+  }
 
   // If duration is in hours, it's fast (< 24 hours)
   if (unit === 'hours' || duration.includes('hour') || duration.includes('jam')) {
@@ -111,27 +131,19 @@ export function isWithinColdChainDuration(rate: BiteshipRateItemRaw): boolean {
     return true;
   }
 
-  // If unit is days, check range
-  if (unit === 'days' || duration.includes('day') || duration.includes('hari')) {
-    // "1 - 1" or "1" is next day
-    if (range === '1' || range === '1 - 1' || range === '0 - 1') {
-      return true;
-    }
-    // Any range exceeding 1 day (e.g. "1 - 2", "2 - 3", "2 - 5") is rejected
-    if (
-      range.includes('2') ||
-      range.includes('3') ||
-      range.includes('4') ||
-      range.includes('5') ||
-      duration.includes('2') ||
-      duration.includes('3') ||
-      duration.includes('4') ||
-      duration.includes('5')
-    ) {
+  // Parse numbers in range or duration
+  const subject = range !== '' ? range : duration;
+  const numbers = subject.match(/\d+/g);
+  if (numbers && numbers.length > 0) {
+    const parsed = numbers.map(Number);
+    const maxDays = Math.max(...parsed);
+    if (maxDays <= 0 || maxDays > 3) {
       return false;
     }
+    return true;
   }
 
+  // Unknown or unparseable duration fails closed (Task 17)
   return false;
 }
 
@@ -167,20 +179,20 @@ export function filterColdChainQuotes(
       continue;
     }
 
-    // 3. Duration validation
+    // 3. Duration validation (fails closed on unknown or unparseable)
     if (!isWithinColdChainDuration(rate)) {
       continue;
     }
 
-    // 4. Policy enforcement by destination
+    // 4. Strict shipping matrix (Task 16):
+    // Jakarta: Instant & Same Day only
+    // Outside Jakarta: Next Day only
     if (isJakarta) {
-      // Jakarta permits instant, sameday, and nextday
-      if (category !== 'instant' && category !== 'sameday' && category !== 'nextday') {
+      if (category !== 'instant' && category !== 'sameday') {
         continue;
       }
     } else {
-      // Outside Jakarta: only instant/sameday if serviced, or legitimate nextday
-      if (category !== 'nextday' && category !== 'sameday' && category !== 'instant') {
+      if (category !== 'nextday') {
         continue;
       }
     }
@@ -198,6 +210,7 @@ export function filterColdChainQuotes(
       duration: rate.duration || (category === 'instant' ? '1-3 hours' : category === 'sameday' ? 'Same day' : '1 day'),
       cold_chain_compliant: true,
       description: rate.description || 'Penanganan pengiriman mengikuti SOP produk dairy Callme Yoghurt.',
+      storage_warning: 'Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima (Suhu < 5°C).',
     });
   }
 

@@ -24,7 +24,8 @@ use App\Domain\Sales\Models\OrderLine;
 use App\Domain\Shipping\Exceptions\ExpiredShippingQuoteException;
 use App\Domain\Shipping\Exceptions\InvalidShippingQuoteException;
 use App\Domain\Shipping\Exceptions\UnconfiguredServiceFeeException;
-use Illuminate\Support\Facades\Cache;
+use App\Domain\Shipping\Services\DestinationNormalizationService;
+use App\Infrastructure\Shipping\ShippingQuoteCacheStore;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -226,51 +227,86 @@ class CreateCheckoutOrderService
                 ];
             }
 
-            // Step E: Resolve Shipping Quote and Authoritative Financial Breakdown
+            // Step E: Resolve Shipping Quote and Authoritative Financial Breakdown (Sections 2, 4, 7, 8)
             $subtotalAmount = $totalAmount;
-            $shippingFee = 0;
-            $serviceFee = 0;
-            $shippingQuoteId = null;
-            $shippingCourier = null;
-            $shippingService = null;
-
-            if (!empty($canonicalPayload['shipping_quote_id'])) {
-                $shippingQuoteId = $canonicalPayload['shipping_quote_id'];
-                $quoteRecord = Cache::get("shipping_quote:{$shippingQuoteId}");
-
-                if ($quoteRecord === null) {
-                    throw new ExpiredShippingQuoteException(
-                        'Kutipan ongkos kirim telah kedaluwarsa atau tidak ditemukan. Silakan hitung ulang ongkir.'
-                    );
-                }
-
-                // Verify cart fingerprint matches canonical items
-                $currentCartFingerprint = hash('sha256', json_encode($canonicalPayload['items'], JSON_THROW_ON_ERROR));
-                if (!hash_equals($quoteRecord['cart_fingerprint'], $currentCartFingerprint)) {
-                    throw new InvalidShippingQuoteException(
-                        'Kutipan ongkos kirim tidak sesuai dengan item keranjang belanja.'
-                    );
-                }
-
-                // Authoritative service fee check (Requirement 12)
-                $configuredServiceFee = config('shipping.service_fee_idr');
-                if ($configuredServiceFee === null) {
-                    throw new UnconfiguredServiceFeeException(
-                        'BLOCKED — OWNER FEE VALUE REQUIRED'
-                    );
-                }
-
-                $shippingFee = (int) $quoteRecord['quoted_amount'];
-                $serviceFee = (int) $configuredServiceFee;
-                $shippingCourier = (string) $quoteRecord['courier_code'];
-                $shippingService = (string) $quoteRecord['service_code'];
-
-                // Calculate authoritative grand total: subtotal + shipping_fee + service_fee
-                if (PHP_INT_MAX - $shippingFee < $totalAmount || PHP_INT_MAX - $serviceFee < ($totalAmount + $shippingFee)) {
-                    throw new RuntimeException('Integer arithmetic overflow in payable grand total calculation.');
-                }
-                $totalAmount = $totalAmount + $shippingFee + $serviceFee;
+            $shippingQuoteId = (string) ($canonicalPayload['shipping_quote_id'] ?? '');
+            if ($shippingQuoteId === '') {
+                throw new InvalidShippingQuoteException('Kutipan ongkos kirim wajib disertakan.');
             }
+
+            $quoteStore = ShippingQuoteCacheStore::getStore();
+            $quoteRecord = $quoteStore->get("shipping_quote:{$shippingQuoteId}");
+
+            if ($quoteRecord === null) {
+                throw new ExpiredShippingQuoteException(
+                    'Kutipan ongkos kirim telah kedaluwarsa atau tidak ditemukan. Silakan hitung ulang ongkir.'
+                );
+            }
+
+            // Verify cart fingerprint matches canonical items (Section 4)
+            $currentCartFingerprint = hash('sha256', json_encode($canonicalPayload['items'], JSON_THROW_ON_ERROR));
+            if (!hash_equals($quoteRecord['cart_fingerprint'] ?? '', $currentCartFingerprint)) {
+                throw new InvalidShippingQuoteException(
+                    'Shipping quote does not match current cart items.'
+                );
+            }
+
+            // Verify destination fingerprint matches canonical destination (Section 4)
+            $currentDestinationFingerprint = DestinationNormalizationService::computeFingerprint($canonicalPayload['destination']);
+            if (!hash_equals($quoteRecord['destination_fingerprint'] ?? '', $currentDestinationFingerprint)) {
+                throw new InvalidShippingQuoteException(
+                    'Shipping quote does not match destination location.'
+                );
+            }
+
+            // Verify product price snapshot matches current resolved prices (Section 7)
+            if (isset($quoteRecord['product_subtotal']) && (int) $quoteRecord['product_subtotal'] !== $subtotalAmount) {
+                throw new InvalidShippingQuoteException(
+                    'QUOTE_REPRICE_REQUIRED: Harga produk telah berubah sejak perhitungan ongkir. Silakan hitung ulang.'
+                );
+            }
+
+            $currentPriceFingerprint = hash('sha256', json_encode(array_map(function ($line) {
+                $row = [
+                    'quantity' => $line['quantity'],
+                    'subtotal' => $line['subtotal'],
+                    'unit_price' => $line['unit_price'],
+                    'variant_id' => strtolower(trim((string) $line['variant']->id)),
+                ];
+                ksort($row);
+                return $row;
+            }, $resolvedLines), JSON_THROW_ON_ERROR));
+
+            if (isset($quoteRecord['price_fingerprint']) && !hash_equals($quoteRecord['price_fingerprint'], $currentPriceFingerprint)) {
+                throw new InvalidShippingQuoteException(
+                    'QUOTE_REPRICE_REQUIRED: Harga produk telah berubah sejak perhitungan ongkir. Silakan hitung ulang.'
+                );
+            }
+
+            // Authoritative service fee check & snapshot comparison (Section 8)
+            $configuredServiceFee = config('shipping.service_fee_idr');
+            if ($configuredServiceFee === null) {
+                throw new UnconfiguredServiceFeeException(
+                    'BLOCKED — OWNER FEE VALUE REQUIRED'
+                );
+            }
+
+            if (!isset($quoteRecord['service_fee_amount']) || (int) $quoteRecord['service_fee_amount'] !== (int) $configuredServiceFee) {
+                throw new InvalidShippingQuoteException(
+                    'QUOTE_STALE_FEE: Biaya layanan telah diperbarui. Silakan hitung ulang ongkir.'
+                );
+            }
+
+            $shippingFee = (int) $quoteRecord['quoted_amount'];
+            $serviceFee = (int) $configuredServiceFee;
+            $shippingCourier = (string) $quoteRecord['courier_code'];
+            $shippingService = (string) $quoteRecord['service_code'];
+
+            // Calculate authoritative grand total: subtotal + shipping_fee + service_fee
+            if (PHP_INT_MAX - $shippingFee < $totalAmount || PHP_INT_MAX - $serviceFee < ($totalAmount + $shippingFee)) {
+                throw new RuntimeException('Integer arithmetic overflow in payable grand total calculation.');
+            }
+            $totalAmount = $totalAmount + $shippingFee + $serviceFee;
 
             // Step E2: Create Order with encrypted shipping snapshot and breakdown
             $order = Order::create([
@@ -324,8 +360,9 @@ class CreateCheckoutOrderService
      *
      * Invariants:
      * - Trims customer name and address strings.
+     * - Normalizes destination via DestinationNormalizationService.
      * - Normalizes phone via PhoneBlindIndexService::normalize.
-     * - Normalizes delivery method.
+     * - Normalizes delivery method and shipping quote id.
      * - Sorts items deterministically by variant_id ASC (deadlock avoidance + replay equivalence).
      *
      * @param array<string, mixed> $data
@@ -341,14 +378,19 @@ class CreateCheckoutOrderService
         ];
         ksort($canonicalCustomer);
 
+        $rawDestination = (array) ($data['destination'] ?? []);
+        $canonicalDestination = DestinationNormalizationService::normalize($rawDestination);
+
         $rawItems = (array) ($data['items'] ?? []);
         $canonicalItems = [];
         foreach ($rawItems as $item) {
             $itemArr = (array) $item;
-            $canonicalItems[] = [
+            $row = [
                 'quantity' => (int) ($itemArr['quantity'] ?? 0),
                 'variant_id' => strtolower(trim((string) ($itemArr['variant_id'] ?? ''))),
             ];
+            ksort($row);
+            $canonicalItems[] = $row;
         }
 
         // Deterministic item sort by variant_id ASC
@@ -357,11 +399,10 @@ class CreateCheckoutOrderService
         $canonical = [
             'customer' => $canonicalCustomer,
             'delivery_method' => strtolower(trim((string) ($data['delivery_method'] ?? ''))),
+            'destination' => $canonicalDestination,
             'items' => $canonicalItems,
+            'shipping_quote_id' => strtolower(trim((string) ($data['shipping_quote_id'] ?? ''))),
         ];
-        if (!empty($data['shipping_quote_id'])) {
-            $canonical['shipping_quote_id'] = strtolower(trim((string) $data['shipping_quote_id']));
-        }
         ksort($canonical);
 
         return $canonical;

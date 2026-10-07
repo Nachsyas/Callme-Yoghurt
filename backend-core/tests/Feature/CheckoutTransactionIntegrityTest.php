@@ -60,6 +60,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
             'crm.pii_blind_index_key' => $this->blindIndexKey,
             'inventory.fulfillment_warehouse_code' => 'WH-MAIN',
             'checkout.fingerprint_key' => $this->fingerprintKey,
+            'shipping.service_fee_idr' => 1000,
         ]);
 
         $this->uomPcs = UnitOfMeasure::create([
@@ -197,21 +198,96 @@ class CheckoutTransactionIntegrityTest extends TestCase
         return $this->withHeaders($headers)->postJson('/api/internal/orders', $payload);
     }
 
-    private function validPayload(): array
+    private function seedQuote(array $items, array $destination, int $shippingFee = 20000, int $serviceFee = 1000): string
     {
+        $quoteId = (string) Str::uuid();
+        $canonicalItems = [];
+        foreach ($items as $item) {
+            $row = [
+                'quantity' => (int) $item['quantity'],
+                'variant_id' => strtolower(trim((string) $item['variant_id'])),
+            ];
+            ksort($row);
+            $canonicalItems[] = $row;
+        }
+        usort($canonicalItems, fn($a, $b) => strcmp($a['variant_id'], $b['variant_id']));
+
+        $subtotal = 0;
+        $lines = [];
+        foreach ($canonicalItems as $cItem) {
+            $vid = $cItem['variant_id'];
+            $qty = $cItem['quantity'];
+            $unitPrice = 0;
+            if ($vid === strtolower($this->variant1->id)) {
+                $unitPrice = 25000;
+            } elseif (isset($this->variant2) && $vid === strtolower($this->variant2->id)) {
+                $unitPrice = 30000;
+            }
+            $lineSub = $unitPrice * $qty;
+            $subtotal += $lineSub;
+            $pRow = [
+                'quantity' => $qty,
+                'subtotal' => $lineSub,
+                'unit_price' => $unitPrice,
+                'variant_id' => $vid,
+            ];
+            ksort($pRow);
+            $lines[] = $pRow;
+        }
+
+        $cartFingerprint = hash('sha256', json_encode($canonicalItems, JSON_THROW_ON_ERROR));
+        $destFingerprint = \App\Domain\Shipping\Services\DestinationNormalizationService::computeFingerprint($destination);
+        $priceFingerprint = hash('sha256', json_encode($lines, JSON_THROW_ON_ERROR));
+
+        \App\Infrastructure\Shipping\ShippingQuoteCacheStore::getStore()->put("shipping_quote:{$quoteId}", [
+            'quote_id' => $quoteId,
+            'cart_fingerprint' => $cartFingerprint,
+            'destination_fingerprint' => $destFingerprint,
+            'price_fingerprint' => $priceFingerprint,
+            'product_subtotal' => $subtotal,
+            'courier_code' => 'grab',
+            'courier_name' => 'Grab',
+            'service_code' => 'instant',
+            'service_name' => 'Instant',
+            'service_type' => 'instant',
+            'quoted_amount' => $shippingFee,
+            'service_fee_amount' => $serviceFee,
+            'payable_total' => $subtotal + $shippingFee + $serviceFee,
+            'duration' => '1-2 hours',
+            'created_at' => now()->timestamp,
+            'expires_at' => now()->addSeconds(900)->timestamp,
+        ], 900);
+
+        return $quoteId;
+    }
+
+    private function validPayload(?array $customItems = null, ?array $customDest = null): array
+    {
+        $items = $customItems ?? [
+            [
+                'variant_id' => $this->variant1->id,
+                'quantity' => 2,
+            ],
+        ];
+
+        $destination = $customDest ?? [
+            'postal_code' => '10110',
+            'city' => 'Jakarta Pusat',
+            'province' => 'DKI Jakarta',
+        ];
+
+        $quoteId = $this->seedQuote($items, $destination, 20000, 1000);
+
         return [
             'customer' => [
                 'name' => 'Budi Pratama',
                 'whatsapp' => '081234567890',
                 'address' => 'Jl. Sudirman No. 45, Jakarta Pusat',
             ],
-            'items' => [
-                [
-                    'variant_id' => $this->variant1->id,
-                    'quantity' => 2,
-                ],
-            ],
+            'destination' => $destination,
+            'items' => $items,
             'delivery_method' => 'instant',
+            'shipping_quote_id' => $quoteId,
         ];
     }
 
@@ -230,7 +306,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
             'total_amount',
         ]);
         $this->assertEquals('CONFIRMED', $response->json('status'));
-        $this->assertEquals(50000, $response->json('total_amount')); // 2 * 25000
+        $this->assertEquals(71000, $response->json('total_amount')); // 2 * 25000 + 20000 + 1000
 
         $this->assertDatabaseCount('orders', 1);
         $this->assertDatabaseCount('order_lines', 1);
@@ -321,26 +397,24 @@ class CheckoutTransactionIntegrityTest extends TestCase
      */
     public function test_erp_calculates_correct_line_subtotal_and_order_total(): void
     {
-        $payload = [
-            'customer' => [
-                'name' => 'Multi Item Customer',
-                'whatsapp' => '081299998888',
-                'address' => 'Jl. Thamrin No. 10',
-            ],
-            'items' => [
-                ['variant_id' => $this->variant1->id, 'quantity' => 3], // 3 * 25000 = 75000
-                ['variant_id' => $this->variant2->id, 'quantity' => 2], // 2 * 30000 = 60000
-            ],
-            'delivery_method' => 'sameday',
+        $items = [
+            ['variant_id' => $this->variant1->id, 'quantity' => 3], // 3 * 25000 = 75000
+            ['variant_id' => $this->variant2->id, 'quantity' => 2], // 2 * 30000 = 60000
+        ];
+        $payload = $this->validPayload($items);
+        $payload['customer'] = [
+            'name' => 'Multi Item Customer',
+            'whatsapp' => '081299998888',
+            'address' => 'Jl. Thamrin No. 10',
         ];
 
         $response = $this->postOrder($payload);
         $response->assertStatus(201);
-        $response->assertJson(['total_amount' => 135000]); // 75000 + 60000
+        $response->assertJson(['total_amount' => 156000]); // 135000 + 20000 + 1000
 
         $order = Order::with('lines')->first();
         $this->assertNotNull($order);
-        $this->assertEquals(135000, $order->total_amount);
+        $this->assertEquals(156000, $order->total_amount);
 
         $lines = $order->lines->sortBy('product_variant_id')->values();
         $this->assertCount(2, $lines);
@@ -645,8 +719,12 @@ class CheckoutTransactionIntegrityTest extends TestCase
         ]);
 
         // Request 5 units: 2 from lot1, 3 from lotB
-        $payload = $this->validPayload();
-        $payload['items'][0]['quantity'] = 5;
+        $payload = $this->validPayload([
+            [
+                'variant_id' => $this->variant1->id,
+                'quantity' => 5,
+            ],
+        ]);
 
         $response = $this->postOrder($payload);
         $response->assertStatus(201);
@@ -744,8 +822,12 @@ class CheckoutTransactionIntegrityTest extends TestCase
      */
     public function test_insufficient_stock_returns_conflict_and_leaves_zero_partial_writes(): void
     {
-        $payload = $this->validPayload();
-        $payload['items'][0]['quantity'] = 99; // Only 50 units in stock
+        $payload = $this->validPayload([
+            [
+                'variant_id' => $this->variant1->id,
+                'quantity' => 99, // Only 50 units in stock
+            ],
+        ]);
 
         $response = $this->postOrder($payload);
         $response->assertStatus(409);
@@ -763,17 +845,15 @@ class CheckoutTransactionIntegrityTest extends TestCase
      */
     public function test_second_line_failure_rolls_back_first_line_allocation(): void
     {
-        $payload = [
-            'customer' => [
-                'name' => 'Atomicity Test Customer',
-                'whatsapp' => '081234567890',
-                'address' => 'Jl. Atomicity No. 1',
-            ],
-            'items' => [
-                ['variant_id' => $this->variant1->id, 'quantity' => 5], // Sufficient stock (50 in stock)
-                ['variant_id' => $this->variant2->id, 'quantity' => 99], // Insufficient stock (50 in stock)
-            ],
-            'delivery_method' => 'instant',
+        $items = [
+            ['variant_id' => $this->variant1->id, 'quantity' => 5], // Sufficient stock (50 in stock)
+            ['variant_id' => $this->variant2->id, 'quantity' => 99], // Insufficient stock (50 in stock)
+        ];
+        $payload = $this->validPayload($items);
+        $payload['customer'] = [
+            'name' => 'Atomicity Test Customer',
+            'whatsapp' => '081234567890',
+            'address' => 'Jl. Atomicity No. 1',
         ];
 
         $response = $this->postOrder($payload);
@@ -810,8 +890,10 @@ class CheckoutTransactionIntegrityTest extends TestCase
     {
         $key = 'idemp-replay-001';
 
+        $payload = $this->validPayload();
+
         // 1st request -> 201
-        $res1 = $this->postOrder($this->validPayload(), $key);
+        $res1 = $this->postOrder($payload, $key);
         $res1->assertStatus(201);
         $orderId = $res1->json('order_id');
         $orderNumber = $res1->json('order_number');
@@ -821,7 +903,7 @@ class CheckoutTransactionIntegrityTest extends TestCase
         $this->assertDatabaseCount('stock_allocations', 1);
 
         // 2nd request with same key and payload -> 200 replay
-        $res2 = $this->postOrder($this->validPayload(), $key);
+        $res2 = $this->postOrder($payload, $key);
         $res2->assertStatus(200);
         $this->assertEquals($orderId, $res2->json('order_id'));
         $this->assertEquals($orderNumber, $res2->json('order_number'));
@@ -839,17 +921,15 @@ class CheckoutTransactionIntegrityTest extends TestCase
     {
         $key = 'idemp-order-permute-001';
 
-        $payload1 = [
-            'customer' => [
-                'name' => 'Permutation Customer',
-                'whatsapp' => '081234567890',
-                'address' => 'Jl. Permutasi No. 1',
-            ],
-            'items' => [
-                ['variant_id' => $this->variant1->id, 'quantity' => 2],
-                ['variant_id' => $this->variant2->id, 'quantity' => 3],
-            ],
-            'delivery_method' => 'instant',
+        $items = [
+            ['variant_id' => $this->variant1->id, 'quantity' => 2],
+            ['variant_id' => $this->variant2->id, 'quantity' => 3],
+        ];
+        $payload1 = $this->validPayload($items);
+        $payload1['customer'] = [
+            'name' => 'Permutation Customer',
+            'whatsapp' => '081234567890',
+            'address' => 'Jl. Permutasi No. 1',
         ];
 
         // 1st request
@@ -911,17 +991,11 @@ class CheckoutTransactionIntegrityTest extends TestCase
      */
     public function test_duplicate_variant_id_lines_are_rejected(): void
     {
-        $payload = [
-            'customer' => [
-                'name' => 'Duplicate Variant Customer',
-                'whatsapp' => '081234567890',
-                'address' => 'Jl. Duplikat No. 1',
-            ],
-            'items' => [
-                ['variant_id' => $this->variant1->id, 'quantity' => 1],
-                ['variant_id' => $this->variant1->id, 'quantity' => 2],
-            ],
-            'delivery_method' => 'instant',
+        $payload = $this->validPayload();
+        $payload['customer']['name'] = 'Duplicate Variant Customer';
+        $payload['items'] = [
+            ['variant_id' => $this->variant1->id, 'quantity' => 1],
+            ['variant_id' => $this->variant1->id, 'quantity' => 2],
         ];
 
         $response = $this->postOrder($payload);
@@ -1147,8 +1221,12 @@ class CheckoutTransactionIntegrityTest extends TestCase
 
         // In WH-MAIN, 50 units exist. Order full 50 units.
         // If WH-BALI reservation incorrectly reduced WH-MAIN, available would be 42 and this would 409.
-        $payload = $this->validPayload();
-        $payload['items'][0]['quantity'] = 50;
+        $payload = $this->validPayload([
+            [
+                'variant_id' => $this->variant1->id,
+                'quantity' => 50,
+            ],
+        ]);
 
         $response = $this->postOrder($payload);
         $response->assertStatus(201);
@@ -1167,15 +1245,9 @@ class CheckoutTransactionIntegrityTest extends TestCase
             ];
         }
 
-        $payload = [
-            'customer' => [
-                'name' => 'Too Many Lines Customer',
-                'whatsapp' => '081234567890',
-                'address' => 'Jl. Banyak Item No. 51',
-            ],
-            'items' => $items,
-            'delivery_method' => 'instant',
-        ];
+        $payload = $this->validPayload();
+        $payload['customer']['name'] = 'Too Many Lines Customer';
+        $payload['items'] = $items;
 
         $response = $this->postOrder($payload);
         $response->assertStatus(422);

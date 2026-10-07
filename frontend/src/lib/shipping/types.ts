@@ -22,6 +22,11 @@ export interface ShippingQuote {
   duration: string;
   cold_chain_compliant: boolean;
   description?: string;
+  storage_warning?: string;
+  product_subtotal?: number;
+  shipping_fee?: number;
+  service_fee?: number;
+  payable_total?: number;
 }
 
 /**

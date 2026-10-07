@@ -13,8 +13,9 @@ use App\Domain\Pricing\Services\CurrentVariantPriceResolver;
 use App\Domain\Shipping\Contracts\ShippingRateProviderInterface;
 use App\Domain\Shipping\Exceptions\UnmeasuredShippingWeightException;
 use App\Domain\Shipping\Services\ColdChainPolicyService;
+use App\Domain\Shipping\Services\DestinationNormalizationService;
+use App\Infrastructure\Shipping\ShippingQuoteCacheStore;
 use DateTimeInterface;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class GetShippingQuotesService
@@ -49,31 +50,26 @@ class GetShippingQuotesService
         // 1. Sort items deterministically by variant_id ASC
         $canonicalItems = [];
         foreach ($items as $item) {
-            $canonicalItems[] = [
-                'variant_id' => strtolower(trim((string) $item['variant_id'])),
+            $row = [
                 'quantity' => (int) $item['quantity'],
+                'variant_id' => strtolower(trim((string) $item['variant_id'])),
             ];
+            ksort($row);
+            $canonicalItems[] = $row;
         }
         usort($canonicalItems, fn($a, $b) => strcmp($a['variant_id'], $b['variant_id']));
 
-        // Compute cart and destination fingerprints
+        // Compute cart and destination fingerprints (Sections 4 & 7)
         $cartFingerprint = hash('sha256', json_encode($canonicalItems, JSON_THROW_ON_ERROR));
 
-        $normalizedDestination = [
-            'area_id' => trim((string) ($destination['area_id'] ?? ($destination['destination_area_id'] ?? ''))),
-            'city' => trim((string) ($destination['city'] ?? '')),
-            'district' => trim((string) ($destination['district'] ?? '')),
-            'latitude' => isset($destination['latitude']) ? (float) $destination['latitude'] : (isset($destination['destination_latitude']) ? (float) $destination['destination_latitude'] : null),
-            'longitude' => isset($destination['longitude']) ? (float) $destination['longitude'] : (isset($destination['destination_longitude']) ? (float) $destination['destination_longitude'] : null),
-            'postal_code' => trim((string) ($destination['postal_code'] ?? ($destination['destination_postal_code'] ?? ''))),
-            'province' => trim((string) ($destination['province'] ?? '')),
-        ];
-        ksort($normalizedDestination);
-        $destinationFingerprint = hash('sha256', json_encode($normalizedDestination, JSON_THROW_ON_ERROR));
+        $normalizedDestination = DestinationNormalizationService::normalize($destination);
+        $destinationFingerprint = DestinationNormalizationService::computeFingerprint($destination);
 
         // 2. Resolve variants, prices, and shipping weights from PostgreSQL
         $resolvedBiteshipItems = [];
         $totalWeightGrams = 0;
+        $productSubtotal = 0;
+        $linePrices = [];
 
         foreach ($canonicalItems as $line) {
             /** @var ProductVariant|null $variant */
@@ -105,6 +101,17 @@ class GetShippingQuotesService
             $variant->setRelation('inventoryItem', $inventoryItem);
 
             $unitPrice = $this->priceResolver->resolvePrice($variant, 'IDR', lockRow: false);
+            $lineSubtotal = $unitPrice * $line['quantity'];
+            $productSubtotal += $lineSubtotal;
+            $priceRow = [
+                'quantity' => $line['quantity'],
+                'subtotal' => $lineSubtotal,
+                'unit_price' => $unitPrice,
+                'variant_id' => $line['variant_id'],
+            ];
+            ksort($priceRow);
+            $linePrices[] = $priceRow;
+
             $itemWeight = $variant->shipping_weight_grams * $line['quantity'];
             $totalWeightGrams += $itemWeight;
 
@@ -115,6 +122,8 @@ class GetShippingQuotesService
                 'weight_grams' => $variant->shipping_weight_grams,
             ];
         }
+
+        $priceFingerprint = hash('sha256', json_encode($linePrices, JSON_THROW_ON_ERROR));
 
         // 3. Resolve authoritative service fee from ERP configuration
         $rawServiceFee = config('shipping.service_fee_idr');
@@ -131,20 +140,24 @@ class GetShippingQuotesService
         // 5. Apply Cold Chain & SOP 01 Time-Gating Policy
         $compliantRates = $this->coldChainPolicy->filterRates($rawRates, $normalizedDestination, $referenceTime);
 
-        // 6. Generate Opaque Server-Side Quotes & store in Cache with TTL
+        // 6. Generate Opaque Server-Side Quotes & store in Cache/Redis with TTL
+        $quoteStore = ShippingQuoteCacheStore::getStore();
         $ttlSeconds = (int) config('shipping.quote_ttl_seconds', 900);
         $quotes = [];
 
         foreach ($compliantRates as $rate) {
             $quoteId = (string) Str::uuid();
             $quotedAmount = (int) $rate['price'];
-            $serviceFeeAmount = $serviceFeeConfig['amount'] ?? 0;
-            $payableTotal = $quotedAmount + $serviceFeeAmount;
+            $serviceFeeAmount = $serviceFeeConfig['amount']; // null if unconfigured
+            $serviceFeeVal = $serviceFeeAmount ?? 0;
+            $payableTotal = $productSubtotal + $quotedAmount + $serviceFeeVal;
 
             $quoteRecord = [
                 'quote_id' => $quoteId,
                 'cart_fingerprint' => $cartFingerprint,
                 'destination_fingerprint' => $destinationFingerprint,
+                'price_fingerprint' => $priceFingerprint,
+                'product_subtotal' => $productSubtotal,
                 'courier_code' => $rate['courier_code'],
                 'courier_name' => $rate['courier_name'],
                 'service_code' => $rate['service_code'],
@@ -152,13 +165,14 @@ class GetShippingQuotesService
                 'service_type' => $rate['service_type'],
                 'quoted_amount' => $quotedAmount,
                 'service_fee_amount' => $serviceFeeConfig['amount'], // null if unconfigured
+                'payable_total' => $payableTotal,
                 'duration' => $rate['duration'],
                 'created_at' => now()->timestamp,
                 'expires_at' => now()->addSeconds($ttlSeconds)->timestamp,
             ];
 
-            // Cache ephemeral quote state bound to cart & destination
-            Cache::put("shipping_quote:{$quoteId}", $quoteRecord, $ttlSeconds);
+            // Cache ephemeral quote state bound to cart, destination & price
+            $quoteStore->put("shipping_quote:{$quoteId}", $quoteRecord, $ttlSeconds);
 
             $quotes[] = [
                 'quote_id' => $quoteId,
@@ -168,9 +182,12 @@ class GetShippingQuotesService
                 'service_name' => $rate['service_name'],
                 'service_code' => $rate['service_code'],
                 'service_type' => $rate['service_type'],
-                'price' => $quotedAmount,
+                'product_subtotal' => $productSubtotal,
+                'shipping_fee' => $quotedAmount,
                 'service_fee' => $serviceFeeConfig['amount'],
-                'total_price' => $payableTotal,
+                'payable_total' => $payableTotal,
+                'price' => $quotedAmount,
+                'total_price' => $quotedAmount + $serviceFeeVal,
                 'duration' => $rate['duration'],
                 'cold_chain_compliant' => true,
                 'description' => $rate['description'],

@@ -216,6 +216,12 @@ describe("Vercel Staging Deployment Boundary & Security Isolation (Phase 1.2C)",
               whatsapp: "081234567890",
               address: "Jl. Sudirman No. 1, Jakarta",
             },
+            destination: {
+              postal_code: "10110",
+              city: "Jakarta Pusat",
+              province: "DKI Jakarta",
+              district: "Gambir",
+            },
             items: [
               {
                 variant_id: "01912a76-2f00-7bb0-b3b7-e2da49303381",
@@ -223,6 +229,7 @@ describe("Vercel Staging Deployment Boundary & Security Isolation (Phase 1.2C)",
               },
             ],
             delivery_method: "instant",
+            shipping_quote_id: "01940b50-1111-7000-8000-000000000099",
           }),
         });
 

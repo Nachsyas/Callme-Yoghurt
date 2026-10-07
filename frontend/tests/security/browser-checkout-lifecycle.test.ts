@@ -55,11 +55,18 @@ describe('Browser Checkout Lifecycle & Idempotency Boundary (Gate 0E.2B)', () =>
         whatsapp: '081234567890',
         address: 'Jl. Melati No. 5, Jakarta',
       },
+      destination: {
+        postal_code: '13890',
+        city: 'Jakarta Timur',
+        province: 'DKI Jakarta',
+        district: 'Cipayung',
+      },
       items: [
         { variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43a', quantity: 2 },
         { variant_id: '018f6c38-8c50-711e-b8d4-53a8be77e43b', quantity: 1 },
       ],
       delivery_method: 'instant',
+      shipping_quote_id: '01940b50-1111-7000-8000-000000000099',
     };
   }
 
