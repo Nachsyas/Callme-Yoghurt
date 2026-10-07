@@ -125,42 +125,10 @@ const PREVIEW_PRICES: Record<ProductSize, number> = {
   1000: 55000,
 };
 
-const FLAVOR_UUID_INDEX: Record<string, string> = {
-  plain: '0001',
-  stroberi: '0002',
-  mangga: '0003',
-  melon: '0004',
-  anggur: '0005',
-  leci: '0006',
-  vanila: '0007',
-};
-
 const SLUG_ALIASES: Record<string, string> = {
   strawberry: 'stroberi',
   vanilla: 'vanila',
 };
-
-function getFallbackVariant(slug: string, displayName: string, size: ProductSize): PublicCatalogVariant {
-  const flavorIndex = FLAVOR_UUID_INDEX[slug] || '0099';
-  const sizeIndex = size === 250 ? '000000000001' : size === 500 ? '000000000002' : '000000000003';
-  const variantId = `01940a00-${flavorIndex}-7000-8000-${sizeIndex}`;
-  const price = PREVIEW_PRICES[size];
-  const sizeLabel = size === 1000 ? '1000ml' : `${size}ml`;
-
-  return {
-    variant_id: variantId,
-    sku: `CY-${slug.toUpperCase()}-${size}`,
-    name: `${displayName} ${sizeLabel}`,
-    net_content: {
-      quantity: `${size}.000000`,
-      uom: 'ML',
-    },
-    price: {
-      currency: 'IDR',
-      amount: price,
-    },
-  };
-}
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -269,41 +237,34 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
     return ml === 1000;
   });
 
-  // Storefront fallback variants for interaction when ERP connectivity is not yet available (Task 2)
-  const fallback250 = getFallbackVariant(requestedSlug, displayName, 250);
-  const fallback500 = getFallbackVariant(requestedSlug, displayName, 500);
-  const fallback1000 = getFallbackVariant(requestedSlug, displayName, 1000);
+  // Storefront preview pricing when ERP connectivity is unavailable
+  const price250 = erpVariant250?.price.amount ?? PREVIEW_PRICES[250];
+  const price500 = erpVariant500?.price.amount ?? PREVIEW_PRICES[500];
+  const price1000 = erpVariant1000?.price.amount ?? PREVIEW_PRICES[1000];
 
-  const variant250 = erpVariant250 || fallback250;
-  const variant500 = erpVariant500 || fallback500;
-  const variant1000 = erpVariant1000 || fallback1000;
+  const currentErpVariant =
+    selectedSize === 250 ? erpVariant250 : selectedSize === 500 ? erpVariant500 : erpVariant1000;
+  const currentPrice =
+    currentErpVariant?.price.amount ?? PREVIEW_PRICES[selectedSize];
 
-  const has250Variant = Boolean(variant250);
-  const has500Variant = Boolean(variant500);
-  const has1000Variant = Boolean(variant1000);
-
-  const price250 = variant250.price.amount;
-  const price500 = variant500.price.amount;
-  const price1000 = variant1000.price.amount;
-
-  const currentVariant =
-    selectedSize === 250 ? variant250 : selectedSize === 500 ? variant500 : variant1000;
-  const hasCurrentVariant = Boolean(currentVariant);
-  const currentPrice = currentVariant.price.amount;
+  // Transaction authority invariant (Phase 1.7C.20):
+  // When ERP is offline or variant does not exist in authoritative catalog, Add to Cart MUST be disabled.
+  // Fabricated UUIDs are forbidden.
+  const isAddToCartAvailable = catalogOnline && Boolean(currentErpVariant);
 
   // Visual scale mapping (250 = 0.90, 500 = 1.00, 1000 = 1.00 neutral)
   const currentScale = selectedSize === 250 ? 0.90 : 1.00;
 
   const handleAddToCart = () => {
-    if (!currentVariant) return;
+    if (!catalogOnline || !currentErpVariant) return;
 
     addItem({
-      variant_id: currentVariant.variant_id,
-      sku: currentVariant.sku,
-      name: currentVariant.name,
+      variant_id: currentErpVariant.variant_id,
+      sku: currentErpVariant.sku,
+      name: currentErpVariant.name,
       volume_ml: selectedSize,
       quantity: quantity,
-      display_price: currentVariant.price.amount,
+      display_price: currentErpVariant.price.amount,
       image_url: currentImageSrc,
     });
     setAdded(true);
@@ -381,14 +342,6 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                 </span>
               </div>
 
-              {/* Cold Chain Badge */}
-              <div className="absolute top-3.5 right-3.5 z-10">
-                <span className="bg-[#1E3932] text-white font-bold text-[10px] px-2.5 py-1 rounded-full shadow-sm flex items-center gap-1">
-                  <Snowflake size={11} className="text-emerald-300" />
-                  <span>0–5°C</span>
-                </span>
-              </div>
-
               {/* Product Visual Area: Updates image and scale according to selected size */}
               <motion.div
                 key={selectedSize}
@@ -421,8 +374,8 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             {/* Quality Badges below image */}
             <div className="w-full max-w-[380px] mt-4 grid grid-cols-3 gap-2 px-1 text-[11px] font-medium">
               <span className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-[#E8F5E9] text-[#2E7D32] rounded-lg border border-[#2E7D32]/15">
-                <Snowflake size={13} className="text-[#2E7D32]" />
-                <span className="text-[10px] font-bold">0–5°C Dingin</span>
+                <ShieldCheck size={13} className="text-[#2E7D32]" />
+                <span className="text-[10px] font-bold">SOP Dairy</span>
               </span>
               <span className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-[#E8F5E9] text-[#2E7D32] rounded-lg border border-[#2E7D32]/15">
                 <ShieldCheck size={13} className="text-[#2E7D32]" />
@@ -526,7 +479,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[#2E7D32]">
                         <Check size={11} />
-                        <span>Varian aktif</span>
+                        <span>{catalogOnline ? (erpVariant250 ? 'Varian aktif' : 'Tidak tersedia') : 'Mode Pratinjau'}</span>
                       </span>
                     )}
                   </div>
@@ -564,7 +517,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[#2E7D32]">
                         <Check size={11} />
-                        <span>Varian aktif</span>
+                        <span>{catalogOnline ? (erpVariant500 ? 'Varian aktif' : 'Tidak tersedia') : 'Mode Pratinjau'}</span>
                       </span>
                     )}
                   </div>
@@ -602,7 +555,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[#2E7D32]">
                         <Check size={11} />
-                        <span>Varian aktif</span>
+                        <span>{catalogOnline ? (erpVariant1000 ? 'Varian aktif' : 'Tidak tersedia') : 'Mode Pratinjau'}</span>
                       </span>
                     )}
                   </div>
@@ -610,11 +563,21 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            {/* 4. Cold Chain Logistics Fulfillment Info */}
+            {/* Offline Catalog Safety Banner (Requirement 3) */}
+            {!catalogOnline && (
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200/80 text-amber-900 text-xs flex items-start gap-2.5">
+                <Info size={16} className="text-amber-700 flex-shrink-0 mt-0.5" />
+                <p className="leading-relaxed font-medium">
+                  Katalog transaksi sedang tidak tersedia. Produk tetap dapat dilihat, tetapi belum dapat ditambahkan ke pesanan.
+                </p>
+              </div>
+            )}
+
+            {/* 4. Logistics Fulfillment Info */}
             <div className="p-3.5 bg-[#E8F5E9]/60 rounded-xl border border-[#2E7D32]/20 space-y-1.5">
               <div className="flex items-center gap-2 text-xs font-bold text-[#2E7D32]">
                 <Snowflake size={14} className="text-[#2E7D32]" />
-                <span>Distribusi Rantai Dingin (0–5°C) — Jakarta Hub</span>
+                <span>Penanganan Produk Dairy Sesuai SOP — Jakarta Hub</span>
               </div>
               <p className="text-[11px] text-[#1B5E20]/80 flex items-center gap-1.5 font-medium">
                 <Clock size={12} className="text-[#2E7D32]" />
@@ -660,15 +623,22 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
               <motion.button
                 type="button"
                 onClick={handleAddToCart}
-                whileHover={shouldReduceMotion ? undefined : { scale: 1.01 }}
-                whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                disabled={!isAddToCartAvailable}
+                whileHover={!isAddToCartAvailable || shouldReduceMotion ? undefined : { scale: 1.01 }}
+                whileTap={!isAddToCartAvailable || shouldReduceMotion ? undefined : { scale: 0.98 }}
                 className={`w-full text-white py-3.5 px-6 rounded-full font-extrabold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-md ${
-                  added
-                    ? 'bg-[#1B5E20] shadow-[#1B5E20]/30 cursor-pointer'
-                    : 'bg-[#2E7D32] hover:bg-[#256628] active:bg-[#1B5E20] shadow-[#2E7D32]/25 cursor-pointer'
+                  !isAddToCartAvailable
+                    ? 'bg-black/30 cursor-not-allowed shadow-none'
+                    : added
+                      ? 'bg-[#1B5E20] shadow-[#1B5E20]/30 cursor-pointer'
+                      : 'bg-[#2E7D32] hover:bg-[#256628] active:bg-[#1B5E20] shadow-[#2E7D32]/25 cursor-pointer'
                 }`}
               >
-                {added ? (
+                {!catalogOnline ? (
+                  <span>Katalog Transaksi Sedang Tidak Tersedia</span>
+                ) : !currentErpVariant ? (
+                  <span>Varian Belum Tersedia</span>
+                ) : added ? (
                   <>
                     <Check size={18} className="text-white" />
                     <span>Berhasil Ditambahkan ke Keranjang!</span>
@@ -714,15 +684,11 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
             <div className="bg-[#f0f5f2] p-6 rounded-2xl border border-[#2E7D32]/20 shadow-sm space-y-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#2E7D32] flex items-center gap-2">
                 <Snowflake size={14} />
-                <span>Penyimpanan Rantai Dingin</span>
+                <span>Penyimpanan Produk Sesuai SOP</span>
               </h3>
               <div className="space-y-2 text-xs text-black/75 leading-relaxed">
                 <p>
-                  <strong>Suhu Optimal:</strong> Simpan segera di kulkas pada suhu{' '}
-                  <strong className="text-[#2E7D32]">0–5°C</strong>.
-                </p>
-                <p>
-                  <strong>Ketahanan Produk:</strong> Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima.
+                  <strong>Penyimpanan:</strong> Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima (Suhu &lt; 5°C).
                 </p>
                 <p>
                   <strong>Peringatan Mutu:</strong> Jangan dibekukan di dalam freezer atau dibiarkan di
@@ -766,7 +732,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
           <div className="mt-2 flex justify-center gap-4 text-black/60 font-medium">
             <span>Bambu Apus, Cipayung, Jakarta Timur</span>
             <span>•</span>
-            <span>Cold Chain Standard (0–5°C)</span>
+            <span>Penanganan Dairy Sesuai SOP</span>
             <span>•</span>
             <span>HAKI IDM000981336</span>
           </div>

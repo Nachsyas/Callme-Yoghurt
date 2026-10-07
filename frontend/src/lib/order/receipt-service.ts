@@ -106,8 +106,8 @@ export function generateWhatsAppReceipt(options: WhatsAppReceiptOptions): WhatsA
     `*Status Pembayaran:* ${summary.payment_status}`,
     `*Status Pesanan:* ${summary.order_status}`,
     '',
-    '❄️ *Jaminan Cold Chain Logistics (0–5°C):*',
-    'Segera simpan di dalam kulkas setelah pesanan tiba.',
+    '❄️ *Penyimpanan Produk Sesuai SOP (< 5°C):*',
+    'Hanya tahan 3 hari di suhu ruang. Segera simpan di dalam kulkas setelah pesanan tiba (Suhu < 5°C).',
     '',
     greeting,
   ];

@@ -57,12 +57,6 @@ export function CatalogCard({
       >
         <div className="absolute inset-0 bg-black/5 mix-blend-overlay" />
 
-        {/* Cold Chain Badge */}
-        <div className="absolute top-4 left-4 z-20">
-          <span className="bg-white/90 backdrop-blur-xs text-[#1E3932] text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs">
-            0–5°C Cold Chain
-          </span>
-        </div>
 
         {/* Product Visual Area: Official Flavor Artwork */}
         <div className="relative w-full h-full flex items-center justify-center z-10 origin-bottom">

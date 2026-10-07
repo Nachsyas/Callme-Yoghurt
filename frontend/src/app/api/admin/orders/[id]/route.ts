@@ -1,8 +1,9 @@
+import { forwardToErpAdmin } from '@/lib/auth/admin-bff.ts';
+import { getAdminSessionFromRequest } from '@/lib/auth/admin-session.ts';
+import { requirePermission } from '@/lib/auth/permissions.ts';
 import { NextResponse } from 'next/server.js';
-import { getAdminSessionFromRequest } from '@/lib/auth/admin-session';
-import { requirePermission } from '@/lib/auth/permissions';
-import { adminOrderStore } from '@/lib/order/admin-order-store';
-import type { OrderLifecycleStatus } from '@/lib/order/types';
+
+export const dynamic = 'force-dynamic';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -28,24 +29,13 @@ export async function GET(
   }
 
   const { id } = await context.params;
-  const order = adminOrderStore.getOrderById(id);
 
-  if (!order) {
-    return NextResponse.json(
-      { error: 'Pesanan tidak ditemukan' },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json(
-    { success: true, order },
-    {
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    }
-  );
+  return forwardToErpAdmin({
+    request,
+    permission: 'admin:orders:view',
+    path: `/api/internal/admin/orders/${encodeURIComponent(id)}`,
+    method: 'GET',
+  });
 }
 
 export async function PATCH(
@@ -67,54 +57,9 @@ export async function PATCH(
     );
   }
 
-  const { id } = await context.params;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
-  }
-
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
-  }
-
-  const payload = body as Record<string, unknown>;
-
-  // Handle Task 4: Payment verification actions
-  if (payload.action === 'confirm_payment' || payload.action === 'reject_payment') {
-    const action = payload.action === 'confirm_payment' ? 'confirm' : 'reject';
-    const result = adminOrderStore.verifyPayment(id, action, session.user.username);
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 422 });
-    }
-
-    return NextResponse.json({ success: true, order: result.order }, { status: 200 });
-  }
-
-  // Handle Task 3: Order status transitions
-  if (typeof payload.status === 'string') {
-    const targetStatus = payload.status as OrderLifecycleStatus;
-    const result = adminOrderStore.updateOrderStatus(
-      id,
-      targetStatus,
-      session.user.username
-    );
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error || 'Transisi status tidak diizinkan' },
-        { status: 422 }
-      );
-    }
-
-    return NextResponse.json({ success: true, order: result.order }, { status: 200 });
-  }
-
+  // Manual admin order status and payment verification mutations are not implemented in ERP domain (Phase 1.7C.20)
   return NextResponse.json(
-    { error: 'Permintaan tidak valid: tentukan status atau aksi pembayaran' },
-    { status: 400 }
+    { error: 'BLOCKED: Authoritative ERP order status and payment verification mutations are not implemented in backend core' },
+    { status: 501 }
   );
 }

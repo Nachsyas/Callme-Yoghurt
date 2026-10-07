@@ -312,7 +312,7 @@ export default function Home() {
                 transition={{ duration: MOTION_TOKENS.duration.normal, delay: 0.35 }}
                 className="text-base sm:text-lg md:text-xl text-[#5C6F68] max-w-lg mb-8 leading-relaxed"
               >
-                Stirred yoghurt Callme Yoghurt dengan standar pengiriman rantai dingin 0–5°C untuk menjaga kualitas produk.
+                Stirred yoghurt Callme Yoghurt dengan penanganan produk dairy sesuai SOP untuk menjaga kualitas produk.
               </motion.p>
 
               <motion.div
@@ -382,8 +382,8 @@ export default function Home() {
             {[
               {
                 icon: Truck,
-                title: "Cold Chain Logistics",
-                desc: "Suhu terjaga ketat 0–5°C dari fasilitas pengolahan hingga tiba di tangan Anda.",
+                title: "Penanganan SOP Dairy",
+                desc: "Penanganan produk dairy sesuai SOP untuk menjaga kualitas dan kesegaran produk.",
               },
               {
                 icon: ShieldCheck,
@@ -544,10 +544,10 @@ export default function Home() {
                 Dedikasi untuk<br />Keluarga Indonesia.
               </h2>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed">
-                Callme Yoghurt menghadirkan produk <strong>stirred yoghurt</strong> dengan standar penanganan rantai dingin (Cold Chain) yang terjaga. Kami melayani pemesanan langsung dari fasilitas operasional di Cipayung, Jakarta Timur.
+                Callme Yoghurt menghadirkan produk <strong>stirred yoghurt</strong> dengan penanganan produk dairy sesuai SOP. Kami melayani pemesanan langsung dari fasilitas operasional di Cipayung, Jakarta Timur.
               </p>
               <p className="text-base sm:text-lg text-[#5C6F68] leading-relaxed pb-2">
-                Setiap pesanan dikemas secara rapi dengan penjagaan suhu 0–5°C untuk memastikan kesegaran yoghurt tiba dengan baik di tangan Anda.
+                Setiap pesanan dikemas secara rapi sesuai standar operasional. Hanya tahan 3 hari di suhu ruang, segera simpan di lemari pendingin (&lt; 5°C) setelah diterima.
               </p>
               <div>
                 <motion.button

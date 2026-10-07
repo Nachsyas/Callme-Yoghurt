@@ -1,6 +1,6 @@
 'use client';
 
-import { useCartStore, toTransactionProjection, type CartItem } from '@/store/cartStore';
+import { useCartStore, toTransactionProjection, isLegacyPreviewVariantId, type CartItem } from '@/store/cartStore';
 import { executeCheckoutSubmission, type CheckoutPayload, type DeliveryMethod, type PublicCommittedOrderData } from '@/lib/checkout-client';
 import { type ShippingQuote, type BiteshipArea } from '@/lib/shipping';
 import { buildOrderSummary, saveOrderSummary } from '@/lib/order';
@@ -72,6 +72,58 @@ export default function CheckoutPage() {
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [hasCalculatedShipping, setHasCalculatedShipping] = useState(false);
   const [serviceFeeConfig, setServiceFeeConfig] = useState<ServiceFeeConfig | null>(null);
+  const [catalogOnline, setCatalogOnline] = useState<boolean | null>(null);
+  const [cartValidationWarning, setCartValidationWarning] = useState<string | null>(null);
+
+  // Validate cart items against authoritative ERP catalog on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function validateCartAndCatalog() {
+      // 1. Purge known legacy preview items immediately
+      useCartStore.getState().purgeLegacyPreviewItems();
+
+      try {
+        const res = await fetch('/api/catalog');
+        if (!isMounted) return;
+
+        if (res.ok) {
+          const data = await res.json();
+          setCatalogOnline(true);
+          if (data && Array.isArray(data.products)) {
+            const validIds = new Set<string>();
+            for (const product of data.products) {
+              if (Array.isArray(product.variants)) {
+                for (const variant of product.variants) {
+                  if (variant.variant_id) {
+                    validIds.add(variant.variant_id);
+                  }
+                }
+              }
+            }
+            const currentItems = useCartStore.getState().items;
+            const hasInvalid = currentItems.some((i) => !validIds.has(i.variant_id));
+            if (hasInvalid) {
+              useCartStore.getState().purgeUnconfirmedItems(validIds);
+              setCartValidationWarning(
+                'Beberapa item di keranjang Anda merupakan data pratinjau yang tidak terverifikasi oleh katalog resmi ERP dan telah dihapus. Silakan pilih kembali produk dari katalog.'
+              );
+            }
+          }
+        } else {
+          setCatalogOnline(false);
+        }
+      } catch {
+        if (isMounted) {
+          setCatalogOnline(false);
+        }
+      }
+    }
+
+    validateCartAndCatalog();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load authoritative server-side Biaya Layanan configuration on mount
   useEffect(() => {
@@ -159,6 +211,26 @@ export default function CheckoutPage() {
     setShippingError(null);
     setIsCalculatingShipping(true);
 
+    if (catalogOnline === false) {
+      setHasCalculatedShipping(true);
+      setAvailableQuotes([]);
+      setSelectedQuote(null);
+      setShippingError('Katalog transaksi ERP sedang offline. Perhitungan tarif belum dapat dilakukan.');
+      setIsCalculatingShipping(false);
+      return;
+    }
+
+    const hasLegacyPreviewItems = items.some((i) => isLegacyPreviewVariantId(i.variant_id));
+    if (hasLegacyPreviewItems) {
+      useCartStore.getState().purgeLegacyPreviewItems();
+      setHasCalculatedShipping(true);
+      setAvailableQuotes([]);
+      setSelectedQuote(null);
+      setShippingError('Item keranjang mengandung varian pratinjau yang tidak sah dan telah dihapus. Silakan pilih kembali produk.');
+      setIsCalculatingShipping(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/shipping/quote', {
         method: 'POST',
@@ -217,6 +289,20 @@ export default function CheckoutPage() {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    // 0. Catalog connectivity check (Phase 1.7C.20)
+    if (catalogOnline === false) {
+      setErrorMessage('Katalog transaksi ERP saat ini sedang offline. Pesanan belum dapat diproses.');
+      return;
+    }
+
+    // 0b. Reject legacy preview items (Phase 1.7C.20)
+    const hasLegacyPreview = items.some((i) => isLegacyPreviewVariantId(i.variant_id));
+    if (hasLegacyPreview) {
+      useCartStore.getState().purgeLegacyPreviewItems();
+      setErrorMessage('Item keranjang mengandung varian pratinjau yang tidak sah dan telah dihapus. Silakan pilih kembali produk dari katalog resmi.');
+      return;
+    }
 
     // 1. Prevent checkout with empty cart
     if (items.length === 0) {
@@ -415,7 +501,7 @@ export default function CheckoutPage() {
           </div>
           <div className="bg-[#1B5E20] p-4 rounded-[12px] flex items-start gap-3 text-white text-left mb-6">
             <ShieldCheck size={20} className="text-emerald-300 flex-shrink-0 mt-0.5" />
-            <p className="text-xs leading-relaxed opacity-90">Pesanan disiapkan dengan standar Cold Chain Logistics. Tim kami akan menghubungi WhatsApp Anda untuk konfirmasi pengiriman.</p>
+            <p className="text-xs leading-relaxed opacity-90">Pesanan disiapkan dengan penanganan produk dairy sesuai SOP. Tim kami akan menghubungi WhatsApp Anda untuk konfirmasi pengiriman.</p>
           </div>
           <Link href="/" className="w-full inline-block bg-[#2E7D32] hover:bg-[#256628] text-white py-4 rounded-[50px] font-bold text-sm transition-colors shadow-sm">
             Kembali ke Beranda
@@ -482,6 +568,24 @@ export default function CheckoutPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {catalogOnline === false && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-900 px-5 py-4 rounded-[12px] text-sm flex items-start gap-3 shadow-xs">
+            <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 font-medium">
+              Katalog transaksi ERP saat ini tidak tersedia. Produk tetap dapat dilihat di katalog, tetapi kalkulasi pesanan dan checkout ditutup sementara.
+            </div>
+          </div>
+        )}
+
+        {cartValidationWarning && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-900 px-5 py-4 rounded-[12px] text-sm flex items-start gap-3 shadow-xs">
+            <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 font-medium">
+              {cartValidationWarning}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* LEFT: Customer Address & Shipping Options Form */}
@@ -713,7 +817,7 @@ export default function CheckoutPage() {
                       )}
                     </button>
                     <p className="text-[11px] text-black/50 text-center mt-1.5">
-                      Tarif dihitung otomatis berdasarkan berat paket & SOP Rantai Dingin (0–5°C).
+                      Tarif dihitung otomatis berdasarkan berat paket & penanganan produk dairy sesuai SOP.
                     </p>
                   </div>
                 </div>
@@ -804,7 +908,7 @@ export default function CheckoutPage() {
                               )}
                             </div>
                             <p className="text-xs text-black/60 mt-1.5">
-                              {quote.description || 'Pengiriman dengan proteksi Rantai Dingin (0–5°C).'}
+                              {quote.description || 'Pengiriman dengan penanganan produk dairy sesuai SOP.'}
                             </p>
                           </div>
                         </label>
@@ -848,10 +952,10 @@ export default function CheckoutPage() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm sm:text-base text-[#1c1917]">
-                          QRIS (Scan & Bayar Instan)
+                          QRIS — Scan untuk Membayar
                         </span>
                         <span className="font-extrabold text-xs text-[#2E7D32] bg-[#E8F5E9] px-2 py-0.5 rounded">
-                          0% Fee
+                          QRIS Manual
                         </span>
                       </div>
                       <p className="text-xs text-black/60 mt-1">
@@ -956,7 +1060,7 @@ export default function CheckoutPage() {
                   <span className="text-sm font-bold text-black/80">
                     {selectedQuote
                       ? `Rp ${shippingFee.toLocaleString('id-ID')}`
-                      : 'Ongkir belum dapat dihitung'}
+                      : 'Belum dihitung'}
                   </span>
                 </div>
 
@@ -964,11 +1068,11 @@ export default function CheckoutPage() {
                 <div className="flex items-baseline justify-between">
                   <span className="text-xs text-black/60 font-medium">Biaya Layanan</span>
                   <span className="text-sm font-bold text-black/80">
-                    {serviceFee > 0
+                    {selectedQuote && serviceFee > 0
                       ? `Rp ${serviceFee.toLocaleString('id-ID')}`
                       : serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number'
                       ? `Rp ${serviceFeeConfig.amount.toLocaleString('id-ID')}`
-                      : 'Konfigurasi belum ditentukan'}
+                      : 'Belum ditentukan'}
                   </span>
                 </div>
 
@@ -991,15 +1095,21 @@ export default function CheckoutPage() {
                     <span className="font-extrabold text-base text-[#1c1917] block">Total Pembayaran</span>
                     <span className="text-[10px] text-black/40 block">Termasuk ongkir kurir & biaya layanan</span>
                   </div>
-                  <motion.span
-                    key={totalPayment}
-                    initial={{ opacity: 0, y: 3 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: MOTION_TOKENS.duration.fast }}
-                    className="text-xl sm:text-2xl font-black text-[#2E7D32] tracking-tight"
-                  >
-                    Rp {totalPayment.toLocaleString('id-ID')}
-                  </motion.span>
+                  {selectedQuote && serviceFeeConfig?.isConfigured && typeof serviceFeeConfig.amount === 'number' ? (
+                    <motion.span
+                      key={totalPayment}
+                      initial={{ opacity: 0, y: 3 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: MOTION_TOKENS.duration.fast }}
+                      className="text-xl sm:text-2xl font-black text-[#2E7D32] tracking-tight"
+                    >
+                      Rp {totalPayment.toLocaleString('id-ID')}
+                    </motion.span>
+                  ) : (
+                    <span id="total-payment-pending" className="text-sm sm:text-base font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200/60">
+                      Belum final
+                    </span>
+                  )}
                 </div>
               </div>
 

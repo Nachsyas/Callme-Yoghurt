@@ -454,7 +454,7 @@ function ReturnPageContent() {
         <div className="bg-[#1E3932] text-white rounded-xl p-3.5 flex items-start gap-3 text-left">
           <Package size={20} className="text-[#A1C349] flex-shrink-0 mt-0.5" />
           <div className="text-xs leading-relaxed opacity-90 space-y-0.5">
-            <span className="block font-bold text-white">Jaminan Kesegaran Cold Chain (0–5°C)</span>
+            <span className="block font-bold text-white">Penanganan Produk Dairy Sesuai SOP</span>
             <p className="text-[11px] text-white/80">
               Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima (Suhu &lt; 5°C).
             </p>

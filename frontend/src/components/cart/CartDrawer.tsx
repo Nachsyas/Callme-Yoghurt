@@ -228,7 +228,7 @@ export function CartDrawer() {
                 <div className="flex justify-between items-baseline">
                   <div>
                     <span className="text-xs font-medium text-black/60 block">Estimasi Subtotal</span>
-                    <span className="text-[10px] text-[#2E7D32] font-semibold">Standar Cold Chain &lt; 5°C</span>
+                    <span className="text-[10px] text-[#2E7D32] font-semibold">Penanganan Dairy Sesuai SOP</span>
                   </div>
                   <span className="text-xl font-black text-[#2E7D32] tracking-tight whitespace-nowrap shrink-0">
                     Rp {total.toLocaleString("id-ID")}

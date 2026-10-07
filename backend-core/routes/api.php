@@ -31,6 +31,7 @@ Route::prefix('admin')->group(function () {
 */
 use App\Http\Controllers\Internal\Admin\AdminCatalogController;
 use App\Http\Controllers\Internal\Admin\AdminInventoryController;
+use App\Http\Controllers\Internal\Admin\AdminOrderController;
 
 use App\Http\Controllers\Internal\ShippingQuoteController;
 
@@ -48,6 +49,10 @@ Route::middleware('service.auth')->prefix('internal')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::middleware('admin.actor')->prefix('admin')->group(function () {
+        // Order Management (PostgreSQL authority)
+        Route::get('/orders', [AdminOrderController::class, 'index']);
+        Route::get('/orders/{id}', [AdminOrderController::class, 'show']);
+
         // Catalog Management
         Route::get('/catalog/products', [AdminCatalogController::class, 'index']);
         Route::post('/catalog/products', [AdminCatalogController::class, 'storeProduct']);

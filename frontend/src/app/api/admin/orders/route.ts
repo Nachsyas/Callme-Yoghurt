@@ -1,7 +1,9 @@
+import { forwardToErpAdmin } from '@/lib/auth/admin-bff.ts';
+import { getAdminSessionFromRequest } from '@/lib/auth/admin-session.ts';
+import { requirePermission } from '@/lib/auth/permissions.ts';
 import { NextResponse } from 'next/server.js';
-import { getAdminSessionFromRequest } from '@/lib/auth/admin-session';
-import { requirePermission } from '@/lib/auth/permissions';
-import { adminOrderStore } from '@/lib/order/admin-order-store';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request): Promise<Response> {
   // 1. Session verification
@@ -13,7 +15,7 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  // 2. RBAC permission check (Task 8)
+  // 2. RBAC permission check
   if (!requirePermission(session, 'admin:orders:view')) {
     return NextResponse.json(
       { error: 'Forbidden: insufficient permissions for viewing orders' },
@@ -21,27 +23,16 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  // 3. Query filters
   const url = new URL(request.url);
-  const status = url.searchParams.get('status') || undefined;
-  const search = url.searchParams.get('search') || undefined;
+  const query = url.searchParams.toString();
+  const path = `/api/internal/admin/orders${query ? `?${query}` : ''}`;
 
-  const orders = adminOrderStore.getOrders({ status, search });
-  const metrics = adminOrderStore.getDashboardMetrics();
-
-  return NextResponse.json(
-    {
-      success: true,
-      orders,
-      metrics,
-    },
-    {
-      status: 200,
-      headers: {
-        'Cache-Control': 'no-store',
-      },
-    }
-  );
+  return forwardToErpAdmin({
+    request,
+    permission: 'admin:orders:view',
+    path,
+    method: 'GET',
+  });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -55,23 +46,14 @@ export async function POST(request: Request): Promise<Response> {
 
   if (!requirePermission(session, 'admin:orders:manage')) {
     return NextResponse.json(
-      { error: 'Forbidden: insufficient permissions for creating orders' },
+      { error: 'Forbidden: insufficient permissions for managing orders' },
       { status: 403 }
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
-  }
-
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-  }
-
-  const order = adminOrderStore.addOrder(body as Parameters<typeof adminOrderStore.addOrder>[0]);
-
-  return NextResponse.json({ success: true, order }, { status: 201 });
+  // Manual admin order creation mutation is not implemented in ERP domain (Phase 1.7C.20)
+  return NextResponse.json(
+    { error: 'BLOCKED: Authoritative ERP order creation mutation is unavailable for manual admin creation' },
+    { status: 501 }
+  );
 }
