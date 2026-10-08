@@ -11,15 +11,16 @@ class ProductionConfigValidator
      */
     public const MIN_SECRET_LENGTH_DEFAULT = 32;
     public const MIN_ADMIN_SECRET_LENGTH = 16;
+    public const REQUIRED_APP_KEY_BYTES = 32;
 
     /**
      * Validate production configuration.
      *
-     * Invariants (Section 10):
+     * Invariants (Section 5, 6, 8, 9, 10, 13):
      * - Centralized validation of all security-critical configuration.
      * - Fails clearly when any critical variable is missing, empty, or insecure.
-     * - NEVER prints secret values or logs secrets.
-     * - Validates presence and minimum entropy/length constraints.
+     * - NEVER prints secret values or logs secrets (APP_KEY, DB_URL, REDIS_URL, tokens).
+     * - Validates presence, minimum entropy, and strict cryptographic constraints.
      *
      * @param bool $strict If true, enforces production rules regardless of APP_ENV.
      * @return array{passed: bool, errors: array<string, string>, warnings: array<string, string>, audited: array<string, string>}
@@ -31,16 +32,47 @@ class ProductionConfigValidator
         $warnings = [];
         $audited = [];
 
-        // 1. APP_KEY
-        $appKey = (string) config('app.key', '');
-        if ($appKey === '') {
-            $errors['APP_KEY'] = 'Missing or empty. Required for encryption (base64:32-bytes).';
+        // 1. APP_KEY — Strict Cryptographic Validation (Section 5)
+        $rawAppKey = (string) config('app.key', '');
+        if ($rawAppKey === '') {
+            $errors['APP_KEY'] = 'Missing or empty. Required for AES-256 encryption (base64:32-bytes).';
             $audited['APP_KEY'] = 'MISSING';
-        } elseif (!str_starts_with($appKey, 'base64:') && strlen($appKey) < self::MIN_SECRET_LENGTH_DEFAULT) {
-            $errors['APP_KEY'] = 'Insecure format or insufficient length (minimum 32 characters or base64 key).';
-            $audited['APP_KEY'] = 'INVALID_LENGTH';
         } else {
-            $audited['APP_KEY'] = 'OK';
+            $isBase64 = str_starts_with($rawAppKey, 'base64:');
+            if ($isBase64) {
+                $encoded = substr($rawAppKey, 7);
+                if ($encoded === '') {
+                    $errors['APP_KEY'] = 'Empty base64 payload after base64: prefix.';
+                    $audited['APP_KEY'] = 'INVALID_BASE64';
+                } else {
+                    $decoded = base64_decode($encoded, true);
+                    if ($decoded === false) {
+                        $errors['APP_KEY'] = 'Invalid base64 encoding. Must be strictly valid base64.';
+                        $audited['APP_KEY'] = 'INVALID_BASE64';
+                    } elseif (strlen($decoded) !== self::REQUIRED_APP_KEY_BYTES) {
+                        $errors['APP_KEY'] = sprintf(
+                            'Invalid decoded key length (%d bytes). AES-256 requires exactly %d bytes.',
+                            strlen($decoded),
+                            self::REQUIRED_APP_KEY_BYTES
+                        );
+                        $audited['APP_KEY'] = 'WRONG_BYTE_LENGTH';
+                    } else {
+                        $audited['APP_KEY'] = 'OK (base64:32-bytes)';
+                    }
+                }
+            } else {
+                // Non-base64 raw key
+                if (strlen($rawAppKey) !== self::REQUIRED_APP_KEY_BYTES) {
+                    $errors['APP_KEY'] = sprintf(
+                        'Raw key has invalid length (%d bytes). Must be exactly %d bytes or base64: prefixed.',
+                        strlen($rawAppKey),
+                        self::REQUIRED_APP_KEY_BYTES
+                    );
+                    $audited['APP_KEY'] = 'WRONG_BYTE_LENGTH';
+                } else {
+                    $audited['APP_KEY'] = 'OK (raw:32-bytes)';
+                }
+            }
         }
 
         // 2. APP_DEBUG
@@ -116,7 +148,7 @@ class ProductionConfigValidator
             $audited['ADMIN_SESSION_SECRET'] = 'OK';
         }
 
-        // 7. Database Driver & Credentials
+        // 7. PostgreSQL Database Contract (Section 6, 8, 13)
         $dbConnection = config('database.default', 'pgsql');
         if ($isProduction && $dbConnection !== 'pgsql') {
             $errors['DB_CONNECTION'] = "Insecure database driver [{$dbConnection}]. PostgreSQL ('pgsql') is mandatory in production (ADR-0001).";
@@ -125,19 +157,60 @@ class ProductionConfigValidator
             $audited['DB_CONNECTION'] = 'OK (' . $dbConnection . ')';
         }
 
-        $dbPassword = (string) config('database.connections.pgsql.password', '');
-        if ($isProduction && $dbPassword === '') {
-            $errors['DB_PASSWORD'] = 'Database password is empty in production.';
-            $audited['DB_PASSWORD'] = 'MISSING';
+        if ($isProduction) {
+            $dbUrl = (string) (config('database.connections.pgsql.url') ?? env('DB_URL', ''));
+            if ($dbUrl !== '') {
+                $parsed = parse_url($dbUrl);
+                $scheme = $parsed['scheme'] ?? '';
+                $hasHost = !empty($parsed['host']);
+                if (!in_array($scheme, ['postgres', 'postgresql'], true) || !$hasHost) {
+                    $errors['DB_URL'] = 'Malformed DB_URL. Must be a valid postgres:// or postgresql:// URL with host.';
+                    $audited['DB_CONFIG'] = 'INVALID_DB_URL';
+                } else {
+                    $audited['DB_CONFIG'] = 'OK (DB_URL configured)';
+                }
+            } else {
+                $host = (string) (config('database.connections.pgsql.host') ?? env('DB_HOST', ''));
+                $db = (string) (config('database.connections.pgsql.database') ?? env('DB_DATABASE', ''));
+                $user = (string) (config('database.connections.pgsql.username') ?? env('DB_USERNAME', ''));
+                $pass = (string) (config('database.connections.pgsql.password') ?? env('DB_PASSWORD', ''));
+
+                if ($host === '' || $db === '' || $user === '' || $pass === '') {
+                    $errors['DB_CONFIG'] = 'Incomplete PostgreSQL configuration. Provide either valid DB_URL or complete DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, and DB_PASSWORD.';
+                    $audited['DB_CONFIG'] = 'INCOMPLETE_HOST_CONFIG';
+                } else {
+                    $audited['DB_CONFIG'] = 'OK (host-style configured)';
+                }
+            }
         } else {
-            $audited['DB_PASSWORD'] = 'OK';
+            $audited['DB_CONFIG'] = 'OK (development mode)';
         }
 
-        // 8. Cache & Ephemeral Storage (Redis mandatory in production)
-        $cacheStore = (string) (config('cache.default') ?? env('CACHE_STORE', 'file'));
-        $shippingStore = (string) (config('shipping.cache_store') ?? env('SHIPPING_CACHE_STORE', ''));
+        // 8. Redis Ephemeral Contract (Section 9, 10, 13)
+        $redisUrl = (string) (config('database.redis.default.url') ?? env('REDIS_URL', ''));
+        $redisHost = (string) (config('database.redis.default.host') ?? env('REDIS_HOST', ''));
 
         if ($isProduction) {
+            if ($redisUrl !== '') {
+                $parsedRedis = parse_url($redisUrl);
+                $redisScheme = $parsedRedis['scheme'] ?? '';
+                $hasRedisHost = !empty($parsedRedis['host']);
+                if (!in_array($redisScheme, ['redis', 'rediss'], true) || !$hasRedisHost) {
+                    $errors['REDIS_CONFIG'] = 'Malformed REDIS_URL. Must be a valid redis:// or rediss:// URL with host.';
+                    $audited['REDIS_CONFIG'] = 'INVALID_REDIS_URL';
+                } else {
+                    $audited['REDIS_CONFIG'] = 'OK (REDIS_URL configured)';
+                }
+            } elseif ($redisHost !== '') {
+                $audited['REDIS_CONFIG'] = 'OK (host-style configured)';
+            } else {
+                $errors['REDIS_CONFIG'] = 'Incomplete Redis configuration. Provide either valid REDIS_URL or REDIS_HOST.';
+                $audited['REDIS_CONFIG'] = 'MISSING';
+            }
+
+            $cacheStore = (string) (config('cache.default') ?? env('CACHE_STORE', 'file'));
+            $shippingStore = (string) (config('shipping.cache_store') ?? env('SHIPPING_CACHE_STORE', ''));
+
             if ($cacheStore !== 'redis') {
                 $errors['CACHE_STORE'] = "Insecure cache store [{$cacheStore}] in production. Distributed Redis ('redis') is required.";
                 $audited['CACHE_STORE'] = "INVALID ({$cacheStore})";
@@ -152,8 +225,9 @@ class ProductionConfigValidator
                 $audited['SHIPPING_CACHE_STORE'] = 'OK (' . ($shippingStore ?: 'defaults to redis') . ')';
             }
         } else {
-            $audited['CACHE_STORE'] = 'OK (' . $cacheStore . ')';
-            $audited['SHIPPING_CACHE_STORE'] = 'OK (' . ($shippingStore ?: 'unconfigured') . ')';
+            $audited['REDIS_CONFIG'] = 'OK (development mode)';
+            $audited['CACHE_STORE'] = 'OK (' . (config('cache.default') ?? 'file') . ')';
+            $audited['SHIPPING_CACHE_STORE'] = 'OK (' . (config('shipping.cache_store') ?: 'unconfigured') . ')';
         }
 
         // 9. Hashing Driver (SOP 04 Mandate: Argon2id)

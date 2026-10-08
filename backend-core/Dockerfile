@@ -25,8 +25,7 @@ RUN composer install \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader \
-    --no-scripts \
-    --ignore-platform-reqs
+    --no-scripts
 
 # ------------------------------------------------------------------------------
 # Stage 2: Production Runtime
@@ -83,6 +82,15 @@ COPY . /var/www/html
 
 # Copy vendor packages from builder stage
 COPY --from=vendor-builder /app/vendor /var/www/html/vendor
+
+# Copy Composer binary to run strict platform requirement validation
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+
+# Authoritative Composer Platform Verification:
+# Proves that PHP and all required extensions strictly satisfy the locked dependency graph.
+# Build MUST fail if any platform requirement is missing.
+RUN composer check-platform-reqs --no-dev \
+    && rm -f /usr/bin/composer
 
 # Copy and setup entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

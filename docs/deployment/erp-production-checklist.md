@@ -12,7 +12,8 @@
 - There is currently **NO reachable production ERP host**.
 - Current Vercel configuration points to `https://staging-erp.callmeyoghurt.com`, but DNS does not currently resolve.
 - **Provider Choice is Reserved for the Owner**: No hosting provider (Railway, Render, Fly.io, Hetzner, AWS, DigitalOcean, VPS) may be selected arbitrarily without explicit owner approval.
-- **No Real Couriers / Payments**: Real Biteship courier dispatch and live payment gateways remain blocked until production verification completes.
+- **No Real Couriers / Transactions**: Real Biteship courier dispatch and real payment transactions remain blocked until production verification completes.
+- **Payment Architecture**: The approved payment architecture is **Manual QRIS Merchant**. There is no third-party payment gateway (Midtrans/Xendit). Production readiness requires configuring official Manual QRIS merchant payment information and manual verification procedures.
 
 ---
 
@@ -158,7 +159,8 @@ Execute these steps strictly in sequence once the hosting environment is approve
   - Input owner-approved `SERVICE_FEE_IDR`.
   - Input owner-verified shipping origin postal code and coordinates.
   - Set `SHIPPING_ORIGIN_VERIFIED=true`.
-  - Switch Biteship and payment gateways to production credentials.
+  - Configure official Manual QRIS merchant payment information and payment-verification/reconciliation procedure.
+  - Switch Biteship to production API credentials when couriers are operational.
 
 ---
 

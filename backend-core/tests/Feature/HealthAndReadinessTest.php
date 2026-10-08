@@ -92,6 +92,8 @@ class HealthAndReadinessTest extends TestCase
             'cache.default' => 'redis',
             'database.redis.default.port' => '63799',
             'database.redis.default.host' => '127.0.0.1',
+            'database.redis.cache.port' => '63799',
+            'database.redis.cache.host' => '127.0.0.1',
         ]);
 
         $response = $this->getJson('/api/ready');
@@ -107,6 +109,29 @@ class HealthAndReadinessTest extends TestCase
         $content = $response->getContent();
         $this->assertStringNotContainsString('password', (string) $content);
         $this->assertStringNotContainsString('Connection refused', (string) $content);
+    }
+
+    /**
+     * Proves /api/ready verifies the exact Redis connection configured for SHIPPING_CACHE_STORE.
+     */
+    public function test_ready_endpoint_fails_when_shipping_quote_redis_connection_is_disconnected(): void
+    {
+        config([
+            'cache.default' => 'file',
+            'shipping.cache_store' => 'redis',
+            'database.redis.cache.port' => '63799',
+            'database.redis.cache.host' => '127.0.0.1',
+        ]);
+
+        $response = $this->getJson('/api/ready');
+
+        $response->assertStatus(503);
+        $response->assertExactJson([
+            'status' => 'unavailable',
+            'service' => 'erp-core',
+            'database' => 'connected',
+            'redis' => 'disconnected',
+        ]);
     }
 
     /**

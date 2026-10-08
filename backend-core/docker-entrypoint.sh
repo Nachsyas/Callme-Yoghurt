@@ -13,25 +13,63 @@ set -e
 
 echo "==> [Callme ERP] Initializing container startup sequence..."
 
-# 1. PostgreSQL Readiness Check (if DB_HOST is set)
+# 1. PostgreSQL Readiness Check (if DB_HOST or DB_URL is set)
 DB_HOST="${DB_HOST:-}"
-if [ -n "$DB_HOST" ] && [ "$SKIP_DB_WAIT" != "true" ]; then
-    DB_PORT="${DB_PORT:-5432}"
-    DB_NAME="${DB_DATABASE:-callme_yoghurt_prod}"
-    DB_USER="${DB_USERNAME:-callme_erp_user}"
+DB_URL="${DB_URL:-}"
+if ( [ -n "$DB_HOST" ] || [ -n "$DB_URL" ] ) && [ "$SKIP_DB_WAIT" != "true" ]; then
+    if [ -n "$DB_URL" ]; then
+        DB_TARGET_LABEL=$(php -r '
+            $url = getenv("DB_URL");
+            $parts = parse_url($url);
+            $host = $parts["host"] ?? "unknown";
+            $port = $parts["port"] ?? 5432;
+            $db   = isset($parts["path"]) ? ltrim($parts["path"], "/") : "default";
+            echo "{$host}:{$port}/{$db}";
+        ' 2>/dev/null || echo "DB_URL")
+        echo "==> [Callme ERP] Waiting for PostgreSQL via DB_URL (${DB_TARGET_LABEL})..."
+    else
+        DB_PORT="${DB_PORT:-5432}"
+        DB_NAME="${DB_DATABASE:-callme_yoghurt_prod}"
+        echo "==> [Callme ERP] Waiting for PostgreSQL (${DB_HOST}:${DB_PORT}/${DB_NAME})..."
+    fi
 
-    echo "==> [Callme ERP] Waiting for PostgreSQL (${DB_HOST}:${DB_PORT}/${DB_NAME})..."
     MAX_TRIES=30
     COUNT=0
 
     until php -r '
+        $url  = getenv("DB_URL");
         $host = getenv("DB_HOST");
-        $port = getenv("DB_PORT") ?: "5432";
-        $db   = getenv("DB_DATABASE") ?: "callme_yoghurt_prod";
-        $user = getenv("DB_USERNAME") ?: "callme_erp_user";
-        $pass = getenv("DB_PASSWORD") ?: "";
         try {
-            $pdo = new PDO("pgsql:host={$host};port={$port};dbname={$db}", $user, $pass, [PDO::ATTR_TIMEOUT => 2]);
+            if (!empty($url)) {
+                $parts = parse_url($url);
+                if (!$parts || empty($parts["host"])) {
+                    exit(1);
+                }
+                $host = $parts["host"];
+                $port = $parts["port"] ?? 5432;
+                $db   = isset($parts["path"]) ? ltrim($parts["path"], "/") : "";
+                $user = isset($parts["user"]) ? urldecode($parts["user"]) : "";
+                $pass = isset($parts["pass"]) ? urldecode($parts["pass"]) : "";
+                $query = [];
+                if (isset($parts["query"])) {
+                    parse_str($parts["query"], $query);
+                }
+                $sslmode = $query["sslmode"] ?? (getenv("DB_SSLMODE") ?: "prefer");
+                $dsn = "pgsql:host={$host};port={$port};dbname={$db};sslmode={$sslmode}";
+                $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_TIMEOUT => 2, PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+                $pdo->query("SELECT 1");
+                exit(0);
+            } elseif (!empty($host)) {
+                $port = getenv("DB_PORT") ?: "5432";
+                $db   = getenv("DB_DATABASE") ?: "callme_yoghurt_prod";
+                $user = getenv("DB_USERNAME") ?: "callme_erp_user";
+                $pass = getenv("DB_PASSWORD") ?: "";
+                $sslmode = getenv("DB_SSLMODE") ?: "prefer";
+                $dsn = "pgsql:host={$host};port={$port};dbname={$db};sslmode={$sslmode}";
+                $pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_TIMEOUT => 2, PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+                $pdo->query("SELECT 1");
+                exit(0);
+            }
             exit(0);
         } catch (Throwable $e) {
             exit(1);
@@ -52,7 +90,7 @@ rm -f /var/www/html/bootstrap/cache/packages.php \
       /var/www/html/bootstrap/cache/services.php \
       /var/www/html/bootstrap/cache/config.php \
       /var/www/html/bootstrap/cache/routes-*.php
-php artisan package:discover --ansi || true
+php artisan package:discover --ansi
 
 # 3. Security & Production Configuration Validation
 if [ "${APP_ENV:-production}" = "production" ] || [ "${VALIDATE_CONFIG:-false}" = "true" ]; then
@@ -77,13 +115,11 @@ fi
 
 # 5. Production Framework Optimization Caching
 if [ "${APP_ENV:-production}" = "production" ]; then
-    echo "==> [Callme ERP] Caching framework configurations, routes, and views..."
-    php artisan config:cache || true
-    php artisan route:cache || true
-    if [ -d "/var/www/html/resources/views" ]; then
-        php artisan view:cache || true
-    fi
-    php artisan event:cache || true
+    echo "==> [Callme ERP] Caching framework configurations, routes, events, and views (php artisan optimize)..."
+    php artisan optimize || {
+        echo "==> [Callme ERP] CRITICAL: Framework optimization (php artisan optimize) failed. Halting container." >&2
+        exit 1
+    }
 fi
 
 # 6. Ensure runtime storage permissions for www-data
