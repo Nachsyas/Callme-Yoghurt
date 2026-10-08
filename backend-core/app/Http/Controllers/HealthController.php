@@ -22,18 +22,39 @@ class HealthController
     }
 
     /**
-     * Readiness check confirming PostgreSQL database connectivity.
+     * Readiness check confirming PostgreSQL database and Redis connectivity.
      */
     public function ready(): JsonResponse
     {
         try {
             DB::connection()->getPdo()->query('SELECT 1');
 
-            return response()->json([
+            $payload = [
                 'status' => 'ready',
                 'service' => 'erp-core',
                 'database' => 'connected',
-            ], 200);
+            ];
+
+            // Verify distributed Redis ephemeral storage when configured or in production
+            $redisRequired = config('cache.default') === 'redis'
+                || config('shipping.cache_store') === 'redis'
+                || (app()->environment('production') && (bool) env('REDIS_HOST'));
+
+            if ($redisRequired) {
+                try {
+                    \Illuminate\Support\Facades\Redis::connection()->ping();
+                    $payload['redis'] = 'connected';
+                } catch (Throwable) {
+                    return response()->json([
+                        'status' => 'unavailable',
+                        'service' => 'erp-core',
+                        'database' => 'connected',
+                        'redis' => 'disconnected',
+                    ], 503);
+                }
+            }
+
+            return response()->json($payload, 200);
         } catch (Throwable) {
             // Strictly sanitized: never leak DSN, credentials, or stack traces
             return response()->json([

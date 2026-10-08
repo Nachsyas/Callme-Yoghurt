@@ -1,7 +1,7 @@
 # ==============================================================================
 # Callme Yoghurt ERP Core — Production Multi-Stage Dockerfile
-# Base: PHP 8.3-FPM (Alpine 3.20)
-# Optimization: 1-2 vCPU, 2GB RAM Low-Cost VPS Profile
+# Base: PHP 8.3-FPM (Alpine 3.20) + Lightweight Standalone Nginx Web Server
+# Provider-Neutral Architecture: Low-Cost VPS, Cloud Run, Fly.io, Railway, Render
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -18,7 +18,8 @@ ENV COMPOSER_ALLOW_SUPERUSER=1 \
 # Copy dependency definition files
 COPY composer.json composer.lock ./
 
-# Install production dependencies without dev packages or scripts
+# Install production dependencies deterministically using lock file
+# Excludes dev packages, no scripts executed, optimized classmap autoloader
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -40,12 +41,13 @@ WORKDIR /var/www/html
 # Install extension installer
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
 
-# Install system dependencies and required PHP C-extensions
-# Extensions: pdo_pgsql, pgsql, redis, bcmath, mbstring, xml, curl, zip, intl, gd, opcache
+# Install system utilities, lightweight Nginx web server, and PHP extensions
+# Extensions: pdo_pgsql, pgsql, redis, bcmath, mbstring, xml, curl, zip, intl, gd, opcache, pcntl, posix
 RUN apk update && apk add --no-cache \
     bash \
     curl \
     git \
+    nginx \
     postgresql-client \
     su-exec \
     && install-php-extensions \
@@ -60,12 +62,21 @@ RUN apk update && apk add --no-cache \
     intl \
     gd \
     opcache \
+    pcntl \
+    posix \
     && rm -rf /var/cache/apk/* /tmp/*
+
+# Configure Nginx and PHP directories
+RUN mkdir -p /var/log/nginx /var/lib/nginx/tmp /run/nginx \
+    && chown -R www-data:www-data /var/log/nginx /var/lib/nginx /run/nginx
 
 # Copy PHP production & OPcache configurations
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom-php.ini
 COPY docker/php/zz-docker.conf /usr/local/etc/php-fpm.d/zz-docker.conf
+
+# Copy standalone Nginx web configuration
+COPY docker/nginx/nginx-standalone.conf /etc/nginx/http.d/default.conf
 
 # Copy application source code
 COPY . /var/www/html
@@ -86,7 +97,12 @@ RUN mkdir -p /var/www/html/storage/framework/cache \
     && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-EXPOSE 9000
+# Expose HTTP port (8000 default) and FastCGI port (9000)
+EXPOSE 8000 9000
+
+# Healthcheck checking /api/health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://127.0.0.1:${PORT:-8000}/api/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["php-fpm"]
+CMD ["web"]

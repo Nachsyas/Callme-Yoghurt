@@ -17,3 +17,5 @@ tests
 docker-compose*
 README*
 *.md
+*.log
+scratch/

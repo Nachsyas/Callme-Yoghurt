@@ -17,6 +17,20 @@ return Application::configure(basePath: dirname(__DIR__))
             'service.auth' => ValidateInternalServiceToken::class,
             'admin.actor' => \App\Http\Middleware\ValidateAdminActorContext::class,
         ]);
+
+        // Secure trusted proxy configuration for container / reverse-proxy deployments
+        $trustedProxies = env('TRUSTED_PROXIES');
+        if (is_string($trustedProxies) && trim($trustedProxies) !== '') {
+            $proxies = array_map('trim', explode(',', $trustedProxies));
+            $middleware->trustProxies(
+                at: $proxies,
+                headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR |
+                    \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST |
+                    \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT |
+                    \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO |
+                    \Illuminate\Http\Request::HEADER_X_FORWARDED_PREFIX
+            );
+        }
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

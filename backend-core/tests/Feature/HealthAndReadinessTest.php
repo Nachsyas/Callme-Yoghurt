@@ -81,4 +81,49 @@ class HealthAndReadinessTest extends TestCase
         $this->assertStringNotContainsString('callme_dev_user', (string) $content);
         $this->assertStringNotContainsString('SQLSTATE', (string) $content);
     }
+
+    /**
+     * Proves /api/ready fails safely with HTTP 503 without leaking details when Redis is required but unreachable.
+     */
+    public function test_ready_endpoint_fails_safely_when_redis_is_required_but_disconnected(): void
+    {
+        // Configure Redis as mandatory cache store pointing to unavailable port
+        config([
+            'cache.default' => 'redis',
+            'database.redis.default.port' => '63799',
+            'database.redis.default.host' => '127.0.0.1',
+        ]);
+
+        $response = $this->getJson('/api/ready');
+
+        $response->assertStatus(503);
+        $response->assertExactJson([
+            'status' => 'unavailable',
+            'service' => 'erp-core',
+            'database' => 'connected',
+            'redis' => 'disconnected',
+        ]);
+
+        $content = $response->getContent();
+        $this->assertStringNotContainsString('password', (string) $content);
+        $this->assertStringNotContainsString('Connection refused', (string) $content);
+    }
+
+    /**
+     * Proves /api/internal/health responds with 200 when service authentication succeeds.
+     */
+    public function test_internal_health_endpoint(): void
+    {
+        $token = 'test-erp-service-token-secret-64ch';
+        config(['services.internal.service_token' => $token]);
+
+        $response = $this->withToken($token)->getJson('/api/internal/health');
+
+        $response->assertStatus(200);
+        $response->assertExactJson([
+            'status' => 'ok',
+            'service' => 'erp-core',
+            'channel' => 'internal',
+        ]);
+    }
 }
