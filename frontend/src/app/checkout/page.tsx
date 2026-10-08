@@ -1,7 +1,7 @@
 'use client';
 
 import { useCartStore, toTransactionProjection, isLegacyPreviewVariantId, type CartItem } from '@/store/cartStore';
-import { executeCheckoutSubmission, type CheckoutPayload, type DeliveryMethod, type PublicCommittedOrderData } from '@/lib/checkout-client';
+import { executeCheckoutSubmission, buildCanonicalDestinationInput, type CheckoutPayload, type DeliveryMethod, type PublicCommittedOrderData } from '@/lib/checkout-client';
 import { type ShippingQuote, type BiteshipArea } from '@/lib/shipping';
 import { buildOrderSummary, saveOrderSummary } from '@/lib/order';
 import { isUuid } from '@/lib/catalog';
@@ -231,18 +231,28 @@ export default function CheckoutPage() {
       return;
     }
 
+    const canonicalDest = buildCanonicalDestinationInput({
+      postalCode: formData.postalCode,
+      city: formData.city,
+      province: formData.province,
+      district: formData.district,
+      areaId: selectedArea?.id,
+      latitude: selectedArea?.latitude,
+      longitude: selectedArea?.longitude,
+    });
+
     try {
       const res = await fetch('/api/shipping/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          destination_area_id: selectedArea?.id,
-          destination_postal_code: formData.postalCode.trim() || undefined,
-          destination_latitude: selectedArea?.latitude,
-          destination_longitude: selectedArea?.longitude,
-          city: formData.city.trim() || 'Jakarta Timur',
-          province: formData.province.trim() || 'DKI Jakarta',
-          district: formData.district.trim() || 'Cipayung',
+          destination_area_id: canonicalDest.area_id,
+          destination_postal_code: canonicalDest.postal_code || undefined,
+          destination_latitude: canonicalDest.latitude,
+          destination_longitude: canonicalDest.longitude,
+          city: canonicalDest.city,
+          province: canonicalDest.province,
+          district: canonicalDest.district,
           items: items.map((i) => ({
             variant_id: i.variant_id,
             quantity: i.quantity,
@@ -401,15 +411,15 @@ export default function CheckoutPage() {
         whatsapp: formData.whatsapp.trim(),
         address: customerAddress,
       },
-      destination: {
-        postal_code: formData.postalCode.trim(),
-        city: formData.city.trim() || undefined,
-        province: formData.province.trim() || undefined,
-        district: formData.district.trim() || undefined,
-        area_id: selectedArea?.id || undefined,
-        latitude: selectedArea?.latitude || undefined,
-        longitude: selectedArea?.longitude || undefined,
-      },
+      destination: buildCanonicalDestinationInput({
+        postalCode: formData.postalCode,
+        city: formData.city,
+        province: formData.province,
+        district: formData.district,
+        areaId: selectedArea?.id,
+        latitude: selectedArea?.latitude,
+        longitude: selectedArea?.longitude,
+      }),
       items: toTransactionProjection(items),
       delivery_method: backendDeliveryMethod,
       shipping_quote_id: selectedQuote.quote_id,

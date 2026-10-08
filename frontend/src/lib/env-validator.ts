@@ -7,20 +7,37 @@
  * 3. Zero Secret Leakage: Error messages and logs must strictly mention missing variable names, NEVER values.
  */
 
-export type DeploymentAppMode = "storefront" | "admin";
+export type DeploymentAppRole = "storefront" | "admin";
+export type DeploymentAppMode = DeploymentAppRole;
 
 export interface EnvValidationResult {
   valid: boolean;
   mode: DeploymentAppMode | "unknown";
+  role?: DeploymentAppRole | "unknown";
   missingVariables: string[];
   error?: string;
 }
 
 export interface ValidateEnvOptions {
   mode?: DeploymentAppMode;
+  role?: DeploymentAppRole;
   env?: Record<string, string | undefined>;
   isProduction?: boolean;
   strict?: boolean;
+}
+
+/**
+ * Returns authoritative server-side deployment role, prioritizing APP_DEPLOYMENT_ROLE
+ * over client-facing NEXT_PUBLIC_APP_MODE.
+ */
+export function getDeploymentRole(
+  env: Record<string, string | undefined> = process.env
+): DeploymentAppRole | "unknown" {
+  const role = env.APP_DEPLOYMENT_ROLE || env.NEXT_PUBLIC_APP_MODE;
+  if (role === "storefront" || role === "admin") {
+    return role;
+  }
+  return "unknown";
 }
 
 const REQUIRED_STOREFRONT_VARS = [
@@ -49,12 +66,36 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
     (env.NODE_ENV === "production" || process.env.NODE_ENV === "production");
   const strict = options?.strict ?? isProduction;
 
-  // Determine application mode
-  const rawMode = options?.mode ?? env.NEXT_PUBLIC_APP_MODE;
+  // Determine application mode / role
+  const rawMode =
+    options?.role ??
+    options?.mode ??
+    env.APP_DEPLOYMENT_ROLE ??
+    env.NEXT_PUBLIC_APP_MODE;
   const mode: DeploymentAppMode | "unknown" =
     rawMode === "storefront" || rawMode === "admin" ? rawMode : "unknown";
 
   const missingVariables: string[] = [];
+
+  // If both are defined but contradict each other, fail closed
+  if (
+    env.APP_DEPLOYMENT_ROLE &&
+    env.NEXT_PUBLIC_APP_MODE &&
+    env.APP_DEPLOYMENT_ROLE !== env.NEXT_PUBLIC_APP_MODE
+  ) {
+    const conflictMsg =
+      "SECURITY CRITICAL: APP_DEPLOYMENT_ROLE and NEXT_PUBLIC_APP_MODE contradict each other.";
+    if (strict) {
+      throw new Error(conflictMsg);
+    }
+    return {
+      valid: false,
+      mode: "unknown",
+      role: "unknown",
+      missingVariables: ["APP_DEPLOYMENT_ROLE"],
+      error: conflictMsg,
+    };
+  }
 
   if (mode === "unknown") {
     missingVariables.push("NEXT_PUBLIC_APP_MODE");
@@ -66,6 +107,7 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
     return {
       valid: false,
       mode: "unknown",
+      role: "unknown",
       missingVariables,
       error: errorMsg,
     };
@@ -101,6 +143,7 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
     return {
       valid: false,
       mode,
+      role: mode,
       missingVariables,
       error: errorMsg,
     };
@@ -109,6 +152,7 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
   return {
     valid: true,
     mode,
+    role: mode,
     missingVariables: [],
   };
 }

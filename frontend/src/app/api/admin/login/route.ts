@@ -28,7 +28,13 @@ export async function POST(request: Request): Promise<Response> {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
-  const erpBaseUrl = process.env.ERP_INTERNAL_URL || "http://127.0.0.1:8000";
+  const erpBaseUrl = process.env.ERP_INTERNAL_URL;
+  if (!erpBaseUrl) {
+    return NextResponse.json(
+      { error: "ERP internal URL unconfigured" },
+      { status: 503 }
+    );
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
@@ -39,7 +45,7 @@ export async function POST(request: Request): Promise<Response> {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        "X-Forwarded-For": request.headers.get("x-forwarded-for") || "127.0.0.1",
+        "X-Forwarded-For": request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
       },
       body: JSON.stringify({ email: trimmedEmail, password }),
       cache: "no-store",

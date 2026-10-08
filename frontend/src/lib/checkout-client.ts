@@ -25,6 +25,32 @@ export interface CheckoutDestinationInput {
   longitude?: number;
 }
 
+export interface RawDestinationInput {
+  postalCode?: string;
+  city?: string;
+  province?: string;
+  district?: string;
+  areaId?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+/**
+ * Normalizes destination input deterministically without artificial default city/province fallbacks.
+ * Ensures strict consistency between shipping quote requests and final checkout submission payload.
+ */
+export function buildCanonicalDestinationInput(input: RawDestinationInput): CheckoutDestinationInput {
+  return {
+    postal_code: (input.postalCode || '').trim(),
+    city: input.city?.trim() || undefined,
+    province: input.province?.trim() || undefined,
+    district: input.district?.trim() || undefined,
+    area_id: input.areaId?.trim() || undefined,
+    latitude: typeof input.latitude === 'number' && Number.isFinite(input.latitude) ? input.latitude : undefined,
+    longitude: typeof input.longitude === 'number' && Number.isFinite(input.longitude) ? input.longitude : undefined,
+  };
+}
+
 export interface CheckoutPayload {
   customer: CheckoutCustomerInput;
   destination: CheckoutDestinationInput;

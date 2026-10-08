@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from "next/server.js";
 import { getAdminSessionFromRequest } from "./admin-session.ts";
 import { requirePermission, type AdminPermission } from "./permissions.ts";
 
@@ -41,9 +41,15 @@ export async function forwardToErpAdmin(options: ForwardAdminOptions): Promise<R
   }
 
   // 3. Upstream configuration
-  const erpBaseUrl = process.env.ERP_INTERNAL_URL || "http://127.0.0.1:8000";
-  const serviceToken = process.env.ERP_SERVICE_TOKEN;
+  const erpBaseUrl = process.env.ERP_INTERNAL_URL;
+  if (!erpBaseUrl) {
+    return NextResponse.json(
+      { error: "ERP internal URL unconfigured" },
+      { status: 503 }
+    );
+  }
 
+  const serviceToken = process.env.ERP_SERVICE_TOKEN;
   if (!serviceToken) {
     return NextResponse.json(
       { error: "ERP service token unconfigured" },
@@ -59,7 +65,7 @@ export async function forwardToErpAdmin(options: ForwardAdminOptions): Promise<R
     // Authoritative server-generated actor identity (ignoring browser-supplied headers)
     "X-Admin-User-Id": session.user.id,
     "X-Admin-Role": session.user.role,
-    "X-Forwarded-For": request.headers.get("x-forwarded-for") || "127.0.0.1",
+    "X-Forwarded-For": request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
   };
 
   const fetchOptions: RequestInit = {
