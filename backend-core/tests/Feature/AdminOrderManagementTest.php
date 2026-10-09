@@ -180,7 +180,7 @@ class AdminOrderManagementTest extends TestCase
                 'customer' => [
                     'name' => 'Siti Rahma',
                 ],
-                'order_status' => 'DELIVERED',
+                'order_status' => 'COMPLETED',
                 'cost' => [
                     'total_amount' => 82000,
                 ],
@@ -246,5 +246,157 @@ class AdminOrderManagementTest extends TestCase
         $resCancelled->assertStatus(200);
         $this->assertCount(1, $resCancelled->json('orders'));
         $this->assertSame('CY-ORD-2', $resCancelled->json('orders.0.order_number'));
+    }
+
+    public function test_order_status_done_does_not_imply_paid_and_fulfillment_is_completed(): void
+    {
+        $order = Order::create([
+            'order_number' => 'CY-DONE-001',
+            'shipping_name' => 'Customer Done',
+            'shipping_phone' => '081299998888',
+            'shipping_address' => 'Jl. Kebon Jeruk',
+            'delivery_method' => DeliveryMethod::INSTANT,
+            'status' => OrderStatus::DONE,
+            'subtotal_amount' => 50000,
+            'shipping_fee' => 20000,
+            'service_fee' => 2000,
+            'total_amount' => 72000,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $response->assertStatus(200);
+        $data = $response->json('order');
+
+        // Order status is COMPLETED, NOT DELIVERED (no delivery proof authority in this phase)
+        $this->assertSame('COMPLETED', $data['order_status']);
+
+        // Payment status must NEVER be assumed PAID without authoritative payment proof
+        $this->assertSame('PENDING_PAYMENT', $data['payment']['status']);
+        $this->assertSame('waiting_verification', $data['payment']['proof_status']);
+
+        // Inventory without reservation must be PENDING, not fabricated RESERVED
+        $this->assertSame('PENDING', $data['inventory']['status']);
+        $this->assertSame('PENDING', $data['inventory']['summary_status']);
+        $this->assertSame('', $data['inventory']['reservation_id']);
+    }
+
+    public function test_confirmed_status_does_not_imply_recognized_revenue_and_metrics_are_authoritative(): void
+    {
+        // 1 Confirmed order
+        Order::create([
+            'order_number' => 'CY-METRIC-1',
+            'shipping_name' => 'Cust A',
+            'shipping_phone' => '081234',
+            'shipping_address' => 'Addr A',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 40000,
+            'shipping_fee' => 10000,
+            'service_fee' => 2000,
+            'total_amount' => 52000,
+        ]);
+
+        // 1 Done order
+        Order::create([
+            'order_number' => 'CY-METRIC-2',
+            'shipping_name' => 'Cust B',
+            'shipping_phone' => '085678',
+            'shipping_address' => 'Addr B',
+            'delivery_method' => DeliveryMethod::SAMEDAY,
+            'status' => OrderStatus::DONE,
+            'subtotal_amount' => 30000,
+            'shipping_fee' => 15000,
+            'service_fee' => 2000,
+            'total_amount' => 47000,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders');
+
+        $response->assertStatus(200);
+        $metrics = $response->json('metrics');
+
+        // Gross Order Value is 52000 + 47000 = 99000
+        $this->assertSame(99000, $metrics['gross_order_value']);
+        $this->assertSame(52000, $metrics['pending_payments_value']);
+
+        // Settled and recognized revenues must be strictly 0 without verification ledgers
+        $this->assertSame(0, $metrics['settled_revenue']);
+        $this->assertSame(0, $metrics['recognized_revenue']);
+        $this->assertSame(99000, $metrics['total_revenue']);
+    }
+
+    public function test_inventory_reservation_derives_truthfully_from_stock_reservation(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-MAIN',
+            'name' => 'Main Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-RESERVE-001',
+            'shipping_name' => 'Cust Reserved',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jl. Bambu Apus',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 30000,
+            'shipping_fee' => 10000,
+            'service_fee' => 2000,
+            'total_amount' => 42000,
+        ]);
+
+        $line = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '1.000000',
+            'unit_price' => 30000,
+            'subtotal' => 30000,
+        ]);
+
+        // Create authoritative StockReservation for this order line
+        $reservation = \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '1.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $response->assertStatus(200);
+        $data = $response->json('order');
+
+        // Status is derived from the real reservation record
+        $this->assertSame((string) $reservation->id, $data['inventory']['reservation_id']);
+        $this->assertSame('RESERVED', $data['inventory']['status']);
+        $this->assertSame('RESERVED', $data['inventory']['summary_status']);
+    }
+
+    public function test_empty_database_returns_genuine_zero_metrics(): void
+    {
+        // No orders created in test database
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders');
+
+        $response->assertStatus(200);
+        $this->assertSame([], $response->json('orders'));
+        $metrics = $response->json('metrics');
+
+        $this->assertSame(0, $metrics['today_orders']);
+        $this->assertSame(0, $metrics['waiting_payment']);
+        $this->assertSame(0, $metrics['completed_orders']);
+        $this->assertSame(0, $metrics['cancelled_orders']);
+        $this->assertSame(0, $metrics['gross_order_value']);
+        $this->assertSame(0, $metrics['pending_payments_value']);
+        $this->assertSame(0, $metrics['settled_revenue']);
+        $this->assertSame(0, $metrics['recognized_revenue']);
+        $this->assertSame(0, $metrics['total_revenue']);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Admin\Order;
 
+use App\Domain\Inventory\Models\StockReservation;
 use App\Domain\Sales\Enums\OrderStatus;
 use App\Domain\Sales\Models\Order;
 use Carbon\Carbon;
@@ -13,7 +14,7 @@ class AdminOrderService
     /**
      * List sanitized admin orders with optional status and search filters.
      *
-     * Invariants (Phase 1.7C.20):
+     * Invariants (Phase 1.7C.20 & 1.7C.22A):
      * - Derives strictly from PostgreSQL database via Laravel Order domain.
      * - Never fabricates synthetic seed orders.
      * - Returns sanitized DTO conforming to Next.js Admin BFF expectations.
@@ -100,6 +101,24 @@ class AdminOrderService
 
         $frontendStatus = $this->mapOrderStatusToFrontend($order->status);
 
+        // Derive authoritative reservation evidence from PostgreSQL
+        $lineIds = $order->lines->pluck('id')->map(fn ($id) => (string) $id)->all();
+        $reservation = null;
+        if (!empty($lineIds)) {
+            $reservation = StockReservation::where('reference_type', 'ORDER_LINE')
+                ->whereIn('reference_id', $lineIds)
+                ->first();
+        }
+        if ($reservation === null) {
+            $reservation = StockReservation::where('reference_type', 'ORDER')
+                ->where('reference_id', (string) $order->id)
+                ->first();
+        }
+
+        $reservationStatus = $reservation ? (string) $reservation->status : 'PENDING';
+        $reservationSummaryStatus = $reservation ? (string) $reservation->status : 'PENDING';
+        $reservationId = $reservation ? (string) $reservation->id : '';
+
         return [
             'id' => (string) $order->id,
             'order_number' => $order->order_number,
@@ -119,17 +138,19 @@ class AdminOrderService
             ],
             'payment' => [
                 'method' => 'QRIS Manual',
-                'status' => $order->status === OrderStatus::DONE ? 'PAID' : ($order->status === OrderStatus::CANCELLED ? 'CANCELLED' : 'PENDING_PAYMENT'),
-                'proof_status' => $order->status === OrderStatus::DONE ? 'verified' : 'waiting_verification',
+                // In Manual QRIS without payment settlement verification records,
+                // OrderStatus::DONE must NOT imply PAID. Remains PENDING_PAYMENT unless cancelled.
+                'status' => $order->status === OrderStatus::CANCELLED ? 'CANCELLED' : 'PENDING_PAYMENT',
+                'proof_status' => 'waiting_verification',
             ],
             'order_status' => $frontendStatus,
             'delivery_method' => $order->shipping_courier
                 ? trim("{$order->shipping_courier} {$order->shipping_service}")
                 : ($order->delivery_method?->value ?? 'Next Day'),
             'inventory' => [
-                'reservation_id' => '',
-                'status' => 'RESERVED',
-                'summary_status' => 'RESERVED',
+                'reservation_id' => $reservationId,
+                'status' => $reservationStatus,
+                'summary_status' => $reservationSummaryStatus,
                 'items' => [],
             ],
             'audit_logs' => [],
@@ -145,9 +166,8 @@ class AdminOrderService
     private function mapFrontendStatusToOrderStatus(string $status): ?OrderStatus
     {
         return match ($status) {
-            'WAITING_PAYMENT' => OrderStatus::CONFIRMED,
-            'PAYMENT_CONFIRMED', 'PROCESSING', 'READY_TO_SHIP' => OrderStatus::CONFIRMED,
-            'DELIVERED' => OrderStatus::DONE,
+            'WAITING_PAYMENT', 'PAYMENT_CONFIRMED', 'PROCESSING', 'READY_TO_SHIP' => OrderStatus::CONFIRMED,
+            'COMPLETED', 'DELIVERED' => OrderStatus::DONE,
             'CANCELLED' => OrderStatus::CANCELLED,
             default => null,
         };
@@ -160,13 +180,24 @@ class AdminOrderService
     {
         return match ($status) {
             OrderStatus::DRAFT, OrderStatus::CONFIRMED => 'WAITING_PAYMENT',
-            OrderStatus::DONE => 'DELIVERED',
+            OrderStatus::DONE => 'COMPLETED',
             OrderStatus::CANCELLED => 'CANCELLED',
         };
     }
 
     /**
      * Calculate summary KPI metrics from PostgreSQL orders table.
+     *
+     * Metric Definitions (Phase 1.7C.22A):
+     * - today_orders: Orders created since midnight today.
+     * - waiting_payment: Orders confirmed but pending manual QRIS verification.
+     * - completed_orders: Orders marked as DONE in ERP lifecycle.
+     * - cancelled_orders: Orders voided or cancelled.
+     * - gross_order_value (GOV): Total monetary sum of all valid active/completed orders.
+     * - pending_payments_value: Outstanding monetary sum for unverified orders.
+     * - settled_revenue: Realized monetary sum verified by merchant payment authority (0 in Manual QRIS without settlement ledger).
+     * - recognized_revenue: Realized revenue verified after delivery confirmation (0 without proof).
+     * - total_revenue: Gross Order Value (retained for backward compatibility).
      *
      * @return array<string, mixed>
      */
@@ -178,7 +209,13 @@ class AdminOrderService
         $waitingPayment = Order::where('status', OrderStatus::CONFIRMED)->count();
         $completedOrders = Order::where('status', OrderStatus::DONE)->count();
         $cancelledOrders = Order::where('status', OrderStatus::CANCELLED)->count();
-        $totalRevenue = (int) Order::whereIn('status', [OrderStatus::CONFIRMED, OrderStatus::DONE])
+
+        // Gross Order Value: Sum of confirmed and completed orders
+        $grossOrderValue = (int) Order::whereIn('status', [OrderStatus::CONFIRMED, OrderStatus::DONE])
+            ->sum('total_amount');
+
+        // Outstanding / Pending Payments Value
+        $pendingPaymentsValue = (int) Order::where('status', OrderStatus::CONFIRMED)
             ->sum('total_amount');
 
         return [
@@ -188,7 +225,11 @@ class AdminOrderService
             'ready_to_ship' => 0,
             'completed_orders' => $completedOrders,
             'cancelled_orders' => $cancelledOrders,
-            'total_revenue' => $totalRevenue,
+            'gross_order_value' => $grossOrderValue,
+            'pending_payments_value' => $pendingPaymentsValue,
+            'settled_revenue' => 0,
+            'recognized_revenue' => 0,
+            'total_revenue' => $grossOrderValue,
         ];
     }
 }

@@ -33,6 +33,7 @@ type FilterStatus =
   | "WAITING_PAYMENT"
   | "PROCESSING"
   | "READY_TO_SHIP"
+  | "COMPLETED"
   | "DELIVERED"
   | "CANCELLED";
 
@@ -41,6 +42,7 @@ const STATUS_FILTERS: { key: FilterStatus; label: string }[] = [
   { key: "WAITING_PAYMENT", label: "Waiting Payment" },
   { key: "PROCESSING", label: "Processing" },
   { key: "READY_TO_SHIP", label: "Ready To Ship" },
+  { key: "COMPLETED", label: "Completed" },
   { key: "DELIVERED", label: "Delivered" },
   { key: "CANCELLED", label: "Cancelled" },
 ];
@@ -438,7 +440,7 @@ export default function AdminOrdersPage() {
                                 ? "bg-blue-50 text-blue-800 border border-blue-200"
                                 : order.order_status === "READY_TO_SHIP"
                                   ? "bg-purple-50 text-purple-800 border border-purple-200"
-                                  : order.order_status === "DELIVERED"
+                                  : order.order_status === "COMPLETED" || order.order_status === "DELIVERED"
                                     ? "bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9]"
                                     : "bg-gray-100 text-gray-700 border border-gray-300"
                         }`}
@@ -493,7 +495,7 @@ export default function AdminOrdersPage() {
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       order.order_status === "WAITING_PAYMENT"
                         ? "bg-amber-50 text-amber-800"
-                        : order.order_status === "DELIVERED"
+                        : order.order_status === "COMPLETED" || order.order_status === "DELIVERED"
                           ? "bg-[#E8F5E9] text-[#2E7D32]"
                           : "bg-blue-50 text-blue-800"
                     }`}
@@ -591,7 +593,7 @@ export default function AdminOrdersPage() {
                               ? "bg-blue-100 text-blue-900 border border-blue-300"
                               : selectedOrder.order_status === "READY_TO_SHIP"
                                 ? "bg-purple-100 text-purple-900 border border-purple-300"
-                                : selectedOrder.order_status === "DELIVERED"
+                                : selectedOrder.order_status === "COMPLETED" || selectedOrder.order_status === "DELIVERED"
                                   ? "bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9]"
                                   : "bg-red-100 text-red-900 border border-red-300"
                       }`}

@@ -70,7 +70,11 @@ describe("Admin Access Control Hardening & Deployment Separation (Phase 1.2A)", 
         const location = res.headers.get("location");
         assert.ok(location?.endsWith("/"), "Storefront mode must redirect /admin to storefront home");
       } finally {
-        process.env.NEXT_PUBLIC_APP_MODE = originalMode;
+        if (originalMode === undefined) {
+          delete process.env.NEXT_PUBLIC_APP_MODE;
+        } else {
+          process.env.NEXT_PUBLIC_APP_MODE = originalMode;
+        }
       }
     });
   });

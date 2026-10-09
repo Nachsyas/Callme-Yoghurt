@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -9,109 +9,101 @@ import {
   CheckCircle2,
   Clock,
   Package,
+  RefreshCw,
   ShoppingCart,
   Snowflake,
   TrendingUp,
+  XCircle,
 } from "lucide-react";
-
-interface RecentOrderPreview {
-  id: string;
-  customer: string;
-  variant: string;
-  qty: number;
-  courier: string;
-  amount: number;
-  status: "CONFIRMED" | "PACKED" | "IN DELIVERY" | "DELIVERED";
-  time: string;
-}
-
-interface InventoryAttentionItem {
-  product: string;
-  variant: string;
-  lot: string;
-  stock: number;
-  expiry: string;
-  daysRemaining: number;
-  fefoStatus: "Near Expiry" | "Critical";
-}
-
-const RECENT_ORDERS_PREVIEW: RecentOrderPreview[] = [
-  {
-    id: "CY-2026-0042",
-    customer: "Budi S**** (Jakarta Timur)",
-    variant: "Plain Pure Original 1000ml",
-    qty: 2,
-    courier: "Instant Courier (Cooler Bag)",
-    amount: 110000,
-    status: "CONFIRMED",
-    time: "10 menit lalu",
-  },
-  {
-    id: "CY-2026-0041",
-    customer: "Siti A**** (Jakarta Selatan)",
-    variant: "Stroberi Summer Blush 250ml",
-    qty: 4,
-    courier: "Sameday Delivery (Cold Box)",
-    amount: 60000,
-    status: "IN DELIVERY",
-    time: "28 menit lalu",
-  },
-  {
-    id: "CY-2026-0040",
-    customer: "Hendro W**** (Bekasi Barat)",
-    variant: "Mangga Tropical Gold 250ml",
-    qty: 3,
-    courier: "Instant Courier (Cooler Bag)",
-    amount: 45000,
-    status: "PACKED",
-    time: "1 jam lalu",
-  },
-  {
-    id: "CY-2026-0039",
-    customer: "Dewi L**** (Depok)",
-    variant: "Melon Emerald Fresh 1000ml",
-    qty: 1,
-    courier: "Sameday Delivery (Cold Box)",
-    amount: 55000,
-    status: "DELIVERED",
-    time: "2 jam lalu",
-  },
-  {
-    id: "CY-2026-0038",
-    customer: "Rian K**** (Jakarta Pusat)",
-    variant: "Anggur Royal Purple 250ml",
-    qty: 6,
-    courier: "Instant Courier (Cooler Bag)",
-    amount: 90000,
-    status: "DELIVERED",
-    time: "3 jam lalu",
-  },
-];
-
-const INVENTORY_ATTENTION_PREVIEW: InventoryAttentionItem[] = [
-  {
-    product: "Melon Emerald Fresh",
-    variant: "1 Liter",
-    lot: "LOT #CY-2026-08D",
-    stock: 45,
-    expiry: "28 Sep 2026",
-    daysRemaining: 6,
-    fefoStatus: "Critical",
-  },
-  {
-    product: "Plain Pure Original",
-    variant: "250 ml",
-    lot: "LOT #CY-2026-09A",
-    stock: 340,
-    expiry: "15 Okt 2026",
-    daysRemaining: 23,
-    fefoStatus: "Near Expiry",
-  },
-];
+import type { AdminOrderRecord, OrderDashboardMetrics } from "@/lib/order/types";
 
 export function DashboardOverview() {
+  const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
+  const [metrics, setMetrics] = useState<OrderDashboardMetrics | null>(null);
+  const [catalogCounts, setCatalogCounts] = useState<{ products: number; variants: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [erpOffline, setErpOffline] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    setErrorDetails(null);
+    let ordersOk = false;
+    let catalogOk = false;
+
+    try {
+      const ordersRes = await fetch("/api/admin/orders", { cache: "no-store" });
+      if (ordersRes.ok) {
+        const ordersData = await ordersRes.json();
+        setOrders(ordersData.orders || []);
+        setMetrics(ordersData.metrics || null);
+        ordersOk = true;
+      } else if (ordersRes.status === 401) {
+        window.location.href = "/admin/login?from=/admin";
+        return;
+      }
+    } catch {
+      // Handled in combined status below
+    }
+
+    try {
+      const catRes = await fetch("/api/admin/catalog/products", { cache: "no-store" });
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        const prods = Array.isArray(catData.products) ? catData.products : [];
+        let variantCount = 0;
+        for (const p of prods) {
+          if (Array.isArray(p.variants)) {
+            variantCount += p.variants.length;
+          }
+        }
+        setCatalogCounts({ products: prods.length, variants: variantCount });
+        catalogOk = true;
+      }
+    } catch {
+      // Handled in combined status below
+    }
+
+    if (!ordersOk && !catalogOk) {
+      setErpOffline(true);
+      setErrorDetails("Koneksi ERP Core offline / tidak terjangkau. Menampilkan status aman.");
+    } else {
+      setErpOffline(false);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
   return (
     <div className="space-y-6">
+      {/* ERP OFFLINE WARNING BANNER */}
+      {erpOffline && (
+        <div
+          role="alert"
+          className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3 text-xs"
+        >
+          <AlertTriangle className="text-amber-700 flex-shrink-0 mt-0.5" size={18} />
+          <div className="flex-1 space-y-1">
+            <p className="font-bold text-sm">ERP Core Tidak Tersedia (Mode Aman)</p>
+            <p className="text-amber-800">
+              {errorDetails ||
+                "Sistem tidak dapat menghubungi layanan ERP internal. Menampilkan status truthful unavailability sesuai prinsip zero-trust."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            className="px-2.5 py-1 rounded bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold flex items-center gap-1 transition-colors"
+          >
+            <RefreshCw size={12} />
+            <span>Muat Ulang</span>
+          </button>
+        </div>
+      )}
+
       {/* SECTION 1: 4 KPI SUMMARY CARDS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="KPI Overview">
         {/* Card 1: Total Orders */}
@@ -122,14 +114,30 @@ export function DashboardOverview() {
             </span>
             <ShoppingCart size={17} className="text-[#00754A]" />
           </div>
-          <p className="mt-2.5 sm:mt-3 text-2xl font-black text-[#1E3932] tracking-tight">
-            28 Pesanan
-          </p>
+          {isLoading ? (
+            <div className="mt-3 h-8 w-24 bg-gray-100 animate-pulse rounded" />
+          ) : erpOffline ? (
+            <p className="mt-2.5 sm:mt-3 text-lg font-bold text-amber-800 tracking-tight">
+              Tidak Tersedia
+            </p>
+          ) : (
+            <p className="mt-2.5 sm:mt-3 text-2xl font-black text-[#1E3932] tracking-tight">
+              {metrics?.today_orders ?? 0} Pesanan
+            </p>
+          )}
           <div className="flex items-center justify-between text-xs mt-1.5 flex-wrap gap-1">
-            <span className="text-[#00754A] font-semibold">+12% vs kemarin</span>
-            <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
-              4 Perlu Packing
-            </span>
+            {erpOffline ? (
+              <span className="text-amber-800 text-[11px] font-semibold">ERP Offline</span>
+            ) : (
+              <>
+                <span className="text-[#00754A] font-semibold" title="Gross Order Value (GOV)">
+                  GOV: Rp {(metrics?.gross_order_value ?? 0).toLocaleString("id-ID")}
+                </span>
+                <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]" title="Nilai Tertunda: Rp ${(metrics?.pending_payments_value ?? 0).toLocaleString('id-ID')}">
+                  {metrics?.waiting_payment ?? 0} Menunggu Verifikasi
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -141,11 +149,19 @@ export function DashboardOverview() {
             </span>
             <Package size={17} className="text-[#00754A]" />
           </div>
-          <p className="mt-2.5 sm:mt-3 text-2xl font-black text-[#1E3932] tracking-tight">
-            7 SKUs Aktif
-          </p>
+          {isLoading ? (
+            <div className="mt-3 h-8 w-24 bg-gray-100 animate-pulse rounded" />
+          ) : erpOffline || !catalogCounts ? (
+            <p className="mt-2.5 sm:mt-3 text-lg font-bold text-amber-800 tracking-tight">
+              Tidak Tersedia
+            </p>
+          ) : (
+            <p className="mt-2.5 sm:mt-3 text-2xl font-black text-[#1E3932] tracking-tight">
+              {catalogCounts.variants} SKUs Aktif
+            </p>
+          )}
           <p className="text-xs text-[#5C6F68] mt-1.5 flex items-center justify-between">
-            <span>7 Varian Resmi</span>
+            <span>{catalogCounts ? `${catalogCounts.products} Produk Resmi` : "ERP Offline"}</span>
             <span className="text-[#00754A] font-bold">100% Terverifikasi</span>
           </p>
         </div>
@@ -207,7 +223,7 @@ export function DashboardOverview() {
         </div>
 
         <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Item 1: Pending Orders */}
+          {/* Item 1: Pending Orders / Verification */}
           <div className="p-4 rounded-xl border border-amber-200 bg-[#FFFDF7] flex flex-col justify-between space-y-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
@@ -219,10 +235,16 @@ export function DashboardOverview() {
                 </span>
               </div>
               <h3 className="font-bold text-sm text-[#1E3932]">
-                4 Pesanan Perlu Packing
+                {erpOffline
+                  ? "Data Tidak Tersedia"
+                  : `${metrics?.waiting_payment ?? 0} Pesanan Perlu Verifikasi`}
               </h3>
               <p className="text-xs text-[#5C6F68] leading-relaxed">
-                Pesanan instant & sameday area Jakarta harus selesai dipack ke cooler bag sebelum batas kurir.
+                {erpOffline
+                  ? "Status pesanan tidak dapat diambil karena ERP Core offline."
+                  : (metrics?.waiting_payment ?? 0) > 0
+                    ? "Pesanan menunggu verifikasi pembayaran QRIS sebelum serah terima kurir."
+                    : "Tidak ada pesanan tertunda di database PostgreSQL saat ini."}
               </p>
             </div>
             <div className="pt-2 border-t border-amber-100 flex items-center justify-between">
@@ -239,27 +261,27 @@ export function DashboardOverview() {
             </div>
           </div>
 
-          {/* Item 2: Inventory Nearing Expiry */}
-          <div className="p-4 rounded-xl border border-rose-200 bg-[#FFF9F9] flex flex-col justify-between space-y-3">
+          {/* Item 2: FEFO Rotation Monitoring */}
+          <div className="p-4 rounded-xl border border-[#E5E2DA] bg-[#FAF9F7] flex flex-col justify-between space-y-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#C62828] uppercase tracking-wide">
+                <span className="text-[11px] font-bold text-[#5C6F68] uppercase tracking-wide">
                   Rotasi FEFO
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FFEBEE] text-[#C62828] border border-[#FFCDD2]">
-                  6 Hari Lagi
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-[#5C6F68] border border-[#E5E2DA]">
+                  Kebijakan SOP-03
                 </span>
               </div>
               <h3 className="font-bold text-sm text-[#1E3932]">
-                Melon 1L (LOT #CY-2026-08D)
+                Alokasi Kedaluwarsa Terdekat
               </h3>
               <p className="text-xs text-[#5C6F68] leading-relaxed">
-                Tersisa 45 botol kedaluwarsa 28 Sep 2026. Alokasi pengiriman otomatis prioritaskan lot ini.
+                Sistem mengalokasikan stok secara otomatis berdasarkan First Expired, First Out.
               </p>
             </div>
-            <div className="pt-2 border-t border-rose-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-[#C62828]">
-                Prioritas Keluar
+            <div className="pt-2 border-t border-[#E5E2DA] flex items-center justify-between">
+              <span className="text-xs text-[#5C6F68]">
+                WH-MAIN
               </span>
               <Link
                 href="/admin/inventory"
@@ -335,7 +357,7 @@ export function DashboardOverview() {
 
       {/* SECTION 3: RECENT ORDERS PREVIEW & INVENTORY ATTENTION PREVIEW */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (8 Cols): Recent Orders Preview (max 5) */}
+        {/* Left Column (8 Cols): Recent Orders Preview (Authoritative ERP data only) */}
         <div className="lg:col-span-8">
           <div className="bg-white rounded-xl border border-[#E5E2DA] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
             <div className="p-4 sm:p-5 border-b border-[#E5E2DA] flex items-center justify-between">
@@ -344,7 +366,7 @@ export function DashboardOverview() {
                   Recent Orders Preview
                 </h3>
                 <p className="text-xs text-[#5C6F68]">
-                  5 transaksi terbaru tersinkronisasi dengan ERP Core
+                  Transaksi riil tersinkronisasi dengan ERP Core PostgreSQL
                 </p>
               </div>
               <Link
@@ -356,120 +378,171 @@ export function DashboardOverview() {
               </Link>
             </div>
 
-            {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-xs text-[#1E3932]">
-                <thead className="bg-[#FAF9F7] text-[#5C6F68] font-bold uppercase text-[10px] tracking-wider border-b border-[#E5E2DA]">
-                  <tr>
-                    <th className="px-4 py-3">Order ID</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Product & Variant</th>
-                    <th className="px-4 py-3 text-center">Qty</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Waktu</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E2DA]">
-                  {RECENT_ORDERS_PREVIEW.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-[#FDFCFB] transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold text-[#1E3932]">
-                        {tx.id}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-semibold text-[#1E3932] block">
-                          {tx.customer}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-[#1E3932] block">
-                          {tx.variant}
-                        </span>
-                        <span className="text-[10px] text-[#5C6F68]">
-                          {tx.courier}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center font-bold">
-                        {tx.qty}
-                      </td>
-                      <td className="px-4 py-3 font-bold text-[#1E3932]">
-                        Rp {tx.amount.toLocaleString("id-ID")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
-                            tx.status === "CONFIRMED"
-                              ? "bg-[#E8F5E9] text-[#1E3932] border border-[#C8E6C9]"
-                              : tx.status === "IN DELIVERY"
-                                ? "bg-blue-50 text-blue-800 border border-blue-200"
-                                : tx.status === "PACKED"
-                                  ? "bg-amber-50 text-amber-900 border border-amber-200"
-                                  : "bg-[#FAF9F7] text-[#5C6F68] border border-[#E5E2DA]"
-                          }`}
-                        >
-                          {tx.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[#5C6F68] text-[11px] whitespace-nowrap">
-                        {tx.time}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Offline or Error State */}
+            {erpOffline ? (
+              <div className="p-8 text-center space-y-2">
+                <AlertTriangle className="mx-auto text-amber-600" size={28} />
+                <p className="font-bold text-sm text-[#1E3932]">
+                  Tidak Dapat Menghubungi ERP Core
+                </p>
+                <p className="text-xs text-[#5C6F68] max-w-sm mx-auto">
+                  Data transaksi tidak dapat dimuat karena backend ERP offline. Tidak ada data contoh yang ditampilkan.
+                </p>
+              </div>
+            ) : isLoading ? (
+              <div className="p-8 text-center text-xs text-[#5C6F68] space-y-2">
+                <div className="w-6 h-6 border-2 border-[#00754A] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p>Memuat transaksi authoritative dari database...</p>
+              </div>
+            ) : orders.length === 0 ? (
+              /* Genuine Zero-Data Empty State */
+              <div className="p-8 text-center space-y-2">
+                <ShoppingCart className="mx-auto text-[#5C6F68]/50" size={32} />
+                <p className="font-bold text-sm text-[#1E3932]">
+                  Belum Ada Pesanan
+                </p>
+                <p className="text-xs text-[#5C6F68] max-w-xs mx-auto">
+                  Database PostgreSQL belum memiliki transaksi pesanan masuk.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left text-xs text-[#1E3932]">
+                    <thead className="bg-[#FAF9F7] text-[#5C6F68] font-bold uppercase text-[10px] tracking-wider border-b border-[#E5E2DA]">
+                      <tr>
+                        <th className="px-4 py-3">Order ID</th>
+                        <th className="px-4 py-3">Customer</th>
+                        <th className="px-4 py-3">Product Summary</th>
+                        <th className="px-4 py-3 text-center">Items</th>
+                        <th className="px-4 py-3">Amount</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E5E2DA]">
+                      {orders.slice(0, 5).map((tx) => {
+                        const totalQty = tx.items.reduce((acc, it) => acc + it.quantity, 0);
+                        const firstItem = tx.items[0];
+                        const summaryText = firstItem
+                          ? `${firstItem.product_name} (${firstItem.variant})`
+                          : "Callme Yoghurt";
 
-            {/* Mobile Card-based View */}
-            <div className="md:hidden divide-y divide-[#E5E2DA]">
-              {RECENT_ORDERS_PREVIEW.map((tx) => (
-                <div key={tx.id} className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-xs text-[#1E3932]">
-                      {tx.id}
-                    </span>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
-                        tx.status === "CONFIRMED"
-                          ? "bg-[#E8F5E9] text-[#1E3932] border border-[#C8E6C9]"
-                          : tx.status === "IN DELIVERY"
-                            ? "bg-blue-50 text-blue-800 border border-blue-200"
-                            : tx.status === "PACKED"
-                              ? "bg-amber-50 text-amber-900 border border-amber-200"
-                              : "bg-[#FAF9F7] text-[#5C6F68] border border-[#E5E2DA]"
-                      }`}
-                    >
-                      {tx.status}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-xs text-[#1E3932] block">
-                      {tx.customer}
-                    </span>
-                    <span className="text-[11px] text-[#5C6F68] block">
-                      {tx.variant} (Qty: {tx.qty})
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-[#E5E2DA]/60 text-xs">
-                    <span className="text-[11px] text-[#5C6F68]">{tx.time}</span>
-                    <span className="font-bold text-sm text-[#1E3932]">
-                      Rp {tx.amount.toLocaleString("id-ID")}
-                    </span>
-                  </div>
+                        return (
+                          <tr key={tx.id} className="hover:bg-[#FDFCFB] transition-colors">
+                            <td className="px-4 py-3 font-mono font-bold text-[#1E3932]">
+                              {tx.order_number}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-semibold text-[#1E3932] block">
+                                {tx.customer.name}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-medium text-[#1E3932] block">
+                                {summaryText}
+                              </span>
+                              <span className="text-[10px] text-[#5C6F68]">
+                                {tx.delivery_method}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold">
+                              {totalQty}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-[#1E3932]">
+                              Rp {tx.cost.total_amount.toLocaleString("id-ID")}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
+                                  tx.order_status === "WAITING_PAYMENT"
+                                    ? "bg-amber-50 text-amber-900 border border-amber-200"
+                                    : tx.order_status === "COMPLETED" || tx.order_status === "DELIVERED"
+                                      ? "bg-[#E8F5E9] text-[#1E3932] border border-[#C8E6C9]"
+                                      : "bg-[#FAF9F7] text-[#5C6F68] border border-[#E5E2DA]"
+                                }`}
+                              >
+                                {tx.order_status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-[#5C6F68] text-[11px] whitespace-nowrap">
+                              {new Date(tx.order_date).toLocaleTimeString("id-ID", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+
+                {/* Mobile Card-based View */}
+                <div className="md:hidden divide-y divide-[#E5E2DA]">
+                  {orders.slice(0, 5).map((tx) => {
+                    const totalQty = tx.items.reduce((acc, it) => acc + it.quantity, 0);
+                    const firstItem = tx.items[0];
+                    const summaryText = firstItem
+                      ? `${firstItem.product_name} (${firstItem.variant})`
+                      : "Callme Yoghurt";
+
+                    return (
+                      <div key={tx.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-xs text-[#1E3932]">
+                            {tx.order_number}
+                          </span>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${
+                              tx.order_status === "WAITING_PAYMENT"
+                                ? "bg-amber-50 text-amber-900 border border-amber-200"
+                                : tx.order_status === "COMPLETED" || tx.order_status === "DELIVERED"
+                                  ? "bg-[#E8F5E9] text-[#1E3932] border border-[#C8E6C9]"
+                                  : "bg-[#FAF9F7] text-[#5C6F68] border border-[#E5E2DA]"
+                            }`}
+                          >
+                            {tx.order_status}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-xs text-[#1E3932] block">
+                            {tx.customer.name}
+                          </span>
+                          <span className="text-[11px] text-[#5C6F68] block">
+                            {summaryText} (Total: {totalQty} item)
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-[#E5E2DA]/60 text-xs">
+                          <span className="text-[11px] text-[#5C6F68]">
+                            {new Date(tx.order_date).toLocaleTimeString("id-ID", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <span className="font-bold text-sm text-[#1E3932]">
+                            Rp {tx.cost.total_amount.toLocaleString("id-ID")}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Right Column (4 Cols): Inventory Attention Preview & Cold Chain Card */}
+        {/* Right Column (4 Cols): Inventory Policy & Cold Chain Card */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Inventory Attention Preview Card */}
+          {/* Inventory Policy Card */}
           <div className="bg-white p-4 sm:p-5 rounded-xl border border-[#E5E2DA] shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-4">
             <div className="flex items-center justify-between border-b border-[#E5E2DA] pb-3">
               <div className="flex items-center gap-2">
                 <Boxes size={16} className="text-[#00754A]" />
                 <h3 className="font-bold text-xs uppercase tracking-wider text-[#1E3932]">
-                  Inventory Attention
+                  Inventory Management
                 </h3>
               </div>
               <Link
@@ -480,32 +553,16 @@ export function DashboardOverview() {
               </Link>
             </div>
 
-            <div className="space-y-3">
-              {INVENTORY_ATTENTION_PREVIEW.map((item, idx) => (
-                <div key={idx} className="p-3 rounded-lg border border-[#E5E2DA] bg-[#FAF9F7] space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-[#1E3932] truncate">
-                      {item.product}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        item.fefoStatus === "Critical"
-                          ? "bg-[#FFEBEE] text-[#C62828] border border-[#FFCDD2]"
-                          : "bg-amber-50 text-amber-900 border border-amber-200"
-                      }`}
-                    >
-                      {item.fefoStatus}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-[#5C6F68]">
-                    <span>{item.variant} • {item.lot}</span>
-                    <span className="font-bold text-[#1E3932]">{item.stock} botol</span>
-                  </div>
-                  <p className="text-[10px] text-[#5C6F68]">
-                    Kedaluwarsa: {item.expiry} ({item.daysRemaining} hari lagi)
-                  </p>
-                </div>
-              ))}
+            <div className="p-3.5 rounded-xl bg-[#FAF9F7] border border-[#E5E2DA] space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#00754A]" />
+                <span className="text-xs font-bold text-[#1E3932]">
+                  Rotasi FEFO Authoritative
+                </span>
+              </div>
+              <p className="text-xs text-[#5C6F68] leading-relaxed">
+                Manajemen inventaris mematuhi aturan First Expired, First Out. Lot dialokasikan dari database PostgreSQL tanpa estimasi tiruan.
+              </p>
             </div>
           </div>
 

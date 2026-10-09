@@ -1,28 +1,26 @@
 import { NextResponse } from "next/server.js";
 import type { NextRequest } from "next/server.js";
 import { getAdminSessionFromRequest } from "./lib/auth/admin-session.ts";
+import { resolveDeploymentRole } from "./lib/env-validator.ts";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Authoritative server-side deployment role prioritized over public client mode
-  const deploymentRole =
-    process.env.APP_DEPLOYMENT_ROLE || process.env.NEXT_PUBLIC_APP_MODE;
+  // Authoritative server-side deployment role resolution (Phase 1.7C.22A)
+  const resolved = resolveDeploymentRole(process.env);
 
-  // In production, missing or invalid deployment role must fail closed safely
-  if (
-    process.env.NODE_ENV === "production" &&
-    deploymentRole !== "storefront" &&
-    deploymentRole !== "admin"
-  ) {
+  // In production or when invalid/contradicting, fail closed safely (503)
+  if (!resolved.isValid || !resolved.role) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
-        { error: "Server deployment role unconfigured", code: "CONFIGURATION_ERROR" },
+        { error: resolved.error || "Server deployment role unconfigured", code: "CONFIGURATION_ERROR" },
         { status: 503 }
       );
     }
-    return new NextResponse("Server deployment role unconfigured", { status: 503 });
+    return new NextResponse(resolved.error || "Server deployment role unconfigured", { status: 503 });
   }
+
+  const deploymentRole = resolved.role;
 
   // =========================================================================
   // 1. STOREFRONT MODE ISOLATION

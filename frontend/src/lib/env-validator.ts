@@ -26,18 +26,111 @@ export interface ValidateEnvOptions {
   strict?: boolean;
 }
 
+export interface ResolvedDeploymentRole {
+  role: DeploymentAppRole | "both" | null;
+  isValid: boolean;
+  error?: string;
+}
+
+/**
+ * Normalizes and resolves deployment role authority.
+ *
+ * Requirements (Phase 1.7C.22A):
+ * 1. APP_DEPLOYMENT_ROLE is mandatory for production deployment.
+ * 2. NEXT_PUBLIC_APP_MODE cannot serve as production security authority.
+ * 3. Contradictory role variables fail closed immediately.
+ * 4. Invalid or missing role in production fails closed.
+ * 5. Safe non-production development configuration is preserved.
+ */
+export function resolveDeploymentRole(
+  env: Record<string, string | undefined> = process.env
+): ResolvedDeploymentRole {
+  const isProduction =
+    env.NODE_ENV === "production" || process.env.NODE_ENV === "production";
+  const sanitize = (val?: string) => {
+    if (!val) return undefined;
+    const trimmed = val.trim();
+    return trimmed === "" || trimmed === "undefined" ? undefined : trimmed;
+  };
+
+  const appDeploymentRole = sanitize(env.APP_DEPLOYMENT_ROLE);
+  const nextPublicMode = sanitize(env.NEXT_PUBLIC_APP_MODE);
+
+  const isConcreteRole = (r?: string): r is DeploymentAppRole =>
+    r === "storefront" || r === "admin";
+
+  // Contradiction detection: if both define concrete opposing roles, fail closed immediately
+  if (
+    isConcreteRole(appDeploymentRole) &&
+    isConcreteRole(nextPublicMode) &&
+    appDeploymentRole !== nextPublicMode
+  ) {
+    return {
+      role: null,
+      isValid: false,
+      error: "SECURITY CRITICAL: APP_DEPLOYMENT_ROLE and NEXT_PUBLIC_APP_MODE contradict each other.",
+    };
+  }
+
+  if (isProduction) {
+    if (!appDeploymentRole) {
+      return {
+        role: null,
+        isValid: false,
+        error: "SECURITY CRITICAL: APP_DEPLOYMENT_ROLE is mandatory in production.",
+      };
+    }
+    if (appDeploymentRole !== "storefront" && appDeploymentRole !== "admin") {
+      return {
+        role: null,
+        isValid: false,
+        error: `SECURITY CRITICAL: Invalid APP_DEPLOYMENT_ROLE '${appDeploymentRole}' in production.`,
+      };
+    }
+    return {
+      role: appDeploymentRole,
+      isValid: true,
+    };
+  }
+
+  // Development / test environment fallback
+  if (isConcreteRole(appDeploymentRole)) {
+    return {
+      role: appDeploymentRole,
+      isValid: true,
+    };
+  }
+
+  if (isConcreteRole(nextPublicMode)) {
+    return {
+      role: nextPublicMode,
+      isValid: true,
+    };
+  }
+
+  if (nextPublicMode === "both" || (!appDeploymentRole && !nextPublicMode)) {
+    return {
+      role: "both",
+      isValid: true,
+    };
+  }
+
+  return {
+    role: null,
+    isValid: false,
+    error: "Development deployment role unconfigured or invalid.",
+  };
+}
+
 /**
  * Returns authoritative server-side deployment role, prioritizing APP_DEPLOYMENT_ROLE
  * over client-facing NEXT_PUBLIC_APP_MODE.
  */
 export function getDeploymentRole(
   env: Record<string, string | undefined> = process.env
-): DeploymentAppRole | "unknown" {
-  const role = env.APP_DEPLOYMENT_ROLE || env.NEXT_PUBLIC_APP_MODE;
-  if (role === "storefront" || role === "admin") {
-    return role;
-  }
-  return "unknown";
+): DeploymentAppRole | "both" | "unknown" {
+  const resolved = resolveDeploymentRole(env);
+  return resolved.isValid && resolved.role ? resolved.role : "unknown";
 }
 
 const REQUIRED_STOREFRONT_VARS = [
@@ -67,24 +160,11 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
   const strict = options?.strict ?? isProduction;
 
   // Determine application mode / role
-  const rawMode =
-    options?.role ??
-    options?.mode ??
-    env.APP_DEPLOYMENT_ROLE ??
-    env.NEXT_PUBLIC_APP_MODE;
-  const mode: DeploymentAppMode | "unknown" =
-    rawMode === "storefront" || rawMode === "admin" ? rawMode : "unknown";
-
-  const missingVariables: string[] = [];
+  const resolved = resolveDeploymentRole(env);
 
   // If both are defined but contradict each other, fail closed
-  if (
-    env.APP_DEPLOYMENT_ROLE &&
-    env.NEXT_PUBLIC_APP_MODE &&
-    env.APP_DEPLOYMENT_ROLE !== env.NEXT_PUBLIC_APP_MODE
-  ) {
-    const conflictMsg =
-      "SECURITY CRITICAL: APP_DEPLOYMENT_ROLE and NEXT_PUBLIC_APP_MODE contradict each other.";
+  if (!resolved.isValid && resolved.error?.includes("contradict")) {
+    const conflictMsg = resolved.error;
     if (strict) {
       throw new Error(conflictMsg);
     }
@@ -96,6 +176,17 @@ export function validateDeploymentEnv(options?: ValidateEnvOptions): EnvValidati
       error: conflictMsg,
     };
   }
+
+  const rawMode =
+    options?.role ??
+    options?.mode ??
+    resolved.role ??
+    env.APP_DEPLOYMENT_ROLE ??
+    env.NEXT_PUBLIC_APP_MODE;
+  const mode: DeploymentAppMode | "unknown" =
+    rawMode === "storefront" || rawMode === "admin" ? rawMode : "unknown";
+
+  const missingVariables: string[] = [];
 
   if (mode === "unknown") {
     missingVariables.push("NEXT_PUBLIC_APP_MODE");

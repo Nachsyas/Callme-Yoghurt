@@ -11,6 +11,7 @@ export type OrderLifecycleStatus =
   | 'PROCESSING'
   | 'READY_TO_SHIP'
   | 'DELIVERED'
+  | 'COMPLETED'
   | 'CANCELLED';
 
 export const ORDER_LIFECYCLE_STATUSES: readonly OrderLifecycleStatus[] = [
@@ -19,6 +20,7 @@ export const ORDER_LIFECYCLE_STATUSES: readonly OrderLifecycleStatus[] = [
   'PROCESSING',
   'READY_TO_SHIP',
   'DELIVERED',
+  'COMPLETED',
   'CANCELLED',
 ] as const;
 
@@ -117,7 +119,9 @@ export type InventoryReservationStatus =
   | 'AVAILABLE'
   | 'RESERVED'
   | 'FULFILLED'
-  | 'RELEASED';
+  | 'RELEASED'
+  | 'PENDING'
+  | 'UNAVAILABLE';
 
 /**
  * Fulfillment Audit Log Event Types (Phase 1.7C.17 Task 6).
@@ -147,7 +151,7 @@ export interface InventoryReservationItem {
 export interface OrderInventoryDetail {
   reservation_id: string;
   status: InventoryReservationStatus;
-  summary_status: 'READY' | 'RESERVED' | 'FULFILLED' | 'RELEASED' | 'PENDING';
+  summary_status: 'READY' | 'RESERVED' | 'FULFILLED' | 'RELEASED' | 'PENDING' | 'UNAVAILABLE';
   items: InventoryReservationItem[];
   reserved_at?: string;
   fulfilled_at?: string;
@@ -199,4 +203,8 @@ export interface OrderDashboardMetrics {
   completed_orders: number;
   cancelled_orders: number;
   total_revenue: number;
+  gross_order_value?: number;
+  pending_payments_value?: number;
+  settled_revenue?: number;
+  recognized_revenue?: number;
 }
