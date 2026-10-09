@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type {
   AdminOrderRecord,
+  AdminOrderPagination,
   OrderDashboardMetrics,
   OrderLifecycleStatus,
 } from "@/lib/order/types";
@@ -50,6 +51,9 @@ const STATUS_FILTERS: { key: FilterStatus; label: string }[] = [
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
   const [metrics, setMetrics] = useState<OrderDashboardMetrics | null>(null);
+  const [pagination, setPagination] = useState<AdminOrderPagination | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [perPage] = useState<number>(20);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderRecord | null>(null);
@@ -59,9 +63,10 @@ export default function AdminOrdersPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [, startTransition] = useTransition();
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (targetPage?: number) => {
     setIsLoading(true);
     setErrorMessage(null);
+    const pageToUse = targetPage !== undefined ? targetPage : currentPage;
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "ALL") {
@@ -70,6 +75,8 @@ export default function AdminOrdersPage() {
       if (searchQuery.trim()) {
         params.set("search", searchQuery.trim());
       }
+      params.set("page", String(pageToUse));
+      params.set("per_page", String(perPage));
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`, {
         cache: "no-store",
@@ -86,6 +93,9 @@ export default function AdminOrdersPage() {
       const data = await res.json();
       setOrders(data.orders || []);
       setMetrics(data.metrics || null);
+      if (data.pagination) {
+        setPagination(data.pagination);
+      }
 
       // If drawer is currently open, refresh the selected order object as well
       if (selectedOrder) {
@@ -104,12 +114,19 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
-    fetchOrders();
+    setCurrentPage(1);
+    fetchOrders(1);
   }, [statusFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchOrders();
+    setCurrentPage(1);
+    fetchOrders(1);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    fetchOrders(newPage);
   };
 
   const handleStatusTransition = async (targetStatus: OrderLifecycleStatus) => {
@@ -206,7 +223,7 @@ export default function AdminOrdersPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
-            onClick={fetchOrders}
+            onClick={() => fetchOrders()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FAF9F7] text-[#1E3932] border border-[#D5D1C7] text-xs font-semibold hover:bg-[#F2F0EB] cursor-pointer transition-colors"
           >
             <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
@@ -535,6 +552,38 @@ export default function AdminOrdersPage() {
             ))
           )}
         </div>
+
+        {/* Bounded Server-Side Pagination Bar (Phase 1.7C.22A.1) */}
+        {pagination && pagination.total > 0 && (
+          <div className="p-4 border-t border-[#E5E2DA] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#5C6F68] bg-[#FAF9F7]">
+            <div>
+              Menampilkan halaman <span className="font-bold text-[#1E3932]">{pagination.current_page}</span> dari{" "}
+              <span className="font-bold text-[#1E3932]">{pagination.last_page}</span> (Total{" "}
+              <span className="font-bold text-[#1E3932]">{pagination.total}</span> pesanan)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={pagination.current_page <= 1 || isLoading}
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                className="px-3 py-1.5 rounded-lg border border-[#E5E2DA] bg-white text-[#1E3932] font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-colors"
+              >
+                &larr; Sebelumnya
+              </button>
+              <span className="px-2 font-mono font-bold text-[#1E3932]">
+                {pagination.current_page} / {pagination.last_page}
+              </span>
+              <button
+                type="button"
+                disabled={pagination.current_page >= pagination.last_page || isLoading}
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                className="px-3 py-1.5 rounded-lg border border-[#E5E2DA] bg-white text-[#1E3932] font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-colors"
+              >
+                Selanjutnya &rarr;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* TASK 2: ORDER DETAIL VIEW (Interactive Side Drawer) */}
@@ -785,9 +834,9 @@ export default function AdminOrdersPage() {
                             product_name: i.product_name,
                             variant: i.variant,
                             quantity: i.quantity,
-                            available_stock: 20,
+                            available_stock: undefined,
                             reserved_quantity: 0,
-                            status: "AVAILABLE" as const,
+                            status: "PENDING" as const,
                           }))
                       ).map((item, idx) => (
                         <div
@@ -810,7 +859,9 @@ export default function AdminOrdersPage() {
                             </div>
                             <div className="flex items-center justify-end gap-1.5 mt-0.5">
                               <span className="text-[10px] text-[#5C6F68]">
-                                Tersedia: {item.available_stock}
+                                {typeof item.available_stock === "number"
+                                  ? `Tersedia: ${item.available_stock}`
+                                  : "Data stok belum tersedia"}
                               </span>
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold ${
@@ -820,7 +871,11 @@ export default function AdminOrdersPage() {
                                       ? "bg-blue-100 text-blue-800"
                                       : item.status === "RELEASED"
                                         ? "bg-gray-100 text-gray-700"
-                                        : "bg-amber-100 text-amber-800"
+                                        : item.status === "UNAVAILABLE"
+                                          ? "bg-red-100 text-red-800"
+                                          : item.status === "PARTIAL"
+                                            ? "bg-purple-100 text-purple-800"
+                                            : "bg-amber-100 text-amber-800"
                                 }`}
                               >
                                 {item.status === "RESERVED" ? "READY" : item.status}

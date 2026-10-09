@@ -121,7 +121,8 @@ export type InventoryReservationStatus =
   | 'FULFILLED'
   | 'RELEASED'
   | 'PENDING'
-  | 'UNAVAILABLE';
+  | 'UNAVAILABLE'
+  | 'PARTIAL';
 
 /**
  * Fulfillment Audit Log Event Types (Phase 1.7C.17 Task 6).
@@ -135,12 +136,13 @@ export type FulfillmentEventType =
 
 /**
  * Per-item inventory reservation details (Phase 1.7C.17 Task 1 & 5).
+ * Phase 1.7C.22A.1: available_stock is optional; never fabricated if unavailable from authoritative ledger.
  */
 export interface InventoryReservationItem {
   product_name: string;
   variant: string;
   quantity: number;
-  available_stock: number;
+  available_stock?: number;
   reserved_quantity: number;
   status: InventoryReservationStatus;
 }
@@ -151,7 +153,7 @@ export interface InventoryReservationItem {
 export interface OrderInventoryDetail {
   reservation_id: string;
   status: InventoryReservationStatus;
-  summary_status: 'READY' | 'RESERVED' | 'FULFILLED' | 'RELEASED' | 'PENDING' | 'UNAVAILABLE';
+  summary_status: 'READY' | 'RESERVED' | 'FULFILLED' | 'RELEASED' | 'PENDING' | 'UNAVAILABLE' | 'PARTIAL';
   items: InventoryReservationItem[];
   reserved_at?: string;
   fulfilled_at?: string;
@@ -205,6 +207,19 @@ export interface OrderDashboardMetrics {
   total_revenue: number;
   gross_order_value?: number;
   pending_payments_value?: number;
+  unverified_payment_value?: number;
+  verified_payment_value?: number;
   settled_revenue?: number;
   recognized_revenue?: number;
 }
+
+/**
+ * Bounded server-side pagination metadata (Phase 1.7C.22A.1).
+ */
+export interface AdminOrderPagination {
+  current_page: number;
+  per_page: number;
+  total: number;
+  last_page: number;
+}
+

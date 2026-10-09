@@ -320,7 +320,10 @@ class AdminOrderManagementTest extends TestCase
 
         // Gross Order Value is 52000 + 47000 = 99000
         $this->assertSame(99000, $metrics['gross_order_value']);
-        $this->assertSame(52000, $metrics['pending_payments_value']);
+        // Phase 1.7C.22A.1 Section 8: Unverified payments include both CONFIRMED and DONE orders
+        $this->assertSame(99000, $metrics['pending_payments_value']);
+        $this->assertSame(99000, $metrics['unverified_payment_value']);
+        $this->assertSame(0, $metrics['verified_payment_value']);
 
         // Settled and recognized revenues must be strictly 0 without verification ledgers
         $this->assertSame(0, $metrics['settled_revenue']);
@@ -376,7 +379,156 @@ class AdminOrderManagementTest extends TestCase
         // Status is derived from the real reservation record
         $this->assertSame((string) $reservation->id, $data['inventory']['reservation_id']);
         $this->assertSame('RESERVED', $data['inventory']['status']);
-        $this->assertSame('RESERVED', $data['inventory']['summary_status']);
+        $this->assertSame('READY', $data['inventory']['summary_status']);
+    }
+
+    public function test_multi_line_order_reservation_aggregation(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-MULTI-AGG',
+            'name' => 'Multi Agg Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-MULTI-001',
+            'shipping_name' => 'Multi Item Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jl. Tebet No. 10',
+            'delivery_method' => DeliveryMethod::SAMEDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 60000,
+            'shipping_fee' => 15000,
+            'service_fee' => 2000,
+            'total_amount' => 77000,
+        ]);
+
+        $line1 = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '1.000000',
+            'unit_price' => 30000,
+            'subtotal' => 30000,
+        ]);
+
+        $line2 = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '1.000000',
+            'unit_price' => 30000,
+            'subtotal' => 30000,
+        ]);
+
+        // Reserve only line 1; line 2 has no reservation record
+        $res1 = \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line1->id,
+            'quantity' => '1.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $response->assertStatus(200);
+        $data = $response->json('order');
+
+        // Aggregation must be PARTIAL because line 1 is RESERVED and line 2 is PENDING
+        $this->assertSame('PARTIAL', $data['inventory']['status']);
+        $this->assertSame('PARTIAL', $data['inventory']['summary_status']);
+        $this->assertCount(2, $data['inventory']['items']);
+        $this->assertSame('RESERVED', $data['inventory']['items'][0]['status']);
+        $this->assertSame(1, $data['inventory']['items'][0]['reserved_quantity']);
+        $this->assertNull($data['inventory']['items'][0]['available_stock']);
+        $this->assertSame('PENDING', $data['inventory']['items'][1]['status']);
+        $this->assertSame(0, $data['inventory']['items'][1]['reserved_quantity']);
+        $this->assertNull($data['inventory']['items'][1]['available_stock']);
+    }
+
+    public function test_admin_orders_bounded_server_side_pagination(): void
+    {
+        for ($i = 1; $i <= 25; $i++) {
+            Order::create([
+                'order_number' => sprintf('CY-PAG-%03d', $i),
+                'shipping_name' => "Customer {$i}",
+                'shipping_phone' => '0812345678',
+                'shipping_address' => 'Jakarta',
+                'delivery_method' => DeliveryMethod::NEXTDAY,
+                'status' => OrderStatus::CONFIRMED,
+                'subtotal_amount' => 10000,
+                'shipping_fee' => 5000,
+                'service_fee' => 1000,
+                'total_amount' => 16000,
+            ]);
+        }
+
+        // Default page 1, 20 items per page
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders');
+
+        $res->assertStatus(200);
+        $res->assertJsonStructure([
+            'success',
+            'orders',
+            'metrics',
+            'pagination' => ['current_page', 'per_page', 'total', 'last_page'],
+        ]);
+
+        $this->assertCount(20, $res->json('orders'));
+        $this->assertSame(1, $res->json('pagination.current_page'));
+        $this->assertSame(20, $res->json('pagination.per_page'));
+        $this->assertSame(25, $res->json('pagination.total'));
+        $this->assertSame(2, $res->json('pagination.last_page'));
+
+        // Page 2 should contain remaining 5
+        $resPage2 = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders?page=2&per_page=20');
+        $this->assertCount(5, $resPage2->json('orders'));
+        $this->assertSame(2, $resPage2->json('pagination.current_page'));
+
+        // Max per_page cap at 100 (clamped)
+        $resMax = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders?per_page=500');
+        $this->assertSame(100, $resMax->json('pagination.per_page'));
+    }
+
+    public function test_admin_orders_deterministic_ordering(): void
+    {
+        $o1 = Order::create([
+            'order_number' => 'CY-ORD-DET-1',
+            'shipping_name' => 'Det 1',
+            'shipping_phone' => '0811',
+            'shipping_address' => 'A',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 10000,
+            'shipping_fee' => 5000,
+            'service_fee' => 1000,
+            'total_amount' => 16000,
+        ]);
+
+        $o2 = Order::create([
+            'order_number' => 'CY-ORD-DET-2',
+            'shipping_name' => 'Det 2',
+            'shipping_phone' => '0822',
+            'shipping_address' => 'B',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 10000,
+            'shipping_fee' => 5000,
+            'service_fee' => 1000,
+            'total_amount' => 16000,
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders');
+
+        $orders = $res->json('orders');
+        // Latest created order must be first
+        $this->assertSame('CY-ORD-DET-2', $orders[0]['order_number']);
+        $this->assertSame('CY-ORD-DET-1', $orders[1]['order_number']);
     }
 
     public function test_empty_database_returns_genuine_zero_metrics(): void

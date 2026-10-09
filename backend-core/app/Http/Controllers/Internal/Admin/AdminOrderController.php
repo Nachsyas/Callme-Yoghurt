@@ -22,16 +22,21 @@ class AdminOrderController extends Controller
     {
         $status = $request->query('status');
         $search = $request->query('search');
+        $page = (int) $request->query('page', 1);
+        $perPage = (int) $request->query('per_page', 20);
 
         $result = $this->orderService->listOrders(
             $status !== null ? (string) $status : null,
-            $search !== null ? (string) $search : null
+            $search !== null ? (string) $search : null,
+            $page,
+            $perPage
         );
 
         return response()->json([
             'success' => true,
             'orders' => $result['orders'],
             'metrics' => $result['metrics'],
+            'pagination' => $result['pagination'],
         ], 200, [
             'Cache-Control' => 'no-store',
         ]);

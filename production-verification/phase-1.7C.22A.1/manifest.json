@@ -1,0 +1,90 @@
+{
+  "phase": "Phase 1.7C.22A.1",
+  "title": "Database Safety, Admin Data Integrity & Test Isolation Hotfix Manifest",
+  "generated_at": "2026-10-09T21:45:03.122Z",
+  "git_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+  "total_screenshots": 8,
+  "all_unique_checksums": true,
+  "artifacts": [
+    {
+      "file": "01-storefront-production-unchanged.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app",
+      "test_type": "PRODUCTION READ-ONLY",
+      "sha256": "616ceb3ac1f0978746176686801c0fbd11046542a0495ae77b23514b9314e473",
+      "size_bytes": 626601,
+      "actual_state_verified": "Storefront Homepage on Vercel production deployment remains browseable and unchanged",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "02-storefront-pdp-production-unchanged.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app/product/plain",
+      "test_type": "PRODUCTION READ-ONLY",
+      "sha256": "27494bbb52a2049b10bbfe3f9dbaa903709d8beb79aa2be149baaae4141694d7",
+      "size_bytes": 160272,
+      "actual_state_verified": "Storefront PDP in ERP-offline state with public transactions safely disabled",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "03-admin-production-erp-offline.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "https://callme-yoghurt-admin.vercel.app/admin/login",
+      "test_type": "PRODUCTION READ-ONLY",
+      "sha256": "1cb949d8d50a13588da4cc968bbec2f913dbdc724cdc1453a395c05b9e076348",
+      "size_bytes": 35318,
+      "actual_state_verified": "Admin Production Login fails closed truthfully with ERP unreachable error without tunneling",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "04-admin-genuine-zero-data-state.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "http://127.0.0.1:3002/admin",
+      "test_type": "MOCKED",
+      "sha256": "80591ae8fdf3d59ff93894d3c72d97e5f277c99c4610b2987c4dd488cc0c91b9",
+      "size_bytes": 210080,
+      "actual_state_verified": "Admin Dashboard zero-data state (0 pesanan, GOV Rp 0) captured safely via client-side mock without destructive database deletion",
+      "known_limitations": "Playwright client-side mock used to ensure zero production database mutations per Phase 1.7C.22A.1 safety mandate"
+    },
+    {
+      "file": "05-admin-paginated-order-list.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "http://127.0.0.1:3002/admin/orders",
+      "test_type": "LOCAL ISOLATED TEST",
+      "sha256": "5c8a20e99eb26e11f617dfeaa29ab196c33e4e7c1960c5ee66f76db6822d683f",
+      "size_bytes": 376229,
+      "actual_state_verified": "Admin Orders page displaying server-side bounded pagination bar (Halaman 1 dari 2, Total 25 pesanan)",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "06-admin-unavailable-inventory-state.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "http://127.0.0.1:3002/admin/orders",
+      "test_type": "LOCAL ISOLATED TEST",
+      "sha256": "e070539e3a630547cc39c5df33c5dc37bc1110fdbb697ded0b41042ffd929d17",
+      "size_bytes": 149779,
+      "actual_state_verified": "Admin Order Detail displaying truthful \"Data stok belum tersedia\" without fabricated available_stock: 20 fallback",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "07-admin-payment-unverified-state.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "http://127.0.0.1:3002/admin/orders",
+      "test_type": "LOCAL ISOLATED TEST",
+      "sha256": "ce3bb8a9ccb9c6bf799c3aad323aeca3410cd227daa77fd0b8ade0c2a23bb433",
+      "size_bytes": 147095,
+      "actual_state_verified": "Admin Order Detail showing truthful PENDING_PAYMENT / waiting_verification for COMPLETED order without verified settlement ledger",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "08-admin-real-test-reservation-state.png",
+      "source_commit": "1a25062f656c7357a2bbbea1a992c8aba7946b0f",
+      "target_url": "http://127.0.0.1:3002/admin/orders",
+      "test_type": "LOCAL ISOLATED TEST",
+      "sha256": "aba897344637bf22ec6600aa0d6f6cf07675047b06e6e6386d6e966cc457a131",
+      "size_bytes": 148552,
+      "actual_state_verified": "Admin Order Detail showing authoritative StockReservation evidence (Status: RESERVED, Summary: READY)",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    }
+  ]
+}

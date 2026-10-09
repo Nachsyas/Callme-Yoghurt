@@ -808,7 +808,7 @@ class AdminOrderStore {
         product_name: i.product_name,
         variant: i.variant,
         quantity: i.quantity,
-        available_stock: stock ? stock.available : 20,
+        available_stock: stock ? stock.available : undefined,
         reserved_quantity: 0,
         status: 'AVAILABLE' as InventoryReservationStatus,
       };

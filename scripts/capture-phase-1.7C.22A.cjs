@@ -316,22 +316,53 @@ async function run() {
     screenshots.push({ file: file10, path: path10, url: `${LOCAL_BASE_URL}/admin/orders`, type: 'LOCAL TEST', desc: 'Admin Order List & Detail showing truthful PENDING_PAYMENT and PENDING reservation' });
 
     // =========================================================================
-    // 11. Local Admin Genuine Empty Dataset
+    // 11. Local Admin Genuine Empty Dataset (Safe Mocked Zero-Data State)
     // =========================================================================
     console.log('Capturing 11-local-admin-empty-dataset.png...');
-    // Delete orders in test DB
-    execSync(
-      'docker compose -f docker-compose.production.yml --env-file .env.production exec app php -r "require \'vendor/autoload.php\'; (require \'bootstrap/app.php\')->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); App\\Domain\\Sales\\Models\\Order::query()->delete();"',
-      { cwd: path.resolve(__dirname, '..') }
-    );
+    // Intercept /api/admin/orders to simulate empty database state without mutating persistent data
+    await page.route('**/api/admin/orders*', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          orders: [],
+          metrics: {
+            today_orders: 0,
+            waiting_payment: 0,
+            processing: 0,
+            ready_to_ship: 0,
+            completed_orders: 0,
+            cancelled_orders: 0,
+            gross_order_value: 0,
+            pending_payments_value: 0,
+            unverified_payment_value: 0,
+            verified_payment_value: 0,
+            settled_revenue: 0,
+            recognized_revenue: 0,
+            total_revenue: 0,
+          },
+          pagination: {
+            current_page: 1,
+            per_page: 20,
+            total: 0,
+            last_page: 1,
+          },
+        }),
+      });
+    });
+
     await page.goto(`${LOCAL_BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
-    await injectLocalBadge(page, 'LOCAL TEST — GENUINE ZERO-DATA EMPTY DATASET (0 ORDERS, GOV: RP 0)');
+    await injectLocalBadge(page, 'MOCKED — ZERO-DATA EMPTY DATASET (0 ORDERS, GOV: RP 0)');
     const file11 = '11-local-admin-empty-dataset.png';
     const path11 = path.join(OUTPUT_DIR, file11);
     await page.screenshot({ path: path11, fullPage: true });
     await copyToArtifacts(file11);
-    screenshots.push({ file: file11, path: path11, url: `${LOCAL_BASE_URL}/admin`, type: 'LOCAL TEST', desc: 'Admin Dashboard with authentic zero orders: 0 Pesanan, GOV Rp 0, empty state displayed' });
+    screenshots.push({ file: file11, path: path11, url: `${LOCAL_BASE_URL}/admin`, type: 'MOCKED', desc: 'Admin Dashboard with mocked zero orders: 0 Pesanan, GOV Rp 0, empty state displayed safely without mutating persistent database' });
+
+    // Unroute to restore normal request flow
+    await page.unroute('**/api/admin/orders*');
 
     // =========================================================================
     // 12. Local Admin Inventory Verified State
@@ -347,16 +378,6 @@ async function run() {
     screenshots.push({ file: file12, path: path12, url: `${LOCAL_BASE_URL}/admin/inventory`, type: 'LOCAL TEST', desc: 'Admin Inventory management page displaying authoritative warehouse and stock records' });
 
     await browser.close();
-
-    // Re-seed the 2 test orders for persistent local testing baseline
-    try {
-      execSync(
-        `docker compose -f docker-compose.production.yml --env-file .env.production exec app php -r "require 'vendor/autoload.php'; \\$app = require 'bootstrap/app.php'; \\$kernel = \\$app->make(Illuminate\\Contracts\\Console\\Kernel::class); \\$kernel->bootstrap(); \\$v = App\\Domain\\Catalog\\Models\\ProductVariant::first(); \\$o = new App\\Domain\\Sales\\Models\\Order(); \\$o->order_number = 'CY-' . date('Ymd') . '-TEST001'; \\$o->shipping_name = 'Budi Santoso'; \\$o->shipping_phone = '081234567890'; \\$o->shipping_address = 'Jl. Sudirman No 1'; \\$o->delivery_method = App\\Domain\\Sales\\Enums\\DeliveryMethod::SAMEDAY; \\$o->status = App\\Domain\\Sales\\Enums\\OrderStatus::CONFIRMED; \\$o->subtotal_amount = 100000; \\$o->shipping_fee = 20000; \\$o->service_fee = 5000; \\$o->total_amount = 125000; \\$o->save();"`,
-        { cwd: path.resolve(__dirname, '..'), stdio: 'ignore' }
-      );
-    } catch (e) {
-      console.warn('Note on re-seed:', e.message);
-    }
 
     // Compute SHA-256 for all captured screenshots
     const gitCommit = execSync('git rev-parse HEAD', { cwd: path.resolve(__dirname, '..'), encoding: 'utf-8' }).trim();
