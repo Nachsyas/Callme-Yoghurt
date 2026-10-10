@@ -320,14 +320,15 @@ class AdminOrderManagementTest extends TestCase
 
         // Gross Order Value is 52000 + 47000 = 99000
         $this->assertSame(99000, $metrics['gross_order_value']);
-        // Phase 1.7C.22A.1 Section 8: Unverified payments include both CONFIRMED and DONE orders
+        // Phase 1.7C.22A.2 Section 8: Unverified payments include both CONFIRMED and DONE orders
         $this->assertSame(99000, $metrics['pending_payments_value']);
         $this->assertSame(99000, $metrics['unverified_payment_value']);
-        $this->assertSame(0, $metrics['verified_payment_value']);
+        $this->assertNull($metrics['verified_payment_value']);
 
-        // Settled and recognized revenues must be strictly 0 without verification ledgers
-        $this->assertSame(0, $metrics['settled_revenue']);
-        $this->assertSame(0, $metrics['recognized_revenue']);
+        // Settled and recognized revenues must be strictly null / NOT_TRACKED without verification ledgers
+        $this->assertNull($metrics['settled_revenue']);
+        $this->assertNull($metrics['recognized_revenue']);
+        $this->assertSame('NOT_TRACKED', $metrics['settlement_status']);
         $this->assertSame(99000, $metrics['total_revenue']);
     }
 
@@ -547,8 +548,287 @@ class AdminOrderManagementTest extends TestCase
         $this->assertSame(0, $metrics['cancelled_orders']);
         $this->assertSame(0, $metrics['gross_order_value']);
         $this->assertSame(0, $metrics['pending_payments_value']);
-        $this->assertSame(0, $metrics['settled_revenue']);
-        $this->assertSame(0, $metrics['recognized_revenue']);
+        $this->assertNull($metrics['settled_revenue']);
+        $this->assertNull($metrics['recognized_revenue']);
+        $this->assertNull($metrics['verified_payment_value']);
+        $this->assertSame('NOT_TRACKED', $metrics['settlement_status']);
         $this->assertSame(0, $metrics['total_revenue']);
+    }
+
+    public function test_multiple_reservations_per_line_sum_correctly(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-MULTI-RES',
+            'name' => 'Multi Res Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-MULTI-RES-001',
+            'shipping_name' => 'Multi Res Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jakarta',
+            'delivery_method' => DeliveryMethod::SAMEDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 90000,
+            'shipping_fee' => 15000,
+            'service_fee' => 2000,
+            'total_amount' => 107000,
+        ]);
+
+        $line = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '3.000000',
+            'unit_price' => 30000,
+            'subtotal' => 90000,
+        ]);
+
+        // Reservation 1: quantity 1
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '1.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        // Reservation 2: quantity 2
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '2.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $res->assertStatus(200);
+        $data = $res->json('order');
+
+        // Total reserved is 1 + 2 = 3 >= 3 -> fully RESERVED
+        $this->assertSame('RESERVED', $data['inventory']['status']);
+        $this->assertSame('READY', $data['inventory']['summary_status']);
+        $this->assertSame(3, $data['inventory']['items'][0]['reserved_quantity']);
+        $this->assertSame('RESERVED', $data['inventory']['items'][0]['status']);
+    }
+
+    public function test_partial_reservation_when_quantity_less_than_ordered(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-PART-RES',
+            'name' => 'Part Res Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-PART-RES-001',
+            'shipping_name' => 'Part Res Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jakarta',
+            'delivery_method' => DeliveryMethod::SAMEDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 150000,
+            'shipping_fee' => 15000,
+            'service_fee' => 2000,
+            'total_amount' => 167000,
+        ]);
+
+        $line = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '5.000000',
+            'unit_price' => 30000,
+            'subtotal' => 150000,
+        ]);
+
+        // Reserved only 2 of 5
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '2.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $res->assertStatus(200);
+        $data = $res->json('order');
+
+        $this->assertSame('PARTIAL', $data['inventory']['status']);
+        $this->assertSame('PARTIAL', $data['inventory']['summary_status']);
+        $this->assertSame(2, $data['inventory']['items'][0]['reserved_quantity']);
+        $this->assertSame('PARTIAL', $data['inventory']['items'][0]['status']);
+    }
+
+    public function test_expired_reservation_is_excluded_from_active_inventory(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-EXP-RES',
+            'name' => 'Exp Res Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-EXP-RES-001',
+            'shipping_name' => 'Exp Res Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jakarta',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 60000,
+            'shipping_fee' => 10000,
+            'service_fee' => 2000,
+            'total_amount' => 72000,
+        ]);
+
+        $line = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '2.000000',
+            'unit_price' => 30000,
+            'subtotal' => 60000,
+        ]);
+
+        // Reservation expired 1 hour ago
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '2.000000',
+            'status' => 'RESERVED',
+            'expires_at' => now()->subHour(),
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $res->assertStatus(200);
+        $data = $res->json('order');
+
+        // Expired reservation must not be treated as available/ready
+        $this->assertSame('PENDING', $data['inventory']['status']);
+        $this->assertSame('PENDING', $data['inventory']['summary_status']);
+        $this->assertSame(0, $data['inventory']['items'][0]['reserved_quantity']);
+        $this->assertSame('PENDING', $data['inventory']['items'][0]['status']);
+    }
+
+    public function test_released_reservation_is_excluded_from_active_inventory(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-REL-RES',
+            'name' => 'Rel Res Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-REL-RES-001',
+            'shipping_name' => 'Rel Res Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jakarta',
+            'delivery_method' => DeliveryMethod::NEXTDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 60000,
+            'shipping_fee' => 10000,
+            'service_fee' => 2000,
+            'total_amount' => 72000,
+        ]);
+
+        $line = OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '2.000000',
+            'unit_price' => 30000,
+            'subtotal' => 60000,
+        ]);
+
+        // Reservation released
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER_LINE',
+            'reference_id' => (string) $line->id,
+            'quantity' => '2.000000',
+            'status' => 'RELEASED',
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $res->assertStatus(200);
+        $data = $res->json('order');
+
+        // Released reservation must not count
+        $this->assertSame('PENDING', $data['inventory']['status']);
+        $this->assertSame('PENDING', $data['inventory']['summary_status']);
+        $this->assertSame(0, $data['inventory']['items'][0]['reserved_quantity']);
+        $this->assertSame('PENDING', $data['inventory']['items'][0]['status']);
+    }
+
+    public function test_order_level_reservation_does_not_falsely_mark_multi_line_order_ready(): void
+    {
+        $warehouse = \App\Domain\Inventory\Models\Warehouse::create([
+            'code' => 'WH-ORD-ISO',
+            'name' => 'Ord Iso Warehouse',
+            'active' => true,
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'CY-ORD-ISO-001',
+            'shipping_name' => 'Ord Iso Cust',
+            'shipping_phone' => '081234567890',
+            'shipping_address' => 'Jakarta',
+            'delivery_method' => DeliveryMethod::SAMEDAY,
+            'status' => OrderStatus::CONFIRMED,
+            'subtotal_amount' => 60000,
+            'shipping_fee' => 15000,
+            'service_fee' => 2000,
+            'total_amount' => 77000,
+        ]);
+
+        OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '2.000000',
+            'unit_price' => 30000,
+            'subtotal' => 60000,
+        ]);
+
+        OrderLine::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'quantity' => '2.000000',
+            'unit_price' => 30000,
+            'subtotal' => 60000,
+        ]);
+
+        // Order-level reservation created with no direct line mappings
+        \App\Domain\Inventory\Models\StockReservation::create([
+            'inventory_item_id' => $this->variant->inventory_item_id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => 'ORDER',
+            'reference_id' => (string) $order->id,
+            'quantity' => '2.000000',
+            'status' => 'RESERVED',
+        ]);
+
+        $res = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/internal/admin/orders/' . $order->id);
+
+        $res->assertStatus(200);
+        $data = $res->json('order');
+
+        // Lines have no line reservations, so lines are PENDING and order cannot be READY
+        $this->assertNotSame('READY', $data['inventory']['summary_status']);
+        $this->assertSame('PENDING', $data['inventory']['items'][0]['status']);
+        $this->assertSame('PENDING', $data['inventory']['items'][1]['status']);
     }
 }

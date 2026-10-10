@@ -377,4 +377,60 @@ describe('Phase 1.7C.20 — Production Authority & Preview Safety Invariants', (
       'cartStore must not track or assert stock authority',
     );
   });
+
+  // 18. Phase 1.7C.22A.2 Section 9 — Admin mock authority isolation gate
+  it('18. proves adminOrderStore mock is strictly isolated to test fixtures', async () => {
+    // A. src/lib/order/index.ts must NOT re-export admin-order-store
+    const orderIndexSource = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/lib/order/index.ts'),
+      'utf-8',
+    );
+    assert.doesNotMatch(
+      orderIndexSource,
+      /admin-order-store/i,
+      'src/lib/order/index.ts must NOT export admin-order-store',
+    );
+
+    // B. No production files in src/app can import admin-order-store
+    function scanDir(dir: string): string[] {
+      let results: string[] = [];
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const full = path.join(dir, file);
+        const stat = fs.statSync(full);
+        if (stat.isDirectory()) {
+          results = results.concat(scanDir(full));
+        } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+          results.push(full);
+        }
+      }
+      return results;
+    }
+
+    const appFiles = scanDir(path.resolve(process.cwd(), 'src/app'));
+    for (const appFile of appFiles) {
+      const content = fs.readFileSync(appFile, 'utf-8');
+      assert.doesNotMatch(
+        content,
+        /admin-order-store|adminOrderStore/,
+        `${path.relative(process.cwd(), appFile)} must not import or use adminOrderStore`,
+      );
+    }
+
+    // C. Explicit fixture must exist in tests/fixtures
+    const fixturePath = path.resolve(process.cwd(), 'tests/fixtures/admin-order-store.ts');
+    assert.ok(fs.existsSync(fixturePath), 'Fixture tests/fixtures/admin-order-store.ts must exist');
+
+    // D. Accessing src/lib/order/admin-order-store.ts throws SECURITY VIOLATION
+    const { adminOrderStore: proxyGuard } = await import('../../src/lib/order/admin-order-store.ts');
+    assert.throws(
+      () => {
+        // Any property access should throw
+        (proxyGuard as any).getOrderById('any-id');
+      },
+      /SECURITY VIOLATION/,
+      'src/lib/order/admin-order-store.ts must throw SECURITY VIOLATION on property access',
+    );
+  });
 });
+

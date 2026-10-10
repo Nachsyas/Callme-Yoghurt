@@ -3,4 +3,3 @@ export { ORDER_LIFECYCLE_STATUSES } from './types.ts';
 export * from './order-number.ts';
 export * from './receipt-service.ts';
 export * from './order-service.ts';
-export * from './admin-order-store.ts';

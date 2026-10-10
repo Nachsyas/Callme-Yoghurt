@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { hasPermission, requirePermission } from '../../src/lib/auth/permissions.ts';
+import { adminOrderStore } from '../fixtures/admin-order-store.ts';
 import {
-  adminOrderStore,
   isValidStatusTransition,
   getAllowedNextTransitions,
 } from '../../src/lib/order/index.ts';

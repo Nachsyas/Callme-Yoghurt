@@ -208,9 +208,10 @@ export interface OrderDashboardMetrics {
   gross_order_value?: number;
   pending_payments_value?: number;
   unverified_payment_value?: number;
-  verified_payment_value?: number;
-  settled_revenue?: number;
-  recognized_revenue?: number;
+  verified_payment_value?: number | null;
+  settled_revenue?: number | null;
+  recognized_revenue?: number | null;
+  settlement_status?: 'NOT_TRACKED' | 'SETTLED' | 'UNAVAILABLE';
 }
 
 /**

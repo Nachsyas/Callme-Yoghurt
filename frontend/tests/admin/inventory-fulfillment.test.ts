@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { adminOrderStore } from '../../src/lib/order/admin-order-store.ts';
+import { adminOrderStore } from '../fixtures/admin-order-store.ts';
 
 describe('Phase 1.7C.17 — Order Fulfillment & Inventory Integration Foundation', () => {
   beforeEach(() => {

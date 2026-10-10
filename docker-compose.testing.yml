@@ -75,7 +75,12 @@ services:
       ARGON_TIME: "1"
       ARGON_MEMORY: "1024"
       ARGON_THREADS: "1"
+    ports:
+      - "127.0.0.1:8001:8000"
     volumes:
+      - ./backend-core/app:/var/www/html/app:ro
+      - ./backend-core/config:/var/www/html/config:ro
+      - ./backend-core/routes:/var/www/html/routes:ro
       - ./backend-core/tests:/var/www/html/tests:ro
       - ./backend-core/phpunit.xml:/var/www/html/phpunit.xml:ro
     depends_on:

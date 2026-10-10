@@ -27,3 +27,7 @@ docker-compose.override.yml
 .vercel
 .env*
 *.tsbuildinfo
+
+# Backups & Dumps
+backup/
+*.sql
