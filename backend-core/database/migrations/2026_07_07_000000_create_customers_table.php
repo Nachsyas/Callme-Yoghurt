@@ -13,10 +13,12 @@ return new class extends Migration
     {
         Schema::create('customers', function (Blueprint $table) {
             $table->id();
-            // Encrypted fields are stored as text (large string)
+            // Encrypted fields are stored as text (large string ciphertext)
             $table->text('name');
             $table->text('phone');
             $table->text('address');
+            // Deterministic blind index for phone lookup/deduplication (HMAC-SHA256 hex = 64 chars)
+            $table->string('phone_bindex', 64)->nullable()->index();
             $table->timestamps();
         });
     }

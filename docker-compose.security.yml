@@ -1,13 +1,28 @@
+# Callme Yoghurt — Security Tooling Compose (OWASP ZAP)
+# NOTE: Restricts ZAP API access to localhost and enforces an API key.
+# Default ZAP key is strictly for local dev testing; never use in production.
+
 services:
   zap:
     image: zaproxy/zap-stable
     container_name: callme_yoghurt_zap
+    networks:
+      - internal_net
     ports:
-      - "8080:8080"
-    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.any=true
+      # Restrict to localhost only
+      - "127.0.0.1:${ZAP_PORT:-8080}:8080"
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8080
+      -config api.key=${ZAP_API_KEY:-callme_dev_zap_local_key_only}
+      -config api.addrs.regex=true
+      -config api.addrs.regex.add=127\.0\.0\.1
     volumes:
       - zap_data:/home/zap/.ZAP
     restart: "no"
+
+networks:
+  internal_net:
+    name: callme_internal_network
 
 volumes:
   zap_data:

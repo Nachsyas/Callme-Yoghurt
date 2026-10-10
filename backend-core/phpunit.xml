@@ -2,7 +2,8 @@
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
-         colors="true">
+         colors="true"
+>
     <testsuites>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
@@ -16,4 +17,26 @@
             <directory>app</directory>
         </include>
     </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_KEY" value="base64:JqXQ00eHl5uU/Xk1J7e1FqXQ00eHl5uU/Xk1J7e1FqU="/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_DATABASE" value="callme_yoghurt_test"/>
+        <env name="DB_USERNAME" value="callme_dev_user"/>
+        <env name="DB_PASSWORD" value="callme_dev_insecure_password"/>
+        <env name="DB_SSLMODE" value="prefer"/>
+        <env name="CRM_PII_BLIND_INDEX_KEY" value="test-crm-pii-blind-index-key-32ch"/>
+        <env name="ERP_SERVICE_TOKEN" value="test-erp-service-token-secret-64ch"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="ADMIN_SESSION_SECRET" value="test-admin-session-secret-key-32ch"/>
+        <env name="HASH_DRIVER" value="argon2id"/>
+        <env name="ARGON_TIME" value="1"/>
+        <env name="ARGON_MEMORY" value="1024"/>
+        <env name="ARGON_THREADS" value="1"/>
+    </php>
 </phpunit>

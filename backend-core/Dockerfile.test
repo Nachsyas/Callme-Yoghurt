@@ -1,0 +1,20 @@
+# ==============================================================================
+# Callme Yoghurt ERP Core — Test Runtime Dockerfile (Phase 1.7C.22A.1)
+# Derived from callme-erp-core:latest, adds Composer & require-dev (PHPUnit)
+# ==============================================================================
+
+FROM callme-erp-core:latest AS testing
+
+WORKDIR /var/www/html
+
+# Keep Composer binary for testing runtime
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+
+# Copy application code changes
+COPY . /var/www/html
+
+# Install full dependencies including require-dev (PHPUnit)
+RUN composer install --prefer-dist --optimize-autoloader
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["vendor/bin/phpunit"]

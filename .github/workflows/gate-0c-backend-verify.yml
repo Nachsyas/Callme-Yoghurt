@@ -1,0 +1,95 @@
+name: Gate 0C — ERP Core Foundation Verification
+
+on:
+  push:
+    branches:
+      - phase0/foundation-repair
+    paths:
+      - 'backend-core/**'
+      - '.github/workflows/gate-0c-backend-verify.yml'
+  workflow_dispatch:
+
+jobs:
+  backend-gate-0c:
+    name: Laravel 13 ERP Core Verification
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: callme_dev_user
+          POSTGRES_PASSWORD: callme_dev_insecure_password
+          POSTGRES_DB: callme_yoghurt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3 with extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_pgsql, pgsql, openssl
+          coverage: none
+
+      - name: Validate composer.json
+        working-directory: backend-core
+        run: composer validate --strict
+
+      - name: Install Composer dependencies
+        working-directory: backend-core
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Audit Composer dependencies
+        working-directory: backend-core
+        run: composer audit --locked --no-interaction
+
+      - name: Prepare environment
+        working-directory: backend-core
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Verify application boot, runtime evidence & route registration
+        working-directory: backend-core
+        run: |
+          echo "=== RUNTIME EVIDENCE ==="
+          php --version
+          php artisan --version
+          echo "=== APPLICATION ABOUT ==="
+          php artisan about
+          echo "=== ROUTE LIST ==="
+          php artisan route:list
+
+      - name: Verify database migrations against PostgreSQL
+        working-directory: backend-core
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: callme_yoghurt_test
+          DB_USERNAME: callme_dev_user
+          DB_PASSWORD: callme_dev_insecure_password
+        run: php artisan migrate:fresh --force
+
+      - name: Run automated test suite
+        working-directory: backend-core
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: callme_yoghurt_test
+          DB_USERNAME: callme_dev_user
+          DB_PASSWORD: callme_dev_insecure_password
+          CRM_PII_BLIND_INDEX_KEY: test-crm-pii-blind-index-key-32ch
+          ERP_SERVICE_TOKEN: test-erp-service-token-secret-64ch
+          CHECKOUT_FINGERPRINT_KEY: test-checkout-fingerprint-key-32ch
+        run: php artisan test

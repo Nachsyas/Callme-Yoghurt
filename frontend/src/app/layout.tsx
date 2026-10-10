@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Callme Yoghurt | Premium Stirred Yoghurt",
-  description: "Menghadirkan stirred yoghurt kental, smooth, dan creamy kualitas homemade terbaik dengan standar Cold Chain Logistics.",
+  title: "Callme Yoghurt | Official Stirred Yoghurt",
+  description: "Katalog resmi produk Callme Yoghurt dengan standar Cold Chain Logistics.",
 };
 
 export default function RootLayout({
