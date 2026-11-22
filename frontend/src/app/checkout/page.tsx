@@ -5,7 +5,8 @@ import { executeCheckoutSubmission, buildCanonicalDestinationInput, type Checkou
 import { type ShippingQuote, type BiteshipArea } from '@/lib/shipping';
 import { buildOrderSummary, saveOrderSummary } from '@/lib/order';
 import { isUuid } from '@/lib/catalog';
-import { AlertCircle, ArrowLeft, CheckCircle2, Clock, MapPin, Phone, QrCode, Search, ShieldCheck, ShoppingBag, Store, Truck, User } from 'lucide-react';
+import { OFFICIAL_MANUAL_QRIS_MERCHANT, resolveSafeManualQrisImageUrl } from '@/lib/payment';
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Clock, Download, MapPin, Phone, QrCode, Search, ShieldCheck, ShoppingBag, Store, Truck, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -74,6 +75,7 @@ export default function CheckoutPage() {
   const [serviceFeeConfig, setServiceFeeConfig] = useState<ServiceFeeConfig | null>(null);
   const [catalogOnline, setCatalogOnline] = useState<boolean | null>(null);
   const [cartValidationWarning, setCartValidationWarning] = useState<string | null>(null);
+  const [showQrisPreview, setShowQrisPreview] = useState(false);
 
   // Validate cart items against authoritative ERP catalog on mount
   useEffect(() => {
@@ -493,7 +495,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-black/58 mb-6">
             Pesanan Anda telah berhasil diproses dan tercatat di sistem ERP kami.
           </p>
-          <div className="bg-gray-50 rounded-[12px] p-4 text-left space-y-2 mb-6 border border-gray-100 text-sm">
+          <div className="bg-gray-50 rounded-[12px] p-4 text-left space-y-2 mb-5 border border-gray-100 text-sm">
             <div className="flex justify-between">
               <span className="text-black/58">Nomor Pesanan:</span>
               <span className="font-bold text-black/87">{committedFallback.order_number}</span>
@@ -508,6 +510,38 @@ export default function CheckoutPage() {
                 Rp {committedFallback.total_amount.toLocaleString('id-ID')}
               </span>
             </div>
+          </div>
+          <div className="border border-[#2E7D32]/25 bg-[#E8F5E9]/30 rounded-[16px] p-4 mb-5 space-y-3 text-center">
+            <div className="text-[11px] font-black uppercase tracking-widest text-[#2E7D32]">
+              Pembayaran QRIS Resmi
+            </div>
+            <div className="w-full max-w-[260px] mx-auto bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+              <Image
+                src={resolveSafeManualQrisImageUrl(committedFallback.payment?.qr_code_url)}
+                alt={`QRIS Resmi ${OFFICIAL_MANUAL_QRIS_MERCHANT.accountName} (${OFFICIAL_MANUAL_QRIS_MERCHANT.nmid})`}
+                width={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeWidth}
+                height={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeHeight}
+                unoptimized
+                priority
+                className="w-full h-auto block"
+              />
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-xs font-extrabold text-black/85">
+                {OFFICIAL_MANUAL_QRIS_MERCHANT.accountName}
+              </p>
+              <p className="text-[11px] font-mono text-black/55">
+                NMID: {OFFICIAL_MANUAL_QRIS_MERCHANT.nmid} • {OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId}
+              </p>
+            </div>
+            <a
+              href={resolveSafeManualQrisImageUrl(committedFallback.payment?.qr_code_url)}
+              download="QRIS-Callme-Yoghurt.jpg"
+              className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#2E7D32] bg-[#E8F5E9] hover:bg-[#d4edd7] px-3.5 py-2 rounded-lg transition-colors"
+            >
+              <Download size={14} />
+              <span>Unduh QRIS</span>
+            </a>
           </div>
           <div className="bg-[#1B5E20] p-4 rounded-[12px] flex items-start gap-3 text-white text-left mb-6">
             <ShieldCheck size={20} className="text-emerald-300 flex-shrink-0 mt-0.5" />
@@ -971,11 +1005,54 @@ export default function CheckoutPage() {
                       <p className="text-xs text-black/60 mt-1">
                         Mendukung semua e-wallet & mobile banking: <strong>BCA Mobile, GoPay, OVO, ShopeePay, Dana, LinkAja</strong>, dan seluruh bank di Indonesia.
                       </p>
-                      <p className="text-[11px] text-[#2E7D32] font-semibold mt-1.5 flex items-center gap-1">
+                      <div className="mt-2.5 p-2.5 rounded-lg bg-white/90 border border-[#2E7D32]/15 text-[11px] space-y-0.5">
+                        <div className="font-bold text-[#1c1917]">
+                          Merchant Resmi: {OFFICIAL_MANUAL_QRIS_MERCHANT.accountName}
+                        </div>
+                        <div className="font-mono text-black/60">
+                          NMID: {OFFICIAL_MANUAL_QRIS_MERCHANT.nmid} • {OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-[#2E7D32] font-semibold mt-2 flex items-center gap-1">
                         ✓ Kode QRIS resmi Callme Yoghurt langsung tampil setelah pesanan dibuat
                       </p>
                     </div>
                   </label>
+
+                  {/* Collapsible Official QRIS Preview */}
+                  <div className="rounded-xl border border-gray-200 bg-gray-50/70 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowQrisPreview((prev) => !prev)}
+                      className="w-full px-4 py-2.5 flex items-center justify-between text-xs font-bold text-[#2E7D32] hover:bg-[#E8F5E9]/40 transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <QrCode size={14} />
+                        <span>{showQrisPreview ? 'Sembunyikan Pratinjau QRIS Resmi' : 'Lihat Pratinjau QRIS Resmi'}</span>
+                      </span>
+                      <ChevronDown
+                        size={16}
+                        className={`transition-transform ${showQrisPreview ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showQrisPreview && (
+                      <div className="px-4 pb-4 pt-1 flex flex-col items-center text-center space-y-2.5 border-t border-gray-200/80">
+                        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200/70 rounded-lg px-3 py-2 leading-relaxed">
+                          Mohon selesaikan pesanan terlebih dahulu sebelum melakukan transfer agar nominal pembayaran sesuai total akhir tagihan.
+                        </p>
+                        <div className="w-full max-w-[260px] bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+                          <Image
+                            src={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeUrl}
+                            alt={`Pratinjau QRIS Resmi ${OFFICIAL_MANUAL_QRIS_MERCHANT.accountName}`}
+                            width={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeWidth}
+                            height={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeHeight}
+                            unoptimized
+                            className="w-full h-auto block"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </form>

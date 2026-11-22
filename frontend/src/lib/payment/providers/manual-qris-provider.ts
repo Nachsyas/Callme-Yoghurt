@@ -10,9 +10,35 @@ import type {
 } from '../types.ts';
 
 /**
+ * Official Callme Yoghurt Manual QRIS merchant metadata.
+ * Single source of truth used across payment service, checkout preview, and post-order payment instructions.
+ */
+export const OFFICIAL_MANUAL_QRIS_MERCHANT = {
+  accountName: 'CALLME YOGHURT CIPAYUNG DRINK JP',
+  nmid: 'ID1026505664866',
+  terminalId: 'A01',
+  qrCodeUrl: '/images/qris-callme.jpg',
+  qrCodeWidth: 726,
+  qrCodeHeight: 1024,
+  deadlineMinutes: 30,
+} as const;
+
+/**
+ * Zero-Trust QRIS asset resolver.
+ * Never trusts arbitrary external or tampered storage URLs for Manual QRIS payment display;
+ * always resolves to the official internal Callme Yoghurt QRIS asset.
+ */
+export function resolveSafeManualQrisImageUrl(candidateUrl?: string): string {
+  if (candidateUrl === OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeUrl) {
+    return candidateUrl;
+  }
+  return OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeUrl;
+}
+
+/**
  * Manual QRIS Payment Provider (Phase 1.7C.14)
  *
- * Designed for manual/personal QRIS operations (e.g. Callme Yoghurt BCA/GoPay QRIS).
+ * Designed for official Manual QRIS merchant operations (CALLME YOGHURT CIPAYUNG DRINK JP).
  * Produces a PENDING_PAYMENT transaction with customer instructions,
  * payment deadline, and structured confirmation metadata.
  */
@@ -20,12 +46,10 @@ export class ManualQRISPaymentProvider implements PaymentProvider {
   public readonly id: PaymentProviderType = 'manual_qris';
   public readonly name = 'QRIS (Manual Confirmation)';
 
-  private readonly defaultAccountName = 'CALLME YOGHURT INDONESIA';
-  private readonly defaultDeadlineMinutes = 30;
-
-  // Standard static QRIS payload representation for Callme Yoghurt
-  private readonly mockQrString =
-    '00020101021226670016ID.CO.QRIS.WWW01189360091800000000000215000000000000000303UME51440014ID.LINKAJA.WWW02150000000000000005204581253033605802ID5923CALLME YOGHURT JAKARTA6007JAKARTA61051389062070703A016304';
+  private readonly defaultAccountName = OFFICIAL_MANUAL_QRIS_MERCHANT.accountName;
+  private readonly defaultNmid = OFFICIAL_MANUAL_QRIS_MERCHANT.nmid;
+  private readonly defaultTerminalId = OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId;
+  private readonly defaultDeadlineMinutes = OFFICIAL_MANUAL_QRIS_MERCHANT.deadlineMinutes;
 
   public async createPayment(input: PaymentRequestInput): Promise<PaymentTransactionResult> {
     if (input.amount <= 0) {
@@ -42,11 +66,11 @@ export class ManualQRISPaymentProvider implements PaymentProvider {
 
     const instructions: string[] = [
       'Buka aplikasi BCA Mobile, GoPay, OVO, ShopeePay, Dana, atau mobile banking Anda.',
-      'Pindai (scan) kode QRIS Callme Yoghurt di layar.',
-      `Pastikan nama penerima tertera: ${this.defaultAccountName}.`,
-      `Pastikan jumlah transfer tepat: Rp ${formattedAmount} (termasuk kurir & handling cold chain).`,
+      'Pindai (scan) atau unduh kode QRIS resmi Callme Yoghurt di layar.',
+      `Pastikan nama penerima tertera: ${this.defaultAccountName} (NMID: ${this.defaultNmid}).`,
+      `Pastikan jumlah transfer tepat: Rp ${formattedAmount} (termasuk ongkir & biaya layanan).`,
       `Selesaikan pembayaran sebelum batas waktu berakhir (${this.defaultDeadlineMinutes} menit).`,
-      'Klik tombol "Konfirmasi Pembayaran" dan kirimkan bukti transfer melalui WhatsApp resmi kami.',
+      'Klik tombol "Saya Sudah Membayar" dan kirimkan bukti transfer melalui WhatsApp resmi kami.',
     ];
 
     return {
@@ -57,14 +81,17 @@ export class ManualQRISPaymentProvider implements PaymentProvider {
       provider: this.id,
       status: 'PENDING_PAYMENT',
       accountName: this.defaultAccountName,
-      qrString: this.mockQrString,
-      qrCodeUrl: '/images/qris-callme.png',
+      nmid: this.defaultNmid,
+      terminalId: this.defaultTerminalId,
+      qrCodeUrl: OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeUrl,
       instructions,
       expiresAt,
       paymentDeadlineMinutes: this.defaultDeadlineMinutes,
       rawProviderData: {
         method: 'manual_qris',
         account: this.defaultAccountName,
+        nmid: this.defaultNmid,
+        terminalId: this.defaultTerminalId,
         customerWhatsapp: input.customer.whatsapp,
       },
     };

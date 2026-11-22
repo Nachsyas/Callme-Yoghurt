@@ -1,9 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   PaymentService,
   defaultPaymentService,
   ManualQRISPaymentProvider,
+  OFFICIAL_MANUAL_QRIS_MERCHANT,
+  resolveSafeManualQrisImageUrl,
   MidtransPaymentProvider,
   XenditPaymentProvider,
   type PaymentStatus,
@@ -59,12 +63,38 @@ describe('Payment Infrastructure Foundation (Phase 1.7C.14)', () => {
       assert.equal(result.amount, 55000);
       assert.equal(result.orderId, input.orderId);
       assert.equal(result.orderNumber, input.orderNumber);
-      assert.equal(result.accountName, 'CALLME YOGHURT INDONESIA');
+      assert.equal(result.accountName, 'CALLME YOGHURT CIPAYUNG DRINK JP');
+      assert.equal(result.nmid, 'ID1026505664866');
+      assert.equal(result.terminalId, 'A01');
+      assert.equal(result.qrCodeUrl, '/images/qris-callme.jpg');
+      assert.equal(result.qrString, undefined);
       assert.equal(result.paymentDeadlineMinutes, 30);
       assert.ok(result.instructions.length >= 4);
-      assert.ok(result.instructions.some((inst) => inst.includes('CALLME YOGHURT INDONESIA')));
+      assert.ok(result.instructions.some((inst) => inst.includes('CALLME YOGHURT CIPAYUNG DRINK JP')));
+      assert.ok(result.instructions.some((inst) => inst.includes('ID1026505664866')));
       assert.ok(result.instructions.some((inst) => inst.includes('55.000')));
       assert.ok(result.paymentId.startsWith('PAY-QRIS-'));
+    });
+
+    it('verifies official QRIS asset exists on disk, return page renders real image, and tampered QR URLs fail closed', () => {
+      const qrisAssetPath = path.resolve(process.cwd(), 'public', OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeUrl.replace(/^\//, ''));
+      assert.ok(fs.existsSync(qrisAssetPath), `Official QRIS image must exist at ${qrisAssetPath}`);
+      assert.ok(fs.statSync(qrisAssetPath).size > 10_000, 'Official QRIS image must be non-empty');
+
+      // Zero-Trust: tampered external, javascript, data, or legacy paths always resolve to official internal QRIS asset
+      assert.equal(resolveSafeManualQrisImageUrl('https://evil.example/phishing-qris.jpg'), '/images/qris-callme.jpg');
+      assert.equal(resolveSafeManualQrisImageUrl('javascript:alert(1)'), '/images/qris-callme.jpg');
+      assert.equal(resolveSafeManualQrisImageUrl('data:image/png;base64,AAAA'), '/images/qris-callme.jpg');
+      assert.equal(resolveSafeManualQrisImageUrl('/images/qris-callme.png'), '/images/qris-callme.jpg');
+      assert.equal(resolveSafeManualQrisImageUrl(undefined), '/images/qris-callme.jpg');
+      assert.equal(resolveSafeManualQrisImageUrl('/images/qris-callme.jpg'), '/images/qris-callme.jpg');
+
+      // Return page must not contain fake hardcoded placeholder NMID or simulated matrix SVG
+      const returnPageSource = fs.readFileSync(path.resolve(process.cwd(), 'src/app/return/page.tsx'), 'utf-8');
+      assert.doesNotMatch(returnPageSource, /ID102600291884/, 'Fake placeholder NMID must be removed');
+      assert.doesNotMatch(returnPageSource, /Matrix Grid Data Simulation/, 'Simulated fake SVG QR must be removed');
+      assert.match(returnPageSource, /OFFICIAL_MANUAL_QRIS_MERCHANT/, 'Return page must use official QRIS merchant metadata');
+      assert.match(returnPageSource, /resolveSafeManualQrisImageUrl/, 'Return page must sanitize QRIS image URL');
     });
 
     it('rejects zero or negative payment amounts', async () => {

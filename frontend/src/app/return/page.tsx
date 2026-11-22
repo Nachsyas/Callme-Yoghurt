@@ -11,12 +11,17 @@ import {
   type OrderSummary,
 } from '@/lib/order';
 import {
+  OFFICIAL_MANUAL_QRIS_MERCHANT,
+  resolveSafeManualQrisImageUrl,
+} from '@/lib/payment';
+import {
   AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
   Clock,
   Copy,
+  Download,
   FileText,
   MessageSquare,
   Package,
@@ -25,6 +30,7 @@ import {
   Store,
   Truck,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 function ReturnPageContent() {
@@ -36,6 +42,7 @@ function ReturnPageContent() {
   const [checked, setChecked] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [copiedReceipt, setCopiedReceipt] = useState(false);
+  const [copiedAmount, setCopiedAmount] = useState(false);
   const [showReceiptDetails, setShowReceiptDetails] = useState(false);
   const shouldReduceMotion = useReducedMotion();
 
@@ -137,6 +144,29 @@ function ReturnPageContent() {
       });
     }
   };
+
+  const handleCopyAmount = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(String(confirmation.total_amount)).then(() => {
+        setCopiedAmount(true);
+        setTimeout(() => setCopiedAmount(false), 2500);
+      });
+    }
+  };
+
+  const qrisImageUrl = resolveSafeManualQrisImageUrl(payment?.qr_code_url);
+  const merchantName =
+    payment?.provider === 'manual_qris'
+      ? OFFICIAL_MANUAL_QRIS_MERCHANT.accountName
+      : payment?.account_name || OFFICIAL_MANUAL_QRIS_MERCHANT.accountName;
+  const merchantNmid =
+    payment?.provider === 'manual_qris'
+      ? OFFICIAL_MANUAL_QRIS_MERCHANT.nmid
+      : payment?.nmid || OFFICIAL_MANUAL_QRIS_MERCHANT.nmid;
+  const merchantTerminalId =
+    payment?.provider === 'manual_qris'
+      ? OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId
+      : payment?.terminal_id || OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId;
 
   return (
     <div className="min-h-screen bg-[#f7f5f0] flex items-center justify-center p-4 sm:p-6 py-12">
@@ -317,84 +347,61 @@ function ReturnPageContent() {
             </div>
 
             {/* QR Code Presentation Box */}
-            <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-col items-center justify-center text-center shadow-xs">
-              <div className="text-[11px] font-black uppercase tracking-widest text-[#2E7D32] mb-2">
+            <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200 flex flex-col items-center justify-center text-center shadow-xs space-y-3">
+              <div className="text-[11px] font-black uppercase tracking-widest text-[#2E7D32]">
                 QRIS Standar Pembayaran Nasional
               </div>
 
-              {/* Crisp SVG QR Code Graphic */}
-              <div className="w-48 h-48 bg-white p-2 border-2 border-gray-100 rounded-lg flex items-center justify-center relative">
-                <svg
-                  className="w-full h-full"
-                  viewBox="0 0 100 100"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+              {/* Official Callme Yoghurt QRIS Image */}
+              <div className="w-full max-w-[300px] sm:max-w-[320px] bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+                <Image
+                  src={qrisImageUrl}
+                  alt={`QRIS Resmi ${merchantName} (${merchantNmid})`}
+                  width={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeWidth}
+                  height={OFFICIAL_MANUAL_QRIS_MERCHANT.qrCodeHeight}
+                  unoptimized
+                  priority
+                  className="w-full h-auto block"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <div className="text-xs sm:text-sm font-extrabold text-black/85">
+                  {merchantName}
+                </div>
+                <div className="text-[11px] font-mono text-black/55">
+                  NMID: {merchantNmid} • {merchantTerminalId}
+                </div>
+              </div>
+
+              {/* Quick Actions: Download QRIS & Copy Exact Amount */}
+              <div className="w-full max-w-[320px] grid grid-cols-2 gap-2 pt-1">
+                <a
+                  href={qrisImageUrl}
+                  download="QRIS-Callme-Yoghurt.jpg"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#2E7D32] bg-[#E8F5E9] hover:bg-[#d4edd7] px-3 py-2 rounded-lg transition-colors"
                 >
-                  {/* Position detection patterns (Corner Squares) */}
-                  <rect x="5" y="5" width="26" height="26" fill="#1c1917" rx="3" />
-                  <rect x="9" y="9" width="18" height="18" fill="white" rx="1" />
-                  <rect x="13" y="13" width="10" height="10" fill="#1c1917" rx="1" />
-
-                  <rect x="69" y="5" width="26" height="26" fill="#1c1917" rx="3" />
-                  <rect x="73" y="9" width="18" height="18" fill="white" rx="1" />
-                  <rect x="77" y="13" width="10" height="10" fill="#1c1917" rx="1" />
-
-                  <rect x="5" y="69" width="26" height="26" fill="#1c1917" rx="3" />
-                  <rect x="9" y="73" width="18" height="18" fill="white" rx="1" />
-                  <rect x="13" y="77" width="10" height="10" fill="#1c1917" rx="1" />
-
-                  {/* Matrix Grid Data Simulation */}
-                  <rect x="36" y="8" width="5" height="5" fill="#1c1917" />
-                  <rect x="46" y="8" width="5" height="5" fill="#1c1917" />
-                  <rect x="56" y="8" width="5" height="5" fill="#1c1917" />
-                  <rect x="36" y="18" width="5" height="5" fill="#1c1917" />
-                  <rect x="51" y="18" width="5" height="5" fill="#1c1917" />
-                  <rect x="36" y="28" width="5" height="5" fill="#1c1917" />
-                  <rect x="46" y="28" width="5" height="5" fill="#1c1917" />
-                  <rect x="56" y="28" width="5" height="5" fill="#1c1917" />
-
-                  <rect x="8" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="18" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="28" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="8" y="46" width="5" height="5" fill="#1c1917" />
-                  <rect x="23" y="46" width="5" height="5" fill="#1c1917" />
-                  <rect x="8" y="56" width="5" height="5" fill="#1c1917" />
-                  <rect x="18" y="56" width="5" height="5" fill="#1c1917" />
-                  <rect x="28" y="56" width="5" height="5" fill="#1c1917" />
-
-                  <rect x="69" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="79" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="89" y="36" width="5" height="5" fill="#1c1917" />
-                  <rect x="74" y="46" width="5" height="5" fill="#1c1917" />
-                  <rect x="89" y="46" width="5" height="5" fill="#1c1917" />
-                  <rect x="69" y="56" width="5" height="5" fill="#1c1917" />
-                  <rect x="84" y="56" width="5" height="5" fill="#1c1917" />
-
-                  <rect x="36" y="69" width="5" height="5" fill="#1c1917" />
-                  <rect x="46" y="69" width="5" height="5" fill="#1c1917" />
-                  <rect x="56" y="69" width="5" height="5" fill="#1c1917" />
-                  <rect x="41" y="79" width="5" height="5" fill="#1c1917" />
-                  <rect x="56" y="79" width="5" height="5" fill="#1c1917" />
-                  <rect x="36" y="89" width="5" height="5" fill="#1c1917" />
-                  <rect x="51" y="89" width="5" height="5" fill="#1c1917" />
-
-                  <rect x="69" y="69" width="5" height="5" fill="#1c1917" />
-                  <rect x="79" y="74" width="5" height="5" fill="#1c1917" />
-                  <rect x="89" y="69" width="5" height="5" fill="#1c1917" />
-                  <rect x="69" y="84" width="5" height="5" fill="#1c1917" />
-                  <rect x="79" y="89" width="5" height="5" fill="#1c1917" />
-                  <rect x="89" y="84" width="5" height="5" fill="#1c1917" />
-
-                  {/* Center Badge */}
-                  <rect x="40" y="40" width="20" height="20" fill="white" rx="4" stroke="#2E7D32" strokeWidth="2" />
-                  <circle cx="50" cy="50" r="6" fill="#2E7D32" />
-                </svg>
+                  <Download size={14} />
+                  <span>Unduh QRIS</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleCopyAmount}
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-[#1c1917] bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-lg transition-colors cursor-pointer"
+                >
+                  {copiedAmount ? (
+                    <>
+                      <Check size={14} className="text-[#2E7D32]" />
+                      <span className="text-[#2E7D32]">Tersalin!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      <span>Salin Nominal</span>
+                    </>
+                  )}
+                </button>
               </div>
-
-              <div className="mt-2 text-xs font-bold text-black/80">
-                {payment.account_name || 'CALLME YOGHURT INDONESIA'}
-              </div>
-              <div className="text-[11px] text-black/50">NMID: ID102600291884</div>
             </div>
 
             {/* Steps Instruction */}
@@ -406,11 +413,11 @@ function ReturnPageContent() {
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">2</span>
-                <span>Pindai (scan) kode QRIS di atas dan periksa nama penerima.</span>
+                <span>Pindai (scan) atau unggah gambar QRIS di atas dan pastikan nama penerima tertera <strong>{merchantName}</strong>.</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">3</span>
-                <span>Pastikan nominal transfer tepat sesuai dengan Total Pembayaran di atas.</span>
+                <span>Pastikan nominal transfer tepat sesuai dengan Total Pembayaran di atas (<strong>Rp {confirmation.total_amount.toLocaleString('id-ID')}</strong>).</span>
               </div>
               <div className="flex items-start gap-2">
                 <span className="w-4 h-4 rounded-full bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5">4</span>

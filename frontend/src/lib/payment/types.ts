@@ -35,6 +35,8 @@ export interface PaymentTransactionResult {
   provider: PaymentProviderType;
   status: PaymentStatus;
   accountName?: string;
+  nmid?: string;
+  terminalId?: string;
   qrCodeUrl?: string;
   qrString?: string;
   instructions: string[];

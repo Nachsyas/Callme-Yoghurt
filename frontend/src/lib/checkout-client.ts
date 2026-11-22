@@ -1,6 +1,13 @@
 import { normalizeIndonesianPhone } from './security/pii-masking.ts';
 import { isUuid } from './catalog.ts';
-import { defaultPaymentService, type PaymentService, type PaymentStatus, type PaymentProviderType } from './payment/index.ts';
+import {
+  defaultPaymentService,
+  OFFICIAL_MANUAL_QRIS_MERCHANT,
+  resolveSafeManualQrisImageUrl,
+  type PaymentService,
+  type PaymentStatus,
+  type PaymentProviderType,
+} from './payment/index.ts';
 
 export type DeliveryMethod = 'instant' | 'sameday' | 'nextday';
 
@@ -71,6 +78,8 @@ export interface StoredPaymentData {
   status: PaymentStatus;
   amount: number;
   account_name?: string;
+  nmid?: string;
+  terminal_id?: string;
   qr_code_url?: string;
   qr_string?: string;
   instructions: string[];
@@ -349,13 +358,31 @@ export function getValidOrderConfirmation(
 
     let paymentData: StoredPaymentData | undefined = undefined;
     if (isRecord(record.payment)) {
+      const provider = (record.payment.provider as StoredPaymentData['provider']) || 'manual_qris';
+      const isManualQris = provider === 'manual_qris';
+      const rawQrCodeUrl = typeof record.payment.qr_code_url === 'string' ? record.payment.qr_code_url : undefined;
+
       paymentData = {
         payment_id: String(record.payment.payment_id || ''),
-        provider: (record.payment.provider as StoredPaymentData['provider']) || 'manual_qris',
+        provider,
         status: (record.payment.status as StoredPaymentData['status']) || 'PENDING_PAYMENT',
         amount: typeof record.payment.amount === 'number' ? record.payment.amount : record.total_amount,
-        account_name: typeof record.payment.account_name === 'string' ? record.payment.account_name : undefined,
-        qr_code_url: typeof record.payment.qr_code_url === 'string' ? record.payment.qr_code_url : undefined,
+        account_name: isManualQris
+          ? OFFICIAL_MANUAL_QRIS_MERCHANT.accountName
+          : typeof record.payment.account_name === 'string'
+            ? record.payment.account_name
+            : undefined,
+        nmid: isManualQris
+          ? OFFICIAL_MANUAL_QRIS_MERCHANT.nmid
+          : typeof record.payment.nmid === 'string'
+            ? record.payment.nmid
+            : undefined,
+        terminal_id: isManualQris
+          ? OFFICIAL_MANUAL_QRIS_MERCHANT.terminalId
+          : typeof record.payment.terminal_id === 'string'
+            ? record.payment.terminal_id
+            : undefined,
+        qr_code_url: isManualQris ? resolveSafeManualQrisImageUrl(rawQrCodeUrl) : rawQrCodeUrl,
         qr_string: typeof record.payment.qr_string === 'string' ? record.payment.qr_string : undefined,
         instructions: Array.isArray(record.payment.instructions) ? record.payment.instructions.map(String) : [],
         expires_at: typeof record.payment.expires_at === 'string' ? record.payment.expires_at : undefined,
@@ -574,6 +601,8 @@ export async function executeCheckoutSubmission(
       status: paymentResult.status,
       amount: paymentResult.amount,
       account_name: paymentResult.accountName,
+      nmid: paymentResult.nmid,
+      terminal_id: paymentResult.terminalId,
       qr_code_url: paymentResult.qrCodeUrl,
       qr_string: paymentResult.qrString,
       instructions: paymentResult.instructions,

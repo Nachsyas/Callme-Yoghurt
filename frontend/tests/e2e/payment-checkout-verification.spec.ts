@@ -116,7 +116,10 @@ test.describe("Phase 1.7C.14 — Payment Infrastructure Foundation E2E Verificat
     // Task 3: Customer sees QRIS Instruction Card
     await expect(page.getByText("Instruksi Pembayaran QRIS")).toBeVisible();
     await expect(page.getByText("QRIS Standar Pembayaran Nasional")).toBeVisible();
-    await expect(page.getByText("CALLME YOGHURT INDONESIA")).toBeVisible();
+    await expect(page.getByText("CALLME YOGHURT CIPAYUNG DRINK JP").first()).toBeVisible();
+    await expect(page.getByText(/NMID:\s*ID1026505664866/)).toBeVisible();
+    const qrisImage = page.locator('img[src="/images/qris-callme.jpg"]').first();
+    await expect(qrisImage).toBeVisible();
     await expect(page.getByText("30 Menit")).toBeVisible();
     await expect(page.getByText("Panduan Pembayaran:")).toBeVisible();
 
