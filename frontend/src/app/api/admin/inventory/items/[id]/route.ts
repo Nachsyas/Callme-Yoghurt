@@ -1,0 +1,37 @@
+import { forwardToErpAdmin } from "@/lib/auth/admin-bff";
+
+export async function PUT(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+): Promise<Response> {
+  const { id } = await context.params;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
+  }
+
+  return forwardToErpAdmin({
+    request,
+    permission: "admin:inventory:manage",
+    path: `/api/internal/admin/inventory/items/${encodeURIComponent(id)}`,
+    method: "PUT",
+    body,
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+): Promise<Response> {
+  const { id } = await context.params;
+
+  return forwardToErpAdmin({
+    request,
+    permission: "admin:inventory:manage",
+    path: `/api/internal/admin/inventory/items/${encodeURIComponent(id)}`,
+    method: "DELETE",
+  });
+}

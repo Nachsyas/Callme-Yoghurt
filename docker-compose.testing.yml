@@ -1,0 +1,103 @@
+# ==============================================================================
+# Callme Yoghurt ERP Core — Dedicated Isolated Test Docker Compose
+# Mandate (Phase 1.7C.22A.1 Section 3):
+# 1. Unique Docker project name: callme_test
+# 2. Unique PostgreSQL volume: callme_test_postgres_data (isolated from production)
+# 3. Unique Redis volume: callme_test_redis_data
+# 4. Unique database name: callme_yoghurt_test
+# 5. Synthetic credentials strictly for test execution
+# 6. No fixed container names that collide with existing stacks
+# ==============================================================================
+
+name: callme_test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: callme_yoghurt_test
+      POSTGRES_USER: callme_test_user
+      POSTGRES_PASSWORD: callme_test_password_synthetic_only
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - test_internal_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U callme_test_user -d callme_yoghurt_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: "no"
+    command: ["redis-server", "--requirepass", "callme_test_redis_password_synthetic_only"]
+    volumes:
+      - test_redis_data:/data
+    networks:
+      - test_internal_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "callme_test_redis_password_synthetic_only", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build:
+      context: ./backend-core
+      dockerfile: Dockerfile.test
+    image: callme-erp-core:testing
+    restart: "no"
+    environment:
+      APP_NAME: "Callme Yoghurt ERP Test"
+      APP_ENV: testing
+      APP_KEY: "base64:JqXQ00eHl5uU/Xk1J7e1FqXQ00eHl5uU/Xk1J7e1FqU="
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: callme_yoghurt_test
+      DB_USERNAME: callme_test_user
+      DB_PASSWORD: callme_test_password_synthetic_only
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: callme_test_redis_password_synthetic_only
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+      ERP_SERVICE_TOKEN: test-erp-service-token-secret-64ch
+      ADMIN_SESSION_SECRET: test-admin-session-secret-key-32ch
+      CRM_PII_BLIND_INDEX_KEY: test-crm-pii-blind-index-key-32ch
+      BCRYPT_ROUNDS: "4"
+      HASH_DRIVER: argon2id
+      ARGON_TIME: "1"
+      ARGON_MEMORY: "1024"
+      ARGON_THREADS: "1"
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - ./backend-core/app:/var/www/html/app:ro
+      - ./backend-core/config:/var/www/html/config:ro
+      - ./backend-core/routes:/var/www/html/routes:ro
+      - ./backend-core/tests:/var/www/html/tests:ro
+      - ./backend-core/phpunit.xml:/var/www/html/phpunit.xml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - test_internal_net
+
+networks:
+  test_internal_net:
+    name: callme_test_internal_network
+    driver: bridge
+
+volumes:
+  test_postgres_data:
+    name: callme_test_postgres_data
+  test_redis_data:
+    name: callme_test_redis_data

@@ -1,0 +1,233 @@
+/**
+ * Cold-Chain Logistics Business Filter (SOP 01 & Phase 1.7C.19)
+ *
+ * Invariants:
+ * 1. Dairy yoghurt requires active or insulated temperature preservation (0–5°C).
+ * 2. Regular multi-day transit (> 1 day / 2–5 days) in unrefrigerated vehicles is
+ *    strictly PROHIBITED because room temperature transit > 3 days spoils live cultures.
+ * 3. Inside Jakarta:
+ *    - Instant courier (Grab Instant, Gojek Instant) is permitted.
+ *    - Same Day delivery (Paxel Same Day, Grab/Gojek Same Day) is permitted.
+ *    - Valid Next Day delivery is permitted if available.
+ * 4. Outside Jakarta:
+ *    - Only sufficiently fast services (e.g., genuine Next Day / Overnight like JNE YES,
+ *      TIKI ONS, Paxel) or Same Day if serviced by the courier are permitted.
+ * 5. All Standard / Reguler / Kargo / Economy services (> 1 day duration) are rejected.
+ */
+
+import type { BiteshipRateItemRaw, ShippingQuote, ShippingServiceCategory } from './types.ts';
+
+export interface DestinationContext {
+  province?: string;
+  city?: string;
+  postal_code?: string;
+  isJakarta?: boolean;
+}
+
+/**
+ * Checks if destination is located within DKI Jakarta / Jakarta metropolitan area.
+ */
+export function isJakartaLocation(context: DestinationContext): boolean {
+  if (context.isJakarta !== undefined) return context.isJakarta;
+  const prov = (context.province || '').toLowerCase();
+  const city = (context.city || '').toLowerCase();
+  const postalCode = (context.postal_code || '').trim();
+
+  if (prov.includes('jakarta') || prov.includes('dki')) {
+    return true;
+  }
+
+  if (
+    city.includes('jakarta') ||
+    city.includes('jaktim') ||
+    city.includes('jaksel') ||
+    city.includes('jakpus') ||
+    city.includes('jakbar') ||
+    city.includes('jakut')
+  ) {
+    return true;
+  }
+
+  if (postalCode.length === 5) {
+    const prefix = postalCode.slice(0, 2);
+    if (['10', '11', '12', '13', '14'].includes(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Detects whether a rate item falls into instant, sameday, or legitimate nextday category.
+ */
+export function categorizeBiteshipService(rate: BiteshipRateItemRaw): ShippingServiceCategory {
+  const serviceType = (rate.service_type || '').toLowerCase();
+  const type = (rate.type || '').toLowerCase();
+  const serviceCode = (rate.courier_service_code || '').toLowerCase();
+  const serviceName = (rate.courier_service_name || '').toLowerCase();
+
+  // 1. Instant check
+  if (
+    serviceType === 'instant' ||
+    type === 'instant' ||
+    serviceCode.includes('instant') ||
+    serviceName.includes('instant')
+  ) {
+    return 'instant';
+  }
+
+  // 2. Same Day check
+  if (
+    serviceType === 'same_day' ||
+    type === 'same_day' ||
+    serviceCode.includes('same_day') ||
+    serviceCode.includes('sameday') ||
+    serviceName.includes('same day') ||
+    serviceName.includes('sameday')
+  ) {
+    return 'sameday';
+  }
+
+  // 3. Next Day / Overnight check
+  if (
+    serviceType === 'next_day' ||
+    type === 'next_day' ||
+    serviceCode === 'yes' || // JNE Yakin Esok Sampai
+    serviceCode === 'ons' || // TIKI Over Night Services
+    serviceCode === 'sds' || // Same Day / Super Fast
+    serviceCode.includes('next_day') ||
+    serviceCode.includes('nextday') ||
+    serviceName.includes('next day') ||
+    serviceName.includes('overnight') ||
+    serviceName.includes('esok')
+  ) {
+    return 'nextday';
+  }
+
+  return 'other';
+}
+
+/**
+ * Validates if the duration represents within 3 days room-temperature transit limit.
+ * Blocks any service with multi-day transit > 3 days or unknown/unparseable transit duration.
+ */
+export function isWithinColdChainDuration(rate: BiteshipRateItemRaw): boolean {
+  const duration = (rate.duration || '').toLowerCase().trim();
+  const unit = (rate.shipment_duration_unit || '').toLowerCase().trim();
+  const range = (rate.shipment_duration_range || '').trim();
+
+  if (duration === '' && range === '') {
+    return false;
+  }
+
+  // If duration is in hours, it's fast (< 24 hours)
+  if (unit === 'hours' || duration.includes('hour') || duration.includes('jam')) {
+    return true;
+  }
+
+  // If duration explicitly says "same day"
+  if (duration.includes('same day') || duration.includes('hari yang sama')) {
+    return true;
+  }
+
+  // Parse numbers in range or duration
+  const subject = range !== '' ? range : duration;
+  const numbers = subject.match(/\d+/g);
+  if (numbers && numbers.length > 0) {
+    const parsed = numbers.map(Number);
+    const maxDays = Math.max(...parsed);
+    if (maxDays <= 0 || maxDays > 3) {
+      return false;
+    }
+    return true;
+  }
+
+  // Unknown or unparseable duration fails closed (Task 17)
+  return false;
+}
+
+/**
+ * Filters and normalizes raw Biteship rates against Callme Yoghurt Cold Chain Policy.
+ */
+export function filterColdChainQuotes(
+  rawRates: BiteshipRateItemRaw[],
+  destination: DestinationContext
+): ShippingQuote[] {
+  if (!Array.isArray(rawRates) || rawRates.length === 0) {
+    return [];
+  }
+
+  const isJakarta = isJakartaLocation(destination);
+  const compliantQuotes: ShippingQuote[] = [];
+
+  for (const rate of rawRates) {
+    if (!rate || typeof rate !== 'object') {
+      continue;
+    }
+
+    // 1. Price validation: strictly non-negative, finite positive price
+    if (typeof rate.price !== 'number' || !Number.isFinite(rate.price) || rate.price <= 0) {
+      continue;
+    }
+
+    // 2. Identify category
+    const category = categorizeBiteshipService(rate);
+
+    // Filter out standard, reguler, cargo, trucking, economy
+    if (category === 'other') {
+      continue;
+    }
+
+    // 3. Duration validation (fails closed on unknown or unparseable)
+    if (!isWithinColdChainDuration(rate)) {
+      continue;
+    }
+
+    // 4. Strict shipping matrix (Task 16):
+    // Jakarta: Instant & Same Day only
+    // Outside Jakarta: Next Day only
+    if (isJakarta) {
+      if (category !== 'instant' && category !== 'sameday') {
+        continue;
+      }
+    } else {
+      if (category !== 'nextday') {
+        continue;
+      }
+    }
+
+    const quoteId = `biteship_${rate.courier_code}_${rate.courier_service_code}_${rate.price}`;
+    compliantQuotes.push({
+      quote_id: quoteId,
+      provider: 'Biteship',
+      courier_name: rate.courier_name || rate.company || rate.courier_code.toUpperCase(),
+      courier_code: rate.courier_code,
+      service_name: rate.courier_service_name || rate.courier_service_code.toUpperCase(),
+      service_code: rate.courier_service_code,
+      service_type: category,
+      price: Math.round(rate.price),
+      duration: rate.duration || (category === 'instant' ? '1-3 hours' : category === 'sameday' ? 'Same day' : '1 day'),
+      cold_chain_compliant: true,
+      description: rate.description || 'Penanganan pengiriman mengikuti SOP produk dairy Callme Yoghurt.',
+      storage_warning: 'Hanya tahan 3 hari di suhu ruang. Langsung segera masukan kulkas begitu barang diterima (Suhu < 5°C).',
+    });
+  }
+
+  // Sort: instant first, then sameday, then nextday, sorted by price ascending
+  const priorityMap: Record<ShippingServiceCategory, number> = {
+    instant: 1,
+    sameday: 2,
+    nextday: 3,
+    pickup: 4,
+    other: 5,
+  };
+
+  compliantQuotes.sort((a, b) => {
+    const prioDiff = (priorityMap[a.service_type] || 99) - (priorityMap[b.service_type] || 99);
+    if (prioDiff !== 0) return prioDiff;
+    return a.price - b.price;
+  });
+
+  return compliantQuotes;
+}

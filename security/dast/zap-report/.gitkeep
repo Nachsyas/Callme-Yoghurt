@@ -1,0 +1,2 @@
+# OWASP ZAP Reports Directory
+This directory contains output artifacts from OWASP ZAP DAST scans (HTML, Markdown, JSON alerts).

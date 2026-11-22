@@ -1,0 +1,130 @@
+{
+  "phase": "Phase 1.7C.22A",
+  "title": "Admin Data Integrity & Dual Vercel Deployment Verification Manifest",
+  "generated_at": "2026-10-09T18:57:06.469Z",
+  "git_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+  "total_screenshots": 12,
+  "all_unique_checksums": true,
+  "artifacts": [
+    {
+      "file": "01-storefront-production-homepage.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app",
+      "test_type": "PRODUCTION",
+      "sha256": "f3e6f155b359620f1075fcaeef0128fa3cfa855a1baf2f6a46fe7adc60a37b1d",
+      "size_bytes": 626780,
+      "actual_state_verified": "Storefront Homepage on Vercel",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "02-storefront-product-detail.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app/product/plain",
+      "test_type": "PRODUCTION",
+      "sha256": "27494bbb52a2049b10bbfe3f9dbaa903709d8beb79aa2be149baaae4141694d7",
+      "size_bytes": 160272,
+      "actual_state_verified": "Storefront PDP ERP-offline browseable state with transaction disabled",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "03-storefront-admin-api-404.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app/api/admin/orders",
+      "test_type": "PRODUCTION",
+      "sha256": "dda58e701c4508e6dcbb07670a08d698c4964921c196d987499a3331aac67662",
+      "size_bytes": 13497,
+      "actual_state_verified": "Storefront returns HTTP 404 for admin API operations at gateway boundary",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "04-admin-production-login.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-admin.vercel.app/admin/login",
+      "test_type": "PRODUCTION",
+      "sha256": "2e90fbfecd6c3192fd47e98a121761bbb6164ee540415a39681a9d6ea42cedcf",
+      "size_bytes": 33816,
+      "actual_state_verified": "Admin Login page on Vercel",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "05-admin-unauthenticated-redirect.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-admin.vercel.app/admin",
+      "test_type": "PRODUCTION",
+      "sha256": "b89d8a93b548026fe5b12fe5e9ea5115b2779d8fa5908ca7871993d49ad8f3ca",
+      "size_bytes": 39731,
+      "actual_state_verified": "Admin unauthenticated access to /admin redirected to /admin/login?from=%2Fadmin",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "06-admin-production-erp-unavailable.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-admin.vercel.app/admin/login",
+      "test_type": "PRODUCTION",
+      "sha256": "3568dcd9629a8ff6b6860f03bde4d39356b59ba96c5b80a4d5a34e09b46aec60",
+      "size_bytes": 34984,
+      "actual_state_verified": "Admin attempted login fails closed with truthful ERP unreachable error alert",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "07-mobile-storefront.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-storefront.vercel.app",
+      "test_type": "PRODUCTION",
+      "sha256": "218b6f5af6d98fe8bed7202638caebdfad1cf19c61d920cde0b545666e28e3f5",
+      "size_bytes": 315872,
+      "actual_state_verified": "Mobile Storefront layout (390x844)",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "08-mobile-admin-login.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "https://callme-yoghurt-admin.vercel.app/admin/login",
+      "test_type": "PRODUCTION",
+      "sha256": "b658edefbcc8fc329841288f619fb73ab608d76babe0167be40230a5c6b80296",
+      "size_bytes": 29458,
+      "actual_state_verified": "Mobile Admin Login layout (390x844)",
+      "known_limitations": "Production Vercel deployment without public ERP tunnel; transactional operations safely disabled"
+    },
+    {
+      "file": "09-local-admin-dashboard-real-metrics.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "http://127.0.0.1:3002/admin",
+      "test_type": "LOCAL TEST",
+      "sha256": "68f7ae0b59d5b5af3d28cd86928b55031c00b8b8a26453ea444266a497ddcbf7",
+      "size_bytes": 210208,
+      "actual_state_verified": "Admin Dashboard with authentic PostgreSQL metrics: 2 orders, GOV Rp 200.000, 1 waiting verification",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "10-local-admin-order-detail-real-record.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "http://127.0.0.1:3002/admin/orders",
+      "test_type": "LOCAL TEST",
+      "sha256": "637916ff2ee3d95ec6b46e2cf4a29856b6e7789fa871e9535e777693e8a264ab",
+      "size_bytes": 104279,
+      "actual_state_verified": "Admin Order List & Detail showing truthful PENDING_PAYMENT and PENDING reservation",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "11-local-admin-empty-dataset.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "http://127.0.0.1:3002/admin",
+      "test_type": "LOCAL TEST",
+      "sha256": "63bd13a0c2a7d28c8e5c93d6eecf74abdb23134c2130a5d28fe251ba692c9a62",
+      "size_bytes": 210337,
+      "actual_state_verified": "Admin Dashboard with authentic zero orders: 0 Pesanan, GOV Rp 0, empty state displayed",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    },
+    {
+      "file": "12-local-admin-inventory-verified-state.png",
+      "source_commit": "66debec9474c76ddccc3b443444e6c700abe5103",
+      "target_url": "http://127.0.0.1:3002/admin/inventory",
+      "test_type": "LOCAL TEST",
+      "sha256": "536ea9b5367e2ce20d7ee7445c44e44d7ab85f68f1e2077c4ff837d02ae2b21c",
+      "size_bytes": 301021,
+      "actual_state_verified": "Admin Inventory management page displaying authoritative warehouse and stock records",
+      "known_limitations": "Isolated local Docker environment with synthetic test credentials; no real customer transactions"
+    }
+  ]
+}

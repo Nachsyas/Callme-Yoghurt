@@ -1,0 +1,288 @@
+{
+  "phase": "PHASE 1.7C.22 — DUAL VERCEL DEPLOYMENT + LOCAL ERP TESTING",
+  "generated_at": "2026-10-08T22:38:30Z",
+  "git_branch": "phase0/foundation-repair",
+  "framework": {
+    "frontend": "Next.js 15.5.25 (App Router, Turbopack ready)",
+    "backend": "Laravel 11 ERP Core",
+    "database": "PostgreSQL 16 (Local Docker)",
+    "cache": "Redis 7 (Local Docker)"
+  },
+  "deployments": {
+    "storefront": {
+      "app_name": "callme-yoghurt-storefront",
+      "project_id": "prj_O6HxLGqqgrKB7261C0GospZSDCwp",
+      "production_url": "https://callme-yoghurt-storefront.vercel.app",
+      "deployment_role": "storefront",
+      "role_isolation": {
+        "status": "VERIFIED",
+        "rules": [
+          { "pattern": "/admin", "action": "307 redirect to /" },
+          { "pattern": "/admin/*", "action": "307 redirect to /" },
+          { "pattern": "/api/admin", "action": "404 Not Found" },
+          { "pattern": "/api/admin/*", "action": "404 Not Found" },
+          { "pattern": "/api/admin/login", "action": "404 Not Found" },
+          { "pattern": "/api/admin/logout", "action": "404 Not Found" }
+        ],
+        "live_probe": {
+          "admin_redirect_status": 307,
+          "admin_api_status": 404
+        }
+      }
+    },
+    "admin": {
+      "app_name": "callme-yoghurt-admin",
+      "project_id": "prj_Nkb9oKyo0NxsmxZ182LOFqhnNJix",
+      "production_url": "https://callme-yoghurt-admin.vercel.app",
+      "deployment_role": "admin",
+      "role_isolation": {
+        "status": "VERIFIED",
+        "rules": [
+          { "pattern": "/", "action": "307 redirect to /admin" },
+          { "pattern": "/admin (unauthenticated)", "action": "307 redirect to /admin/login?from=%2Fadmin" },
+          { "pattern": "/admin/login", "action": "200 OK" },
+          { "pattern": "/api/checkout", "action": "404 Not Found" },
+          { "pattern": "/api/checkout/*", "action": "404 Not Found" },
+          { "pattern": "/api/shipping/quote", "action": "404 Not Found" },
+          { "pattern": "/api/shipping/quote/*", "action": "404 Not Found" }
+        ],
+        "live_probe": {
+          "root_redirect_status": 307,
+          "unauth_admin_redirect_status": 307,
+          "login_page_status": 200,
+          "checkout_blocked_status": 404,
+          "shipping_blocked_status": 404
+        }
+      }
+    }
+  },
+  "fail_closed_policy": {
+    "missing_or_invalid_role_in_production": "HTTP 503 Service Unavailable",
+    "missing_erp_internal_url_in_admin_bff": "HTTP 503 Service Unavailable (No localhost fallback)",
+    "status": "VERIFIED"
+  },
+  "local_erp_core": {
+    "status": "VERIFIED_RUNNING",
+    "host": "127.0.0.1:8000",
+    "docker_containers": [
+      "callme_erp_web",
+      "callme_erp_app",
+      "callme_erp_postgres",
+      "callme_erp_redis"
+    ],
+    "health_check": {
+      "url": "http://127.0.0.1:8000/api/health",
+      "status": 200,
+      "response": { "status": "ok", "service": "erp-core" }
+    },
+    "readiness_check": {
+      "url": "http://127.0.0.1:8000/api/ready",
+      "status": 200,
+      "response": { "status": "ready", "service": "erp-core", "database": "connected" }
+    },
+    "internal_health_check": {
+      "url": "http://127.0.0.1:8000/api/internal/health",
+      "status": 401,
+      "response": { "error": "Unauthorized: missing bearer token" }
+    }
+  },
+  "remote_erp_connectivity": {
+    "status": "BLOCKED — SECURE REMOTE ERP CONNECTIVITY REQUIRED",
+    "details": "Local ERP runs on 127.0.0.1:8000 within Docker. No remote tunnel (Cloudflare Tunnel / ngrok) is installed or configured on the machine. Unauthenticated exposing of the database or ERP port is forbidden under DevSecOps SOP 05."
+  },
+  "destination_normalization_consistency": {
+    "canonical_function": "buildCanonicalDestinationInput()",
+    "source_file": "frontend/src/lib/checkout-client.ts",
+    "ui_integration": "frontend/src/app/checkout/page.tsx",
+    "hardcoded_fallbacks_removed": [
+      "Jakarta Timur",
+      "DKI Jakarta",
+      "Cipayung"
+    ],
+    "status": "VERIFIED"
+  },
+  "test_metrics": {
+    "laravel_phpunit": {
+      "tests": 206,
+      "assertions": 939,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "frontend_security_unit": {
+      "tests": 153,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "frontend_admin_unit": {
+      "tests": 49,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "frontend_catalog_unit": {
+      "tests": 33,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "frontend_shipping_unit": {
+      "tests": 18,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "phase_1_7c_22_isolation": {
+      "tests": 20,
+      "failures": 0,
+      "status": "PASSED"
+    },
+    "nextjs_production_build": {
+      "status": "PASSED",
+      "errors": 0
+    }
+  },
+  "business_blockers": [
+    {
+      "code": "SERVICE_FEE_IDR",
+      "status": "BLOCKED",
+      "reason": "Business owner sign-off pending for production service fee value."
+    },
+    {
+      "code": "VARIANT_WEIGHTS",
+      "status": "BLOCKED",
+      "reason": "21 variants unmeasured in physical cold storage; Biteship weight defaulting blocked to avoid freight undercharging."
+    },
+    {
+      "code": "ORIGIN_ADDRESS",
+      "status": "BLOCKED",
+      "reason": "Physical warehouse origin address and geo-coordinates pending formal logistics sign-off."
+    }
+  ],
+  "verification_screenshots": [
+    {
+      "filename": "01-storefront-production-homepage.png",
+      "title": "Storefront Production Homepage",
+      "description": "Live production homepage on https://callme-yoghurt-storefront.vercel.app with desktop viewport",
+      "environment": "PRODUCTION",
+      "bytes": 626387,
+      "sha256": "6c908cc7c1a80edff645a385daad7a1a6fa24ecaec72c09ade94ddd4fad0ba34"
+    },
+    {
+      "filename": "02-storefront-product-detail.png",
+      "title": "Storefront Product Detail",
+      "description": "Product detail page for Plain Pure Original on live Vercel storefront",
+      "environment": "PRODUCTION",
+      "bytes": 160272,
+      "sha256": "27494bbb52a2049b10bbfe3f9dbaa903709d8beb79aa2be149baaae4141694d7"
+    },
+    {
+      "filename": "03-storefront-cart-state.png",
+      "title": "Storefront Cart State",
+      "description": "Cart slideover state on live Vercel storefront showing cold chain dairy handling badge",
+      "environment": "PRODUCTION",
+      "bytes": 100359,
+      "sha256": "3860d239189976e883e568834f1ff17da36052a8cbea601b0b939c7484fda496"
+    },
+    {
+      "filename": "04-storefront-checkout-blocked.png",
+      "title": "Storefront Checkout Blocked / Safe State",
+      "description": "Empty cart state and safety boundary on live Vercel storefront",
+      "environment": "PRODUCTION",
+      "bytes": 23690,
+      "sha256": "5b3ed10828fc9b2c61db88385d43ac63bf411c34b935b57a4c1dab0ed767ce74"
+    },
+    {
+      "filename": "05-admin-production-login.png",
+      "title": "Admin Production Login",
+      "description": "Admin dashboard login screen on https://callme-yoghurt-admin.vercel.app",
+      "environment": "PRODUCTION",
+      "bytes": 33816,
+      "sha256": "2e90fbfecd6c3192fd47e98a121761bbb6164ee540415a39681a9d6ea42cedcf"
+    },
+    {
+      "filename": "06-admin-unauthenticated-redirect.png",
+      "title": "Admin Unauthenticated Redirect",
+      "description": "Accessing /admin redirects immediately to /admin/login?from=%2Fadmin",
+      "environment": "PRODUCTION",
+      "bytes": 33816,
+      "sha256": "2e90fbfecd6c3192fd47e98a121761bbb6164ee540415a39681a9d6ea42cedcf"
+    },
+    {
+      "filename": "07-admin-dashboard-authenticated.png",
+      "title": "Admin Dashboard Authenticated",
+      "description": "Authenticated admin dashboard showing cold chain operational monitoring and role privileges",
+      "environment": "LOCAL TEST (PORT 3002)",
+      "bytes": 275996,
+      "sha256": "e00d6b0543040d3b4d71064e52a111dae616e259bea44963b55ea8af540c3bed"
+    },
+    {
+      "filename": "08-admin-erp-connection-state.png",
+      "title": "Admin ERP Connection State",
+      "description": "Admin production login showing safe boundary state when remote ERP connectivity is unconfigured",
+      "environment": "PRODUCTION",
+      "bytes": 33816,
+      "sha256": "2e90fbfecd6c3192fd47e98a121761bbb6164ee540415a39681a9d6ea42cedcf"
+    },
+    {
+      "filename": "09-mobile-storefront.png",
+      "title": "Mobile Storefront",
+      "description": "Storefront responsive layout on mobile viewport (iPhone 15, 390x844)",
+      "environment": "PRODUCTION",
+      "bytes": 316145,
+      "sha256": "5f66ebf151a0341f9332f69d5973fa168809b5303045e606ab45c97b0633051e"
+    },
+    {
+      "filename": "10-mobile-admin-login.png",
+      "title": "Mobile Admin Login",
+      "description": "Admin login screen on mobile viewport (iPhone 15, 390x844)",
+      "environment": "PRODUCTION",
+      "bytes": 29458,
+      "sha256": "b658edefbcc8fc329841288f619fb73ab608d76babe0167be40230a5c6b80296"
+    },
+    {
+      "filename": "11-test-product-selection.png",
+      "title": "Test Product Selection",
+      "description": "Simulated customer selecting Plain Pure Original 500ml variant with red test warning badge",
+      "environment": "TEST / MOCKED",
+      "bytes": 171009,
+      "sha256": "1126221a334381615238f26d033cc0e5707e01509be8a8554e974ec862145b7e"
+    },
+    {
+      "filename": "12-test-cart.png",
+      "title": "Test Cart",
+      "description": "Simulated cart drawer showing 1 item (Plain 500ml, Rp 30.000) ready for checkout",
+      "environment": "TEST / MOCKED",
+      "bytes": 120263,
+      "sha256": "a3af2addb224adb2ab041b0c947fb611c5a482f98163e6edc2907e7089ed5438"
+    },
+    {
+      "filename": "13-test-shipping-selection.png",
+      "title": "Test Shipping Selection",
+      "description": "Simulated shipping quotes (GrabExpress Instant Rp 18.000) calculated with canonical address",
+      "environment": "TEST / MOCKED",
+      "bytes": 198726,
+      "sha256": "ed5cf86e1d54ac29cb73b2349e35f45257d2e641d1573886900a4048f1285c8c"
+    },
+    {
+      "filename": "14-test-order-summary.png",
+      "title": "Test Order Summary",
+      "description": "Order summary calculation showing subtotal Rp 30.000, shipping Rp 18.000, service fee Rp 2.000, total Rp 50.000",
+      "environment": "TEST / MOCKED",
+      "bytes": 35981,
+      "sha256": "3e5cecb479453e4b86d06ca201dec4c6ff22d69710a034de51922b779bfbdf6f"
+    },
+    {
+      "filename": "15-test-manual-qris-state.png",
+      "title": "Test Manual QRIS State",
+      "description": "Simulated manual QRIS payment option active and verified in checkout step",
+      "environment": "TEST / MOCKED",
+      "bytes": 114425,
+      "sha256": "a4f8906fd92f1d140b037cea3ae68f1271564c3e34787544c2668cd8975f26fe"
+    },
+    {
+      "filename": "16-test-payment-status.png",
+      "title": "Test Payment Status",
+      "description": "Order confirmation and payment instructions page for simulated order CY-TEST-2026-0001",
+      "environment": "TEST / MOCKED",
+      "bytes": 147579,
+      "sha256": "1c95793a52082d7958571c6dc8f3bab0ddd42bc22c36cc02733efb3ab012e360"
+    }
+  ]
+}
